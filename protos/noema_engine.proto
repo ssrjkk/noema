@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package noema.grpc;
+
+option go_package = "github.com/anomalyco/noema/protos";
+
+import "google/protobuf/struct.proto";
+
+service NoemaEngineService {
+  // Think - generate a solution for a task (unary)
+  rpc Think(ThinkRequest) returns (ThinkResponse);
+
+  // ThinkStream - generate a solution with streaming status updates
+  rpc ThinkStream(ThinkRequest) returns (stream ThinkStatus);
+
+  // Health — liveness check
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // GetMetrics — return engine metrics
+  rpc GetMetrics(MetricsRequest) returns (MetricsResponse);
+
+  // CancelTask — cancel a running task
+  rpc CancelTask(CancelRequest) returns (CancelResponse);
+
+  // Evolve — trigger self-evolution cycle
+  rpc Evolve(EvolveRequest) returns (EvolveResponse);
+}
+
+message ThinkRequest {
+  string task_id = 1;
+  string title = 2;
+  string description = 3;
+  string complexity = 4;  // simple | moderate | complex | extreme
+  repeated string tags = 5;
+  string tenant_id = 6;
+  repeated Requirement requirements = 7;
+  google.protobuf.Struct context = 8;
+}
+
+message Requirement {
+  string category = 1;
+  string description = 2;
+  int32 priority = 3;
+  repeated string constraints = 4;
+}
+
+message ThinkResponse {
+  string solution_id = 1;
+  string task_id = 2;
+  string title = 3;
+  string summary = 4;
+  string quality = 5;
+  double confidence = 6;
+  int32 code_blocks_count = 7;
+  double duration_ms = 8;
+  string error = 9;
+}
+
+message ThinkStatus {
+  string stage = 1;
+  string status = 2;
+  int32 attempt = 3;
+  double progress = 4;
+  string message = 5;
+  string correlation_id = 6;
+}
+
+message HealthRequest {}
+message HealthResponse {
+  string status = 1;
+  string version = 2;
+  double uptime_s = 3;
+}
+
+message MetricsRequest {
+  string tenant_id = 1;
+}
+message MetricsResponse {
+  int32 tasks_processed = 1;
+  int32 tasks_successful = 2;
+  int32 tasks_failed = 3;
+  double success_rate = 4;
+  int32 total_llm_calls = 5;
+  int32 total_refinements = 6;
+}
+
+message CancelRequest {
+  string task_id = 1;
+}
+message CancelResponse {
+  bool cancelled = 1;
+  string task_id = 2;
+  string status = 3;
+}
+
+message EvolveRequest {}
+message EvolveResponse {
+  int32 patches_generated = 1;
+  int32 patches_applied = 2;
+  string summary = 3;
+  repeated string improvements = 4;
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "chat-100k",
+    "task": "Design a real-time chat system supporting 100K concurrent users",
+    "tags": ["web", "real-time", "high-load"],
+    "complexity": "complex",
+    "expected_architecture": "WebSocket + Redis Pub/Sub + horizontal scaling",
+    "expected_components": ["WebSocket server", "Redis pub/sub", "message queue", "user presence service"],
+    "key_requirements": [
+      "horizontal scaling across multiple nodes",
+      "persistent message storage",
+      "presence detection"
+    ],
+    "red_flags": [
+      "polling-based approach",
+      "single server architecture",
+      "lack of message persistence"
+    ]
+  },
+  {
+    "id": "bank-api",
+    "task": "Design a secure REST API for a banking application with transaction processing",
+    "tags": ["api", "security", "data"],
+    "complexity": "complex",
+    "expected_architecture": "Hexagonal architecture + CQRS + Event Sourcing",
+    "expected_components": ["API gateway", "transaction service", "account service", "audit log"],
+    "key_requirements": [
+      "idempotent transactions",
+      "audit trail for all operations",
+      "rate limiting per user"
+    ],
+    "red_flags": [
+      "missing authentication/authorization",
+      "no audit trail",
+      "non-idempotent transaction endpoints"
+    ]
+  },
+  {
+    "id": "microservice-ecommerce",
+    "task": "Design a microservice-based e-commerce platform with catalog, cart, checkout, and payment",
+    "tags": ["web", "microservice"],
+    "complexity": "complex",
+    "expected_architecture": "Microservices + API Gateway + Event-driven",
+    "expected_components": ["catalog service", "cart service", "order service", "payment service", "API gateway"],
+    "key_requirements": [
+      "service independence",
+      "eventual consistency between services",
+      "distributed tracing"
+    ],
+    "red_flags": [
+      "shared database across services",
+      "synchronous calls between all services",
+      "no API gateway"
+    ]
+  },
+  {
+    "id": "simple-crud",
+    "task": "Build a simple CRUD API for a blog platform with posts and comments",
+    "tags": ["web", "api"],
+    "complexity": "simple",
+    "expected_architecture": "Monolithic REST API with database",
+    "expected_components": ["REST endpoints", "database models", "basic auth"],
+    "key_requirements": [
+      "RESTful endpoints",
+      "database-backed storage",
+      "pagination"
+    ],
+    "red_flags": [
+      "overengineering with message queues",
+      "microservices for a simple CRUD app",
+      "no error handling"
+    ]
+  },
+  {
+    "id": "data-pipeline",
+    "task": "Design a data processing pipeline that ingests 10TB/day of clickstream data",
+    "tags": ["data", "high-load", "performance"],
+    "complexity": "extreme",
+    "expected_architecture": "Lambda/Kappa architecture with stream processing",
+    "expected_components": ["Kafka ingestion", "stream processor", "batch processor", "data lake", "OLAP database"],
+    "key_requirements": [
+      "exactly-once processing semantics",
+      "handles late-arriving data",
+      "partitioned for parallel processing"
+    ],
+    "red_flags": [
+      "single-machine processing",
+      "relational database for analytics",
+      "no partition strategy"
+    ]
+  }
+]

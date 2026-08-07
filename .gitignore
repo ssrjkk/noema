@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Runtime data (regenerated locally)
+.noema/
+data/
+noema_knowledge.json
+noema_feedback.json
+noema_feedback.bak.*
+*.bak.*
+*.db
+
+# Caches & tooling
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.benchmarks/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Env files (compose.env template stays committed)
+.env
+.env.*
+!.env.example
+
+# Logs & reports
+*.log
+bandit-report.json
+safety-report.json
+pip-audit-report.json
+results.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

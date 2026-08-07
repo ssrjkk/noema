@@ -1,0 +1,428 @@
+{
+  "info": {
+    "name": "Noema API",
+    "description": "Production-grade AI reasoning engine",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "api_key", "value": "", "type": "string" },
+    { "key": "tenant_id", "value": "default", "type": "string" }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "in", "value": "header" },
+      { "key": "key", "value": "X-API-Key" },
+      { "key": "value", "value": "{{api_key}}" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health & Ops",
+      "item": [
+        {
+          "name": "GET /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response has status field\", function () { pm.expect(pm.response.json().status).to.eql(\"ok\"); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Liveness probe — always 200 if process is alive."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ready",
+              "host": ["{{base_url}}"],
+              "path": ["ready"]
+            },
+            "description": "Readiness probe — verifies all dependencies."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /health/infra",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/infra",
+              "host": ["{{base_url}}"],
+              "path": ["health", "infra"]
+            },
+            "description": "Infrastructure health — Redis, PostgreSQL degradation status."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /workers/stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/workers/stats",
+              "host": ["{{base_url}}"],
+              "path": ["workers", "stats"]
+            },
+            "description": "Worker pool statistics."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reasoning",
+      "item": [
+        {
+          "name": "POST /think",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Design a REST API\",\n  \"description\": \"Design a RESTful API for a task management system with user authentication, CRUD operations, and role-based access control.\",\n  \"requirements\": [\n    {\n      \"category\": \"api\",\n      \"description\": \"RESTful endpoints for tasks\",\n      \"priority\": 5,\n      \"constraints\": []\n    }\n  ],\n  \"preferred_stack\": null,\n  \"complexity\": \"moderate\",\n  \"tags\": [\"api\", \"rest\"],\n  \"context\": {},\n  \"task_id\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/think",
+              "host": ["{{base_url}}"],
+              "path": ["think"]
+            },
+            "description": "Generate a solution for the given task."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /think/detail",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Design a REST API\",\n  \"description\": \"Design a RESTful API for a task management system with user authentication, CRUD operations, and role-based access control.\",\n  \"requirements\": [\n    {\n      \"category\": \"api\",\n      \"description\": \"RESTful endpoints for tasks\",\n      \"priority\": 5,\n      \"constraints\": []\n    }\n  ],\n  \"preferred_stack\": null,\n  \"complexity\": \"moderate\",\n  \"tags\": [\"api\", \"rest\"],\n  \"context\": {},\n  \"task_id\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/think/detail",
+              "host": ["{{base_url}}"],
+              "path": ["think", "detail"]
+            },
+            "description": "Generate a full-detail solution."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /think/stream",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "text/event-stream" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Design a REST API\",\n  \"description\": \"Design a RESTful API for a task management system with user authentication, CRUD operations, and role-based access control.\",\n  \"requirements\": [\n    {\n      \"category\": \"api\",\n      \"description\": \"RESTful endpoints for tasks\",\n      \"priority\": 5,\n      \"constraints\": []\n    }\n  ],\n  \"preferred_stack\": null,\n  \"complexity\": \"moderate\",\n  \"tags\": [\"api\", \"rest\"],\n  \"context\": {},\n  \"task_id\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/think/stream",
+              "host": ["{{base_url}}"],
+              "path": ["think", "stream"]
+            },
+            "description": "Generate a solution with Server-Sent Events (SSE) streaming."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /think/{{task_id}}",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/think/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["think", "{{task_id}}"]
+            },
+            "description": "Cancel a running think task by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /tasks/active",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/tasks/active",
+              "host": ["{{base_url}}"],
+              "path": ["tasks", "active"]
+            },
+            "description": "List all currently running task IDs."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Knowledge",
+      "item": [
+        {
+          "name": "GET /knowledge/stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/knowledge/stats",
+              "host": ["{{base_url}}"],
+              "path": ["knowledge", "stats"]
+            },
+            "description": "Knowledge base statistics."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /knowledge/search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/knowledge/search?q=react&top_k=5",
+              "host": ["{{base_url}}"],
+              "path": ["knowledge", "search"],
+              "query": [
+                { "key": "q", "value": "react", "description": "Search query" },
+                { "key": "top_k", "value": "5", "description": "Number of top results" }
+              ]
+            },
+            "description": "Search knowledge base."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "GET /admin/metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "metrics"]
+            },
+            "description": "Prometheus-style metrics as JSON (cached 5s)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/tasks/history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/tasks/history?tenant_id={{tenant_id}}&limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "tasks", "history"],
+              "query": [
+                { "key": "tenant_id", "value": "{{tenant_id}}", "description": "Filter by tenant ID" },
+                { "key": "limit", "value": "50", "description": "Max results (1-500)" },
+                { "key": "offset", "value": "0", "description": "Result offset" }
+              ]
+            },
+            "description": "Return task history from the audit logger."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/tenants/{{tenant_id}}/metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/tenants/{{tenant_id}}/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "tenants", "{{tenant_id}}", "metrics"]
+            },
+            "description": "Tenant-specific metrics."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/neurosymbolic/stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/neurosymbolic/stats",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "neurosymbolic", "stats"]
+            },
+            "description": "NeuroSymbolic engine statistics."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /admin/audit/proof/{{task_id}}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/audit/proof/{{task_id}}?tenant_id={{tenant_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "audit", "proof", "{{task_id}}"],
+              "query": [
+                { "key": "tenant_id", "value": "{{tenant_id}}", "description": "Tenant ID (defaults to current tenant)" }
+              ]
+            },
+            "description": "Cryptographic Merkle inclusion proof for a completed task. Verify it against the published root hash without trusting the server."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /admin/audit/verify",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proof\": {\n    \"leaf_hash\": \"\",\n    \"path\": [],\n    \"root_hash\": \"\",\n    \"block_index\": 0,\n    \"leaf_data\": {}\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/admin/audit/verify",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "audit", "verify"]
+            },
+            "description": "Client-side verification of an inclusion proof (no server trust). Paste the proof from GET /admin/audit/proof/{task_id}."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Features & Webhooks",
+      "item": [
+        {
+          "name": "GET /features",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/features",
+              "host": ["{{base_url}}"],
+              "path": ["features"]
+            },
+            "description": "Get all feature flags for the current tenant."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /webhooks/register",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://hooks.example.com/callback\",\n  \"secret\": \"my-secret\",\n  \"events\": [\"task.completed\"],\n  \"retry_count\": 3\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/register",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "register"]
+            },
+            "description": "Register a new webhook."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /webhooks/{{webhook_id}}",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks/{{webhook_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "{{webhook_id}}"]
+            },
+            "description": "Unregister a webhook."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /webhooks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/webhooks",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks"]
+            },
+            "description": "List all registered webhooks (URLs masked)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Kernels & Agents",
+      "item": [
+        {
+          "name": "GET /kernels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/kernels",
+              "host": ["{{base_url}}"],
+              "path": ["kernels"]
+            },
+            "description": "Registered reasoning kernels."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /agents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/agents",
+              "host": ["{{base_url}}"],
+              "path": ["agents"]
+            },
+            "description": "Registered sub-agents."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

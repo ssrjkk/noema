@@ -1,0 +1,10 @@
+{
+  "name": "Noema Local",
+  "values": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "default" },
+    { "key": "api_key", "value": "", "type": "secret" },
+    { "key": "tenant_id", "value": "default", "type": "default" },
+    { "key": "task_id", "value": "test-task-001", "type": "default" },
+    { "key": "webhook_id", "value": "", "type": "default" }
+  ]
+}

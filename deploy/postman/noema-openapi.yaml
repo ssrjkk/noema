@@ -1,0 +1,912 @@
+openapi: "3.0.3"
+info:
+  title: Noema API
+  description: Production-grade AI reasoning engine
+  version: "1.0.0"
+  contact:
+    name: Noema
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Master API key. Empty = auth disabled (dev only).
+
+  schemas:
+    # ── Audit Proofs ──────────────────────────────────────────────
+    InclusionProof:
+      type: object
+      required: [leaf_hash, path, root_hash, block_index]
+      properties:
+        leaf_hash:
+          type: string
+          description: SHA-256 hex digest of the serialized leaf data
+        path:
+          type: array
+          description: Sibling hashes with direction (false = left, true = right)
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              - type: string
+              - type: boolean
+        root_hash:
+          type: string
+          description: Merkle root this proof commits to
+        block_index:
+          type: integer
+          description: Position of the leaf in the audit log
+        leaf_data:
+          type: object
+          description: Original event payload (returned by the proof endpoint)
+      example:
+        leaf_hash: bf4f09dc175d3458bc8de84191cd18d95a5d21e97ebc8310f2b2d4a2c6d84b5e
+        path: [["38a0d95e93f7bfc458f3b43bcf1034a7ad5c75adca7eff36c891ccc5f79c89e8", false]]
+        root_hash: 28edc6ecf1c584c4ffd90d18565f7dc36a7e74c797cdbe57b4b1786a2f9c53f1
+        block_index: 2
+
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+
+    # ── Request Bodies ──────────────────────────────────────────────
+    Requirement:
+      type: object
+      required: [category, description]
+      properties:
+        category:
+          type: string
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 2000
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+        constraints:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+
+    TaskRequest:
+      type: object
+      required: [title, description]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        requirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Requirement"
+          maxItems: 50
+        preferred_stack:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          nullable: true
+        complexity:
+          type: string
+          enum: [simple, moderate, complex, extreme]
+          default: moderate
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+        context:
+          type: object
+        task_id:
+          type: string
+          nullable: true
+          description: Optional task ID for cancellation tracking
+
+    WebhookRegisterRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        secret:
+          type: string
+          maxLength: 512
+          default: ""
+        events:
+          type: array
+          items:
+            type: string
+          default: ["*"]
+          maxItems: 50
+        retry_count:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 3
+
+    # ── Response Bodies ─────────────────────────────────────────────
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+        uptime_s:
+          type: number
+        db:
+          type: string
+        llm:
+          type: string
+        workers:
+          type: object
+
+    ReadinessResponse:
+      type: object
+      properties:
+        ready:
+          type: boolean
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+
+    SolutionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        quality:
+          type: string
+        confidence:
+          type: number
+        stack_summary:
+          type: string
+        code_blocks_count:
+          type: integer
+        performance_notes:
+          type: array
+          items:
+            type: string
+        security_notes:
+          type: array
+          items:
+            type: string
+        thought_steps:
+          type: integer
+        duration_ms:
+          type: number
+
+    SolutionDetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        quality:
+          type: string
+        confidence:
+          type: number
+        architecture:
+          type: object
+          nullable: true
+        stack:
+          type: object
+        code_blocks:
+          type: array
+          items:
+            type: object
+        deployment:
+          type: object
+        performance_notes:
+          type: array
+          items:
+            type: string
+        security_notes:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+
+    WebhookRegisterResponse:
+      type: object
+      properties:
+        webhook_id:
+          type: string
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        retry_count:
+          type: integer
+
+    # ── Common ──────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+
+  parameters:
+    TenantIdParam:
+      name: tenant_id
+      in: path
+      required: true
+      schema:
+        type: string
+    TaskIdParam:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: string
+    WebhookIdParam:
+      name: webhook_id
+      in: path
+      required: true
+      schema:
+        type: string
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  # ── Health & Ops ───────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Health & Ops]
+      summary: Liveness probe
+      description: Liveness probe — always 200 if process is alive.
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Service starting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ready:
+    get:
+      tags: [Health & Ops]
+      summary: Readiness probe
+      description: Readiness probe — verifies all dependencies.
+      operationId: readinessCheck
+      responses:
+        "200":
+          description: Readiness status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+        "503":
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /health/infra:
+    get:
+      tags: [Health & Ops]
+      summary: Infrastructure health
+      description: Infrastructure health — Redis, PostgreSQL degradation status.
+      operationId: infraHealth
+      responses:
+        "200":
+          description: Infrastructure status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redis:
+                    type: string
+                  postgresql:
+                    type: string
+
+  /workers/stats:
+    get:
+      tags: [Health & Ops]
+      summary: Worker pool stats
+      description: Worker pool statistics.
+      operationId: workerStats
+      responses:
+        "200":
+          description: Worker pool statistics
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Reasoning ──────────────────────────────────────────────────
+  /think:
+    post:
+      tags: [Reasoning]
+      summary: Generate solution
+      description: Generate a solution for the given task.
+      operationId: think
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskRequest"
+      responses:
+        "200":
+          description: Solution generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SolutionResponse"
+        "499":
+          description: Task cancelled by user
+        "503":
+          description: Service starting
+
+  /think/detail:
+    post:
+      tags: [Reasoning]
+      summary: Full-detail solution
+      description: Generate a full-detail solution.
+      operationId: thinkDetail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskRequest"
+      responses:
+        "200":
+          description: Full-detail solution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SolutionDetailResponse"
+        "499":
+          description: Task cancelled by user
+        "503":
+          description: Service starting
+
+  /think/stream:
+    post:
+      tags: [Reasoning]
+      summary: SSE streaming solution
+      description: Generate a solution with Server-Sent Events (SSE) streaming.
+      operationId: thinkStream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskRequest"
+      responses:
+        "200":
+          description: SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream with step_start, step_end, complete events
+        "503":
+          description: Service starting
+
+  /think/{task_id}:
+    delete:
+      tags: [Reasoning]
+      summary: Cancel task
+      description: Cancel a running think task by ID.
+      operationId: cancelThink
+      parameters:
+        - $ref: "#/components/parameters/TaskIdParam"
+      responses:
+        "200":
+          description: Cancellation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [cancelled, not_found_or_completed]
+                  task_id:
+                    type: string
+
+  /tasks/active:
+    get:
+      tags: [Reasoning]
+      summary: List active tasks
+      description: List all currently running task IDs.
+      operationId: listActiveTasks
+      responses:
+        "200":
+          description: Active task IDs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active_tasks:
+                    type: array
+                    items:
+                      type: string
+
+  # ── Knowledge ──────────────────────────────────────────────────
+  /knowledge/stats:
+    get:
+      tags: [Knowledge]
+      summary: Knowledge base stats
+      description: Knowledge base statistics.
+      operationId: knowledgeStats
+      responses:
+        "200":
+          description: Knowledge base statistics
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /knowledge/search:
+    get:
+      tags: [Knowledge]
+      summary: Search knowledge
+      description: Search knowledge base.
+      operationId: knowledgeSearch
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: top_k
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 5
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  # ── Admin ──────────────────────────────────────────────────────
+  /admin/metrics:
+    get:
+      tags: [Admin]
+      summary: System metrics
+      description: Prometheus-style metrics as JSON (cached 5s).
+      operationId: adminMetrics
+      responses:
+        "200":
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      successful:
+                        type: integer
+                      failed:
+                        type: integer
+                      success_rate:
+                        type: number
+                  llm:
+                    type: object
+                    properties:
+                      total_calls:
+                        type: integer
+                      total_refinements:
+                        type: integer
+                      provider:
+                        type: string
+                  workers:
+                    type: object
+                  memory:
+                    type: object
+                    properties:
+                      episodic_count:
+                        type: integer
+                      procedural_count:
+                        type: integer
+                      knowledge_count:
+                        type: integer
+                  uptime_s:
+                    type: number
+        "503":
+          description: Service starting
+
+  /admin/tasks/history:
+    get:
+      tags: [Admin]
+      summary: Task history
+      description: Return task history from the audit logger.
+      operationId: adminTaskHistory
+      parameters:
+        - name: tenant_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Task history events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "503":
+          description: Audit logger not available
+
+  /admin/tenants/{tenant_id}/metrics:
+    get:
+      tags: [Admin]
+      summary: Tenant metrics
+      description: Tenant-specific metrics.
+      operationId: adminTenantMetrics
+      parameters:
+        - $ref: "#/components/parameters/TenantIdParam"
+      responses:
+        "200":
+          description: Tenant metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tenant_id:
+                    type: string
+                  features:
+                    type: object
+                  quota:
+                    type: object
+                    nullable: true
+                    properties:
+                      monthly_budget_usd:
+                        type: number
+                      max_concurrent_tasks:
+                        type: integer
+                      max_tasks_per_hour:
+                        type: integer
+                  recent_task_count:
+                    type: integer
+
+  /admin/neurosymbolic/stats:
+    get:
+      tags: [Admin]
+      summary: NeuroSymbolic stats
+      description: NeuroSymbolic engine statistics.
+      operationId: adminNeurosymbolicStats
+      responses:
+        "200":
+          description: NeuroSymbolic stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  settings:
+                    type: object
+                    properties:
+                      max_refinement_attempts:
+                        type: integer
+                      verification_timeout:
+                        type: number
+                      evolution_enabled:
+                        type: boolean
+                      fallback_to_cot:
+                        type: boolean
+                  metrics:
+                    type: object
+                    properties:
+                      tasks_processed:
+                        type: integer
+                      tasks_successful:
+                        type: integer
+                      tasks_failed:
+                        type: integer
+                      success_rate:
+                        type: number
+                      total_refinements:
+                        type: integer
+                      total_llm_calls:
+                        type: integer
+                  evolution:
+                    type: object
+
+  /admin/audit/proof/{task_id}:
+    get:
+      tags: [Admin]
+      summary: Audit inclusion proof
+      description: |
+        Cryptographic Merkle inclusion proof for a completed task.
+        The client can verify it against the published root hash
+        without trusting the server or downloading the full audit log.
+      operationId: adminAuditProof
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Task identifier
+        - name: tenant_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Tenant identifier (falls back to current tenant)
+      responses:
+        "200":
+          description: Inclusion proof
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tenant_id:
+                    type: string
+                  task_id:
+                    type: string
+                  proof:
+                    $ref: "#/components/schemas/InclusionProof"
+        "404":
+          description: Task not found in audit log
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: Audit logger not available
+
+  /admin/audit/verify:
+    post:
+      tags: [Admin]
+      summary: Verify inclusion proof
+      description: |
+        Client-side verification of an inclusion proof. Returns whether the
+        leaf data is cryptographically included in the Merkle tree for the
+        given root hash. Does not trust the server.
+      operationId: adminAuditVerify
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proof:
+                  $ref: "#/components/schemas/InclusionProof"
+                leaf_data:
+                  type: object
+                  description: Original event payload (embedded in proof if omitted)
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  block_index:
+                    type: integer
+                  root_hash:
+                    type: string
+        "422":
+          description: Malformed proof
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  # ── Features & Webhooks ────────────────────────────────────────
+  /features:
+    get:
+      tags: [Features & Webhooks]
+      summary: Feature flags
+      description: Get all feature flags for the current tenant.
+      operationId: getFeatures
+      responses:
+        "200":
+          description: Feature flags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  features:
+                    type: object
+
+  /webhooks/register:
+    post:
+      tags: [Features & Webhooks]
+      summary: Register webhook
+      description: Register a new webhook.
+      operationId: registerWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookRegisterRequest"
+      responses:
+        "200":
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookRegisterResponse"
+
+  /webhooks/{webhook_id}:
+    delete:
+      tags: [Features & Webhooks]
+      summary: Unregister webhook
+      description: Unregister a webhook.
+      operationId: unregisterWebhook
+      parameters:
+        - $ref: "#/components/parameters/WebhookIdParam"
+      responses:
+        "200":
+          description: Webhook unregistered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [unregistered]
+                  webhook_id:
+                    type: string
+
+  /webhooks:
+    get:
+      tags: [Features & Webhooks]
+      summary: List webhooks
+      description: List all registered webhooks (URLs masked).
+      operationId: listWebhooks
+      responses:
+        "200":
+          description: Registered webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                    events:
+                      type: array
+                      items:
+                        type: string
+                    retry_count:
+                      type: integer
+                    timeout:
+                      type: number
+
+  # ── Kernels & Agents ───────────────────────────────────────────
+  /kernels:
+    get:
+      tags: [Kernels & Agents]
+      summary: List kernels
+      description: Registered reasoning kernels.
+      operationId: listKernels
+      responses:
+        "200":
+          description: List of kernels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    description:
+                      type: string
+
+  /agents:
+    get:
+      tags: [Kernels & Agents]
+      summary: List agents
+      description: Registered sub-agents.
+      operationId: listAgents
+      responses:
+        "200":
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    role:
+                      type: string
+                    expertise:
+                      type: string

@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: noema-production
+
+helmCharts:
+  - name: noema
+    releaseName: noema
+    namespace: noema-production
+    includeCRDs: true
+    valuesFile: ../../helm/noema/values.yaml
+    valuesInline:
+      replicaCount: 3
+      resources:
+        limits:
+          cpu: 2000m
+          memory: 1Gi
+        requests:
+          cpu: 500m
+          memory: 512Mi
+
+configMapGenerator:
+  - name: noema-config
+    literals:
+      - NOEMA_DB_URL=postgresql+asyncpg://noema:noema@noema-postgresql:5432/noema
+      - NOEMA_REDIS_URL=redis://noema-redis:6379/0
+      - NOEMA_API_HOST=0.0.0.0
+      - NOEMA_API_PORT=8000
+      - NOEMA_LLM_PROVIDER=openai
+      - NOEMA_OBS_LOGGING_LEVEL=INFO
+      - NOEMA_OBS_LOGGING_FORMAT=json
+      - NOEMA_OBS_METRICS_ENABLED=true
+      - NOEMA_NS_ENABLED=true
+
+secretGenerator:
+  - name: noema-secrets
+    literals:
+      - NOEMA_LLM_OPENAI_API_KEY=sk-placeholder
+    options:
+      disableNameSuffixHash: true
+
+generatorOptions:
+  disableNameSuffixHash: false
+  labels:
+    app.kubernetes.io/name: noema
+    app.kubernetes.io/instance: noema

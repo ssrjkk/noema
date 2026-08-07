@@ -1,0 +1,76 @@
+site_name: Noema
+site_description: Production-grade AI reasoning engine
+site_url: https://noema.ai
+repo_url: https://github.com/anomalyco/noema
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [noema]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+            docstring_style: google
+            merge_init_into_class: true
+  - exclude:
+      glob:
+        - __pycache__/*
+        - "*.pyc"
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - admonition
+  - footnotes
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
+  - API Reference:
+      - Noema Engine: api/noema.md
+      - Types: api/types.md
+      - NeuroSymbolic: api/neurosymbolic.md
+      - Resilience: api/resilience.md
+      - API Server: api/server.md
+      - Observability: api/observability.md
+      - Billing: api/billing.md
+  - Configuration: configuration.md
+  - Deployment: deployment.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/anomalyco/noema
+  version:
+    provider: mike
+
+copyright: Copyright &copy; 2024 Noema

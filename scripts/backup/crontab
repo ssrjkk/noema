@@ -1,0 +1,14 @@
+# Backup schedule for noema
+# Install with: crontab scripts/backup/crontab
+
+# Full backup daily at 2 AM
+0 2 * * * /opt/noema/scripts/backup/backup_all.sh my-s3-bucket >> /var/log/noema/backup.log 2>&1
+
+# PostgreSQL backup every 6 hours
+0 */6 * * * /opt/noema/scripts/backup/pg_backup.sh noema my-s3-bucket >> /var/log/noema/backup.log 2>&1
+
+# Redis backup every 12 hours
+0 */12 * * * /opt/noema/scripts/backup/redis_backup.sh my-s3-bucket >> /var/log/noema/backup.log 2>&1
+
+# Cleanup old backup logs weekly
+0 0 * * 0 find /var/log/noema -name "backup.log.*" -mtime +30 -delete

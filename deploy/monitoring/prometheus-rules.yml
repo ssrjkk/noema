@@ -1,0 +1,133 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: noema-rules
+  labels:
+    app: noema
+    release: prometheus-operator
+spec:
+  groups:
+    - name: noema
+      interval: 30s
+      rules:
+        - alert: NoemaTaskHighErrorRate
+          expr: rate(noema_errors_total[5m]) / rate(noema_requests_total[5m]) > 0.01
+          for: 5m
+          labels:
+            severity: warning
+            team: noema
+          annotations:
+            summary: "High error rate: {{ $value | humanizePercentage }}"
+            description: "Error rate for the last 5 minutes is {{ $value | humanizePercentage }}"
+            runbook_url: "https://example.com/runbooks/noema-task-high-error-rate"
+
+        - alert: NoemaTaskFailureSpike
+          expr: rate(noema_tasks_failed[5m]) > 5
+          for: 2m
+          labels:
+            severity: critical
+            team: noema
+          annotations:
+            summary: "Task failure spike: {{ $value }} failures in 5m"
+            description: "Tasks are failing at a rate of {{ $value }} per 5 minutes"
+            runbook_url: "https://example.com/runbooks/noema-task-failure-spike"
+
+        - alert: NoemaCircuitBreakerOpen
+          expr: noema_circuit_breaker_state{state="open"} > 0
+          for: 1m
+          labels:
+            severity: critical
+            team: noema
+          annotations:
+            summary: "Circuit breaker OPEN for {{ $labels.provider }}"
+            description: "Circuit breaker is OPEN for provider {{ $labels.provider }} with {{ $value }} failures"
+            runbook_url: "https://example.com/runbooks/noema-circuit-breaker-open"
+
+        - alert: NoemaLatencyHigh
+          expr: histogram_quantile(0.95, rate(noema_request_duration_seconds_bucket[5m])) > 10
+          for: 5m
+          labels:
+            severity: warning
+            team: noema
+          annotations:
+            summary: "p95 latency > 10s"
+            description: "p95 request latency is {{ $value }}s, exceeding the 10s threshold"
+            runbook_url: "https://example.com/runbooks/noema-latency-high"
+
+        - alert: NoemaLLMHighErrorRate
+          expr: rate(noema_llm_errors_total[5m]) > 10
+          for: 5m
+          labels:
+            severity: warning
+            team: noema
+          annotations:
+            summary: "High LLM error rate: {{ $value }}/5m"
+            description: "LLM errors are occurring at a rate of {{ $value }} per 5 minutes"
+            runbook_url: "https://example.com/runbooks/noema-llm-high-error-rate"
+
+        - alert: NoemaRedisDown
+          expr: noema_infra_healthy{component="redis"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: noema
+          annotations:
+            summary: "Redis is DOWN"
+            description: "Redis component is unhealthy"
+            runbook_url: "https://example.com/runbooks/noema-redis-down"
+
+        - alert: NoemaPostgresDown
+          expr: noema_infra_healthy{component="postgresql"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: noema
+          annotations:
+            summary: "PostgreSQL is DOWN"
+            description: "PostgreSQL component is unhealthy"
+            runbook_url: "https://example.com/runbooks/noema-postgres-down"
+
+        - alert: NoemaTokenBudgetExceeded
+          expr: noema_token_budget_exceeded_total > 0
+          for: 0s
+          labels:
+            severity: warning
+            team: noema
+          annotations:
+            summary: "Token budget exceeded"
+            description: "Token budget has been exceeded {{ $value }} times"
+            runbook_url: "https://example.com/runbooks/noema-token-budget-exceeded"
+
+        - alert: NoemaRateLimitExceeded
+          expr: rate(noema_rate_limit_exceeded_total[5m]) > 10
+          for: 5m
+          labels:
+            severity: info
+            team: noema
+          annotations:
+            summary: "Rate limit exceeded {{ $value }} times in 5m"
+            description: "Rate limits are being exceeded at {{ $value }} per 5 minutes"
+            runbook_url: "https://example.com/runbooks/noema-rate-limit-exceeded"
+
+        - alert: NoemaQueueBacklog
+          expr: noema_worker_queue_depth > 50
+          for: 5m
+          labels:
+            severity: warning
+            team: noema
+          annotations:
+            summary: "Worker queue depth: {{ $value }}"
+            description: "Worker queue depth is {{ $value }}, exceeding threshold of 50"
+            runbook_url: "https://example.com/runbooks/noema-queue-backlog"
+
+    - name: noema-recording
+      interval: 30s
+      rules:
+        - record: noema:task_success_rate:5m
+          expr: rate(noema_tasks_successful[5m]) / rate(noema_tasks_processed[5m]) * 100
+
+        - record: noema:llm_calls_per_second:5m
+          expr: rate(noema_llm_calls_total[5m])
+
+        - record: noema:average_response_time:5m
+          expr: rate(noema_request_duration_seconds_sum[5m]) / rate(noema_request_duration_seconds_count[5m])

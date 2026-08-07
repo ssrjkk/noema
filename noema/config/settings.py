@@ -1,0 +1,240 @@
+"""Noema — centralised configuration (Pydantic BaseSettings + YAML)."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any
+
+import yaml
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ─── Paths ───────────────────────────────────────────────────────────────
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_DEFAULT_CONFIG = _PROJECT_ROOT / "settings.yaml"
+
+
+# ─── Sub-models ──────────────────────────────────────────────────────────
+class DatabaseSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_DB_")
+
+    url: str = Field(
+        default="postgresql+asyncpg://noema:noema@localhost:5432/noema",
+        description="SQLAlchemy async connection URL",
+    )
+    pool_min: int = Field(default=2, ge=1)
+    pool_max: int = Field(default=10, ge=1)
+    pool_timeout: float = Field(default=30.0, gt=0)
+    echo: bool = Field(default=False, description="SQLAlchemy echo (debug)")
+
+
+class RedisSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_REDIS_")
+
+    url: str = Field(default="redis://localhost:6379/0")
+    pool_max: int = Field(default=20, ge=1)
+    socket_timeout: float = Field(default=5.0, gt=0)
+
+
+class LLMSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_LLM_")
+
+    provider: str = Field(default="ollama", description="ollama | openai | anthropic")
+    ollama_url: str = Field(default="http://localhost:11434")
+    ollama_model: str = Field(default="llama3.1")
+    openai_api_key: SecretStr = Field(default=SecretStr(""))
+    anthropic_api_key: SecretStr = Field(default=SecretStr(""))
+
+    temperature: float = Field(default=0.4, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=4096, ge=1)
+    request_timeout: float = Field(default=120.0, gt=0)
+
+    circuit_breaker_threshold: int = Field(
+        default=5, ge=1, description="Failures before circuit opens"
+    )
+    circuit_breaker_recovery: float = Field(default=30.0, gt=0, description="Seconds before retry")
+    retry_max: int = Field(default=3, ge=0)
+    retry_base_delay: float = Field(default=1.0, gt=0)
+    retry_max_delay: float = Field(default=30.0, gt=0)
+
+
+class APISettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_API_")
+
+    host: str = Field(default="0.0.0.0")
+    port: int = Field(default=8000, ge=1, le=65535)
+    workers: int = Field(default=1, ge=1)
+    reload: bool = Field(default=False)
+
+    # Auth
+    api_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="Master API key. Empty = auth disabled (dev only).",
+    )
+    api_key_header: str = Field(default="X-API-Key")
+
+    # Rate limiting
+    rate_limit_enabled: bool = Field(default=True)
+    rate_limit_rpm: int = Field(default=60, ge=1, description="Requests per minute per key")
+    rate_limit_burst: int = Field(default=10, ge=1, description="Burst allowance")
+
+    # CORS
+    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_methods: list[str] = Field(default_factory=lambda: ["GET", "POST", "PUT", "DELETE"])
+
+    # Limits
+    max_request_body: int = Field(default=1_048_576, description="Max request body in bytes (1 MB)")
+    max_title_length: int = Field(default=200, ge=1)
+    max_description_length: int = Field(default=10_000, ge=1)
+    max_tags: int = Field(default=20, ge=1)
+
+
+class WorkerSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_WORKER_")
+
+    pool_size: int = Field(default=10, ge=1)
+    max_queue: int = Field(default=100, ge=1)
+    hierarchy_max_depth: int = Field(default=10, ge=1)
+    hierarchy_max_concurrent: int = Field(default=50, ge=1)
+    task_timeout: float = Field(default=300.0, gt=0)
+
+
+class MemorySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_MEMORY_")
+
+    data_dir: Path = Field(default=_PROJECT_ROOT / "data")
+    backup_enabled: bool = Field(default=True)
+    backup_count: int = Field(default=5, ge=0, description="Rotating backups")
+    auto_save_interval: float = Field(default=30.0, gt=0, description="Seconds between auto-saves")
+
+
+class SandboxSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_SANDBOX_")
+
+    enabled: bool = Field(default=True)
+    docker_image: str = Field(default="python:3.12-slim")
+    timeout: float = Field(default=60.0, gt=0)
+    max_memory: str = Field(default="256m")
+    max_cpus: float = Field(default=0.5, gt=0)
+    network_disabled: bool = Field(default=True)
+    read_only_root: bool = Field(default=True)
+
+
+class ObservabilitySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_OBS_")
+
+    logging_level: str = Field(default="INFO")
+    logging_format: str = Field(default="json", description="json | console")
+    metrics_enabled: bool = Field(default=True)
+    metrics_port: int = Field(default=9090, ge=1, le=65535)
+    tracing_enabled: bool = Field(default=False)
+    tracing_endpoint: str = Field(default="http://localhost:4318")
+    sentry_dsn: str = Field(default="", description="Sentry DSN for error tracking")
+    sentry_environment: str = Field(default="production")
+    sentry_traces_sample_rate: float = Field(default=0.1, ge=0.0, le=1.0)
+    sentry_profiles_sample_rate: float = Field(default=0.05, ge=0.0, le=1.0)
+
+
+class NeurosymbolicSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_NS_")
+
+    enabled: bool = Field(default=False)
+    max_refinement_attempts: int = Field(default=3, ge=1, le=10)
+    verification_timeout: float = Field(default=5.0, gt=0)
+    evolution_enabled: bool = Field(default=True)
+    fallback_to_cot: bool = Field(default=True)
+
+    # Causal reasoning
+    causal_enabled: bool = Field(default=True)
+    causal_max_counterfactuals: int = Field(default=5, ge=1, le=20)
+
+
+class AuditSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_AUDIT_")
+
+    merkle_chain_enabled: bool = Field(default=True)
+    merkle_chain_id: str = Field(default="")
+
+
+# ─── Root config ─────────────────────────────────────────────────────────
+class NoemaSettings(BaseSettings):
+    """Single source of truth for every tunable knob in Noema."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="NOEMA_",
+        env_nested_delimiter="__",
+        extra="ignore",
+    )
+
+    # Sub-configs
+    db: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    redis: RedisSettings = Field(default_factory=RedisSettings)
+    llm: LLMSettings = Field(default_factory=LLMSettings)
+    api: APISettings = Field(default_factory=APISettings)
+    worker: WorkerSettings = Field(default_factory=WorkerSettings)
+    memory: MemorySettings = Field(default_factory=MemorySettings)
+    sandbox: SandboxSettings = Field(default_factory=SandboxSettings)
+    obs: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    neurosymbolic: NeurosymbolicSettings = Field(default_factory=NeurosymbolicSettings)
+    audit: AuditSettings = Field(default_factory=AuditSettings)
+
+    # Chain-of-thought
+    cot_max_steps: int = Field(default=12, ge=1)
+    cot_temperature: float = Field(default=0.4, ge=0.0, le=2.0)
+
+    # Evolution
+    evolution_enabled: bool = Field(default=True)
+    evolution_auto_apply: bool = Field(default=False, description="Never auto-apply without tests")
+    evolution_test_before_apply: bool = Field(default=True)
+
+    # Knowledge
+    knowledge_persist_path: Path = Field(default=_PROJECT_ROOT / "data" / "knowledge.json")
+    feedback_persist_path: Path = Field(default=_PROJECT_ROOT / "data" / "feedback.json")
+
+    @classmethod
+    def from_yaml(cls, path: str | Path | None = None) -> NoemaSettings:
+        """Load settings from a YAML file, falling back to env vars."""
+        cfg_path = Path(path) if path else _DEFAULT_CONFIG
+        data: dict[str, Any] = {}
+        if cfg_path.is_file():
+            with open(cfg_path, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        return cls(**data)
+
+    def dump_yaml(self, path: str | Path) -> None:
+        """Write current settings to YAML (secrets masked)."""
+        from pydantic import Secret
+
+        def _mask(obj: Any) -> Any:
+            if isinstance(obj, Secret):
+                return "***"
+            if isinstance(obj, dict):
+                return {k: _mask(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_mask(v) for v in obj]
+            return obj
+
+        dumped = self.model_dump()
+        masked = _mask(dumped)
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.dump(masked, f, default_flow_style=False, allow_unicode=True)
+
+
+# ─── Singleton ───────────────────────────────────────────────────────────
+_settings: NoemaSettings | None = None
+
+
+def get_settings() -> NoemaSettings:
+    """Get or create the global settings singleton."""
+    global _settings
+    if _settings is None:
+        config_path = os.environ.get("NOEMA_CONFIG")
+        _settings = NoemaSettings.from_yaml(config_path)
+    return _settings
+
+
+def reset_settings() -> None:
+    """Reset the singleton (for testing)."""
+    global _settings
+    _settings = None

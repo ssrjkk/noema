@@ -1,0 +1,65 @@
+# Noema — Configuration
+# Override any value via environment variables: NOEMA_API_PORT=9000
+
+db:
+  url: "postgresql+asyncpg://noema:noema@localhost:5432/noema"
+  pool_min: 2
+  pool_max: 10
+
+redis:
+  url: "redis://localhost:6379/0"
+
+llm:
+  provider: "ollama"
+  ollama_url: "http://localhost:11434"
+  ollama_model: "llama3.1"
+  temperature: 0.4
+  max_tokens: 4096
+  request_timeout: 120.0
+  circuit_breaker_threshold: 5
+  circuit_breaker_recovery: 30.0
+  retry_max: 3
+  retry_base_delay: 1.0
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+  reload: false
+  rate_limit_enabled: true
+  rate_limit_rpm: 60
+  rate_limit_burst: 10
+  cors_origins: ["*"]
+
+worker:
+  pool_size: 10
+  max_queue: 100
+  hierarchy_max_depth: 10
+  hierarchy_max_concurrent: 50
+  task_timeout: 300.0
+
+memory:
+  data_dir: "./data"
+  backup_enabled: true
+  backup_count: 5
+  auto_save_interval: 30.0
+
+sandbox:
+  enabled: true
+  docker_image: "python:3.12-slim"
+  timeout: 60.0
+  max_memory: "256m"
+  max_cpus: 0.5
+  network_disabled: true
+
+obs:
+  logging_level: "INFO"
+  logging_format: "json"
+  metrics_enabled: true
+  metrics_port: 9090
+  tracing_enabled: false
+
+cot_max_steps: 12
+evolution_enabled: true
+evolution_auto_apply: false
+evolution_test_before_apply: true

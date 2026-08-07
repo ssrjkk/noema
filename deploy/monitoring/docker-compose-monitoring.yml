@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+      - ./deploy/monitoring/loki-config.yml:/etc/loki/loki-config.yml
+    command: -config.file=/etc/loki/loki-config.yml
+    networks:
+      - noema-network
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: promtail
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./deploy/monitoring/promtail-config.yml:/etc/promtail/promtail-config.yml
+    command: -config.file=/etc/promtail/promtail-config.yml
+    networks:
+      - noema-network
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deploy/monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/noema.json
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-lokiexplore-app
+    networks:
+      - noema-network
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+networks:
+  noema-network:
+    external: true
+
+volumes:
+  loki-data:
+  grafana-data:

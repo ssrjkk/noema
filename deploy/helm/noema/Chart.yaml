@@ -1,0 +1,25 @@
+apiVersion: v2
+name: noema
+description: Noema — Production-grade AI reasoning engine
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+maintainers:
+  - name: Noema
+
+keywords:
+  - ai
+  - reasoning
+  - llm
+  - framework
+
+dependencies:
+  - name: postgresql
+    version: "13.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
