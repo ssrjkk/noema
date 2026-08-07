@@ -55,7 +55,7 @@ db = [
     "alembic>=1.12",
 ]
 full = [
-    "chromadb>=0.4",
+    "chromadb>=1.5.9",
     "sentence-transformers>=2.0",
     "openai>=1.0",
 ]
