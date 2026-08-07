@@ -13,6 +13,17 @@
 
 - Added `scripts/check_encoding.py` encoding guard (Makefile `encoding-check`, wired into `make ci` and CI).
 
+### Dependencies
+
+- Raised minimum versions: pydantic ≥2.13.4, pydantic-settings ≥2.14.2, aiohttp ≥3.14.3, asyncio-mqtt ≥0.16.2, uvicorn ≥0.52.1, asyncpg ≥0.31.0, mypy ≥2.3.0, rich ≥15.0.0, chromadb ≥1.5.9, hvac ≥2.4.0.
+- Bumped GitHub Actions: upload-artifact v4→v7, codecov-action v4→v7, docker/login-action v3→v4, docker/setup-buildx-action v3→v4, azure/setup-helm v3→v5.
+
+### CI
+
+- Fixed `Tests` job failing at startup (pytest exit code 4/2): added `pytest-cov`, `pytest-timeout`, `pytest-benchmark`, `hypothesis`, `httpx` to the `dev` extras.
+- `test_default_values` no longer depends on ambient `NOEMA_LLM_PROVIDER` (uses `monkeypatch.delenv`).
+- Removed redundant `renovate.json`; Dependabot is the single update bot.
+
 ## v1.0.0 (2024-07-30)
 
 Initial release of Noema.
