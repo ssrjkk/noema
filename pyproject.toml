@@ -68,7 +68,7 @@ grpc = [
     "protobuf>=4.25",
 ]
 vault = [
-    "hvac>=2.0",
+    "hvac>=2.4.0",
 ]
 arq = [
     "arq>=0.26",
