@@ -22,7 +22,8 @@ from noema.config.settings import (
 
 
 class TestNoemaSettings:
-    def test_default_values(self):
+    def test_default_values(self, monkeypatch):
+        monkeypatch.delenv("NOEMA_LLM_PROVIDER", raising=False)
         reset_settings()
         s = NoemaSettings()
         assert s.llm.provider == "ollama"
