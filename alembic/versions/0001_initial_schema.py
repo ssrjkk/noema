@@ -4,6 +4,7 @@ Revision ID: 0001
 Revises: None
 Create Date: 2026-07-30 12:00:00.000000
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -83,7 +84,9 @@ def upgrade() -> None:
         sa.Column("user_id", sa.String(100), nullable=False),
         sa.Column("task_id", sa.String(100), nullable=True),
         sa.Column("details", JSONB(), nullable=False, server_default="'{}'::jsonb"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
     )
     op.create_index(
         "idx_audit_tenant_time",
@@ -103,8 +106,12 @@ def upgrade() -> None:
         sa.Column("tasks_run", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("tasks_this_hour", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("reset_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
     )
 
     # --- feature_flags ---
@@ -114,8 +121,12 @@ def upgrade() -> None:
         sa.Column("flag_key", sa.String(100), nullable=False),
         sa.Column("tenant_id", sa.String(100), nullable=True),
         sa.Column("value", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
     )
     op.create_index(
         "ix_feature_flags_key_tenant",

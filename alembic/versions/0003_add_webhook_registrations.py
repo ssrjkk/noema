@@ -4,6 +4,7 @@ Revision ID: 0003
 Revises: 0002
 Create Date: 2026-07-30 12:02:00.000000
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -28,8 +29,12 @@ def upgrade() -> None:
         sa.Column("retry_count", sa.Integer(), nullable=False, server_default="3"),
         sa.Column("timeout", sa.Integer(), nullable=False, server_default="10"),
         sa.Column("active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
     )
     op.create_index(
         "ix_webhook_registrations_tenant",
