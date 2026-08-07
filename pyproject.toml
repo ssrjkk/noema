@@ -19,7 +19,7 @@ dependencies = [
 
     # Async / HTTP
     "aiohttp>=3.9",
-    "asyncio-mqtt>=0.16",
+    "asyncio-mqtt>=0.16.2",
 
     # API
     "fastapi>=0.100",
