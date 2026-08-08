@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -47,6 +48,77 @@ class TaskGraph:
     goals: list[str] = field(default_factory=list)
     variables: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def _sanitize_var_name(name: Any, fallback: str) -> str:
+    """Coerce an arbitrary label into a valid Z3 variable identifier."""
+    text = str(name).strip()
+    if not text:
+        return fallback
+    safe = re.sub(r"[^0-9a-zA-Z_]", "_", text)
+    safe = re.sub(r"_+", "_", safe).strip("_")
+    if not safe or safe[0].isdigit():
+        safe = f"v_{safe}"
+    return safe or fallback
+
+
+def _z3_int(name: str) -> Any:
+    try:
+        from z3 import Int
+
+        return Int(name)
+    except ImportError:
+        return None
+
+
+def _z3_bool(name: str) -> Any:
+    try:
+        from z3 import Bool
+
+        return Bool(name)
+    except ImportError:
+        return None
+
+
+_NUM_RE = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
+
+
+def _extract_bounds(req: dict[str, Any]) -> tuple[float | None, float | None]:
+    """Extract numeric ``(min, max)`` bounds from a requirement.
+
+    Priority: explicit ``min``/``max`` fields, then natural-language-ish
+    ``constraints`` entries such as ``"x >= 0.5"``, ``"x in [1, 10]"``,
+    ``"min=3 max=9"`` or ``"between 2 and 5"``.
+    """
+    raw_min = req.get("min")
+    raw_max = req.get("max")
+    lower = float(raw_min) if raw_min is not None and isinstance(raw_min, (int, float)) else None
+    upper = float(raw_max) if raw_max is not None and isinstance(raw_max, (int, float)) else None
+
+    for raw in req.get("constraints") or []:
+        text = str(raw).lower()
+        in_match = re.search(r"in\s*[\[\(]\s*([-+]?[\d.]+)\s*,\s*([-+]?[\d.]+)\s*[\]\)]", text)
+        if in_match:
+            lower = lower if lower is not None else float(in_match.group(1))
+            upper = upper if upper is not None else float(in_match.group(2))
+        between_match = re.search(r"between\s+([-+]?[\d.]+)\s+and\s+([-+]?[\d.]+)", text)
+        if between_match:
+            lower = lower if lower is not None else float(between_match.group(1))
+            upper = upper if upper is not None else float(between_match.group(2))
+        ge_match = re.search(r">=\s*([-+]?[\d.]+)", text)
+        if ge_match:
+            lower = lower if lower is not None else float(ge_match.group(1))
+        le_match = re.search(r"<=\s*([-+]?[\d.]+)", text)
+        if le_match:
+            upper = upper if upper is not None else float(le_match.group(1))
+        min_match = re.search(r"\bmin\s*[:=]?\s*([-+]?[\d.]+)", text)
+        if min_match:
+            lower = lower if lower is not None else float(min_match.group(1))
+        max_match = re.search(r"\bmax\s*[:=]?\s*([-+]?[\d.]+)", text)
+        if max_match:
+            upper = upper if upper is not None else float(max_match.group(1))
+
+    return lower, upper
 
 
 class SymbolicVerificationError(Exception):
@@ -140,6 +212,7 @@ class SymbolicEngine:
                 constraint = await self._parse_requirement(req)
                 if constraint:
                     graph.requirements.append(constraint)
+                    graph.variables[constraint.name] = _z3_int(constraint.name)
 
             for const in structured_task.get("constraints", []):
                 if len(graph.constraints) >= self.max_constraints:
@@ -148,6 +221,7 @@ class SymbolicEngine:
                 constraint = await self._parse_constraint(const)
                 if constraint:
                     graph.constraints.append(constraint)
+                    graph.variables[constraint.name] = _z3_bool(constraint.name)
 
             graph.goals = structured_task.get("goals", [])
 
@@ -215,23 +289,29 @@ class SymbolicEngine:
             return False, [f"verification_error: {str(e)}"]
 
     async def _check_solution(self, solver: Any, solution: dict, task_graph: TaskGraph) -> bool:
-        from z3 import Int, unsat
+        from z3 import unsat
 
+        checked = 0
         for name, value in solution.items():
-            if name in task_graph.variables:
-                var = task_graph.variables[name]
+            var = task_graph.variables.get(name)
+            if var is None:
+                continue
 
-                solver.push()
-                try:
-                    if isinstance(var, type(Int(name))):
-                        solver.add(var == value)
+            solver.push()
+            try:
+                solver.add(var == value)
+                if solver.check() == unsat:
+                    return False
+            finally:
+                solver.pop()
+            checked += 1
 
-                        result = solver.check()
-                        if result == unsat:
-                            return False
-                finally:
-                    solver.pop()
-
+        if checked == 0 and solution:
+            logger.warning(
+                "no_solution_variable_matched",
+                solution_keys=list(solution.keys()),
+                known_variables=list(task_graph.variables.keys()),
+            )
         return True
 
     async def _extract_violations(
@@ -279,43 +359,71 @@ class SymbolicEngine:
         if not isinstance(task["requirements"], list):
             raise ValueError("requirements must be a list")
 
-    async def _parse_requirement(self, req: dict) -> Constraint | None:
+    async def _parse_requirement(self, req: Any) -> Constraint | None:
         try:
             from z3 import And, Int
+        except ImportError:
+            logger.warning("z3_not_installed; requirement skipped")
+            return None
 
-            name = req["name"]
+        try:
+            if not isinstance(req, dict):
+                if hasattr(req, "model_dump"):
+                    req = req.model_dump()
+                else:
+                    raise TypeError(f"requirement must be a dict, got {type(req).__name__}")
+
+            name = _sanitize_var_name(req.get("name") or req.get("category"), "req")
             req_type = req.get("type", "numeric")
 
             if req_type == "numeric":
+                lower, upper = _extract_bounds(req)
+                if lower is None and upper is None:
+                    logger.warning(
+                        "requirement_no_numeric_bounds; skipped",
+                        requirement_name=name,
+                    )
+                    return None
+
                 var = Int(name)
-                min_val = req.get("min", 0)
-                max_val = req.get("max", 1000)
+                clauses = []
+                if lower is not None:
+                    clauses.append(var >= lower)
+                if upper is not None:
+                    clauses.append(var <= upper)
 
                 return Constraint(
                     name=name,
-                    expression=And(var >= min_val, var <= max_val),
-                    description=f"{name} in [{min_val}, {max_val}]",
-                    priority=req.get("priority", 1),
+                    expression=And(*clauses),
+                    description=str(req.get("description") or ""),
+                    priority=int(req.get("priority", 1)),
                 )
 
+            logger.warning("requirement_type_unsupported", requirement_type=req_type, name=name)
             return None
 
         except Exception as e:
             logger.warning("requirement_parsing_failed", requirement=req, error=str(e))
             return None
 
-    async def _parse_constraint(self, const: dict) -> Constraint | None:
+    async def _parse_constraint(self, const: Any) -> Constraint | None:
         try:
             from z3 import Bool
 
-            name = const["name"]
+            if not isinstance(const, dict):
+                if hasattr(const, "model_dump"):
+                    const = const.model_dump()
+                else:
+                    raise TypeError(f"constraint must be a dict, got {type(const).__name__}")
+
+            name = _sanitize_var_name(const.get("name") or const.get("category"), "constraint")
             var = Bool(name)
 
             return Constraint(
                 name=name,
                 expression=var,
-                description=const.get("condition", ""),
-                priority=const.get("priority", 1),
+                description=str(const.get("condition") or const.get("description") or ""),
+                priority=int(const.get("priority", 1)),
             )
         except Exception as e:
             logger.warning("constraint_parsing_failed", constraint=const, error=str(e))

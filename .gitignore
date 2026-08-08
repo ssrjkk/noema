@@ -45,6 +45,7 @@ bandit-report.json
 safety-report.json
 pip-audit-report.json
 results.xml
+results/
 
 # OS
 .DS_Store

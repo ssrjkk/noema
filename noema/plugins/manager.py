@@ -44,7 +44,7 @@ class Plugin:
         self._initialized = False
 
     async def setup(self) -> None:
-        """РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РїР»Р°РіРёРЅР° (РїРµСЂРµРѕРїСЂРµРґРµР»РёС‚СЊ)."""
+        """Инициализация плагина (переопределить)."""
         self._initialized = True
 
     async def teardown(self) -> None:

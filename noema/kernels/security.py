@@ -79,7 +79,7 @@ class SecurityKernel(BaseKernel):
             {
                 "category": "web",
                 "check": "SQL Injection Prevention",
-                "description": "РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ parameterized queries / ORM",
+                "description": "Использование parameterized queries / ORM",
                 "recommendation": "Всегда использовать prepared statements или ORM",
                 "severity": "critical",
             },

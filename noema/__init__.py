@@ -9,7 +9,7 @@ from noema.core.types import (
     ThoughtProcess,
 )
 
-__version__ = "0.1.0"
+__version__ = "1.1.0"
 __all__ = [
     "NoemaEngine",
     "Task",

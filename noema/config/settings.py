@@ -14,6 +14,45 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _DEFAULT_CONFIG = _PROJECT_ROOT / "settings.yaml"
 
+_SUBMODEL_KEYS = frozenset(
+    {"db", "redis", "llm", "api", "worker", "memory", "sandbox", "obs", "neurosymbolic", "audit"}
+)
+
+
+def _env_overrides() -> dict[str, Any]:
+    """Map relevant ``NOEMA_*`` environment variables onto a nested config dict.
+
+    Supports both ``NOEMA_LLM__PROVIDER`` (root prefix + nested delimiter) and
+    ``NOEMA_LLM_PROVIDER`` (sub-model prefix) spellings; scalar root knobs like
+    ``NOEMA_COT_MAX_STEPS`` map to their root field.
+    """
+    out: dict[str, Any] = {}
+    for key, value in os.environ.items():
+        if not key.startswith("NOEMA_"):
+            continue
+        rest = key[len("NOEMA_") :]
+        parts = rest.split("__")
+        if len(parts) == 1 and "_" in rest:
+            first, _, tail = rest.partition("_")
+            if first.lower() in _SUBMODEL_KEYS:
+                parts = [first, tail]
+        node = out
+        for part in parts[:-1]:
+            node = node.setdefault(part.lower(), {})
+        node[parts[-1].lower()] = value
+    return out
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge ``override`` on top of ``base``; ``override`` wins."""
+    result = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
 
 # ─── Sub-models ──────────────────────────────────────────────────────────
 class DatabaseSettings(BaseSettings):
@@ -194,13 +233,19 @@ class NoemaSettings(BaseSettings):
 
     @classmethod
     def from_yaml(cls, path: str | Path | None = None) -> NoemaSettings:
-        """Load settings from a YAML file, falling back to env vars."""
+        """Load settings from a YAML file, falling back to env vars.
+
+        Precedence: environment variables > YAML file > field defaults.
+        """
         cfg_path = Path(path) if path else _DEFAULT_CONFIG
         data: dict[str, Any] = {}
         if cfg_path.is_file():
             with open(cfg_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
-        return cls(**data)
+        if not isinstance(data, dict):
+            data = {}
+        merged = _deep_merge(data, _env_overrides())
+        return cls(**merged)
 
     def dump_yaml(self, path: str | Path) -> None:
         """Write current settings to YAML (secrets masked)."""

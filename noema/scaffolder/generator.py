@@ -279,9 +279,9 @@ node_modules/
         ]
         for i, entry in enumerate(entries):
             is_last = i == len(entries) - 1
-            connector = "в””в”Ђв”Ђ " if is_last else "в”њв”Ђв”Ђ "
+            connector = "└── " if is_last else "├── "
             lines.append(f"{prefix}{connector}{entry.name}")
             if entry.is_dir():
-                extension = "    " if is_last else "в”‚   "
+                extension = "    " if is_last else "│   "
                 lines.append(self._tree(entry, prefix + extension, max_depth - 1))
         return "\n".join(lines)

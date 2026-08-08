@@ -162,7 +162,7 @@ class NoemaEngine:
         """
         if self._initialized:
             return
-        log.info("РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ NoemaEngine (LLM-first)...")
+        log.info("Инициализация NoemaEngine (LLM-first)...")
         await self.knowledge.load()
         await self.feedback.load()
         await self.worker_pool.start()
@@ -283,10 +283,16 @@ class NoemaEngine:
 
         set_tenant_id(self._tenant_id)
 
-        # Check for existing checkpoint (resumable execution)
+        # Check for existing checkpoint (resumable execution). A checkpoint is
+        # consumed exactly once: restored step results are passed into the CoT
+        # run and the file is deleted immediately, so stale checkpoints can
+        # never leak into later runs.
         ckpt = await self.checkpointer.load(task.id, self._tenant_id)
+        resume_context: dict[str, str] | None = None
         if ckpt:
             log.info("resuming_from_checkpoint", task=task.id, steps=len(ckpt.completed_steps))
+            resume_context = dict(ckpt.step_results or {})
+            await self.checkpointer.delete(task.id, self._tenant_id)
 
         thought = ThoughtProcess(task_id=task.id)
         t0 = time.monotonic()
@@ -303,7 +309,7 @@ class NoemaEngine:
             },
         )
 
-        # в”Ђв”Ђ NeuroSymbolic path в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── NeuroSymbolic path ────────────────────────────────────────
         if self.neurosymbolic:
             try:
                 ns_task = self._prepare_neurosymbolic_task(task)
@@ -354,7 +360,7 @@ class NoemaEngine:
 
         if past_episodes:
             memory_context = "\n".join(
-                f"[Past] {ep.task_description[:100]} в†’ {ep.outcome}" for ep in past_episodes
+                f"[Past] {ep.task_description[:100]} → {ep.outcome}" for ep in past_episodes
             )
             knowledge_context = f"{knowledge_context}\n\n{memory_context}"
 
@@ -382,6 +388,7 @@ class NoemaEngine:
                         [f"Judge: {reflexion_state.error_summary}"] if reflexion_state else None
                     ),
                     reflexion_attempt=reflexion_attempt,
+                    resume_context=resume_context if reflexion_attempt == 1 else None,
                     fallback={"raw": "Chain-of-Thought reasoning failed, using minimal fallback"},
                 )
 
@@ -436,12 +443,8 @@ class NoemaEngine:
                                 tenant_id=self._tenant_id,
                                 session_id=self.tracer.current_span_id,
                                 attempt=reflexion_attempt + 1,
-                                completed_steps=[s.kernel for s in thought.steps if s.kernel],
-                                step_results={
-                                    s.kernel: s.output_summary[:500]
-                                    for s in thought.steps
-                                    if s.kernel
-                                },
+                                completed_steps=[n.name for n in self.cot.chain if n.name],
+                                step_results={n.name: n.response for n in self.cot.chain if n.name},
                                 token_budget_used=getattr(self.token_budget, "_used", 0)
                                 if self.token_budget
                                 else 0,
@@ -520,15 +523,30 @@ class NoemaEngine:
     def _prepare_neurosymbolic_task(self, task: Task) -> dict[str, Any]:
         """Project a :class:`Task` onto the strict neurosymbolic input contract.
 
+        Domain :class:`Requirement` objects carry ``category``/``description``/
+        ``priority``/``constraints``; the symbolic engine consumes numeric
+        requirements with ``name`` + optional ``min``/``max``. Category is used
+        as the variable name and any constraint text (``>= N``, ``in [a, b]``,
+        ``min=N`` …) is forwarded so bounds can be extracted downstream.
+
         Complexity: ``O(R)`` for R task requirements.
         """
+        requirements = []
+        for index, requirement in enumerate(task.requirements):
+            req = requirement.model_dump() if hasattr(requirement, "model_dump") else {}
+            requirements.append(
+                {
+                    "name": req.get("category") or f"req_{index}",
+                    "type": "numeric",
+                    "min": req.get("min"),
+                    "max": req.get("max"),
+                    "constraints": list(req.get("constraints") or []),
+                    "description": req.get("description") or "",
+                    "priority": int(req.get("priority", 1)),
+                }
+            )
         return {
-            "requirements": [
-                requirement.model_dump()
-                if hasattr(requirement, "model_dump")
-                else {"name": str(requirement)}
-                for requirement in task.requirements
-            ],
+            "requirements": requirements,
             "constraints": [],
             "goals": [task.title, task.description],
             "variables": {},
@@ -895,7 +913,7 @@ class NoemaEngine:
         scaffolder = ProjectScaffolder(output_dir=output_dir)
         return await scaffolder.scaffold(solution, task)
 
-    # в”Ђв”Ђ Self-Evolution в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Self-Evolution ────────────────────────────────────────
 
     async def evolve(self) -> dict[str, Any]:
         """Run one self-evolution cycle: analyze self, generate patches, apply improvements.
@@ -911,7 +929,7 @@ class NoemaEngine:
         )
         return result.model_dump()
 
-    # в”Ђв”Ђ Knowledge Ingestion в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Knowledge Ingestion ───────────────────────────────────
 
     async def ingest_file(self, path: str) -> dict[str, Any]:
         result = await self.ingestion.ingest_file(path, tags=["ingested"])
@@ -927,12 +945,12 @@ class NoemaEngine:
         result = await self.ingestion.ingest_text(text, source_name=source, tags=["ingested"])
         return result.model_dump()
 
-    # в”Ђв”Ђ Resource Discovery в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Resource Discovery ────────────────────────────────────
 
     def discover_resources(self) -> dict[str, Any]:
         return self.discovery.discover_all()
 
-    # в”Ђв”Ђ Memory в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Memory ────────────────────────────────────────────────
 
     def search_memory(self, query: str, kind: str = "all") -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -947,7 +965,7 @@ class NoemaEngine:
     def memory_stats(self) -> dict[str, Any]:
         return self.memory.stats()
 
-    # в”Ђв”Ђ Worker Hierarchy в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Worker Hierarchy ──────────────────────────────────────
 
     async def execute_hierarchical(
         self,
@@ -977,7 +995,7 @@ class NoemaEngine:
     def hierarchy_stats(self) -> dict[str, Any]:
         return self.worker_hierarchy.get_stats()
 
-    # в”Ђв”Ђ Sandbox вЂ” Code Validation в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Sandbox — Code Validation ────────────────────────────────
 
     async def validate_solution(self, solution: Solution, run_tests: bool = False) -> SandboxResult:
         """Validate generated code through sandbox (AST, lint, run, tests).
@@ -1003,7 +1021,7 @@ class NoemaEngine:
 
         return result
 
-    # в”Ђв”Ђ Module System в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Module System ──────────────────────────────────────────
 
     def list_modules(self) -> list[dict[str, str]]:
         """List all registered Noema modules."""
@@ -1016,7 +1034,7 @@ class NoemaEngine:
     def execute_all_modules(
         self, task: Task, filter_tags: list[str] | None = None
     ) -> dict[str, dict[str, Any]]:
-        """Execute all (or filtered) modules on a task вЂ” combined intelligence."""
+        """Execute all (or filtered) modules on a task — combined intelligence."""
         return self.modules.execute_all(task, filter_tags)
 
     def get_module(self, name: str) -> Any:

@@ -1,0 +1,43 @@
+# Noema experiment definition.
+#
+# Run it with:
+#   python -m noema.experiments.runner experiments/experiments.yaml --out results
+#
+# The default CI setup uses the built-in "fallback" provider so the pipeline
+# runs without any API keys. To benchmark real models, uncomment a provider
+# and export the matching API key (OPENAI_API_KEY / ANTHROPIC_API_KEY).
+
+meta:
+  name: "llm-benchmark-smoke"
+  description: "Smoke benchmark: same tasks across providers/models."
+  seed: 42
+
+providers:
+  - provider: fallback
+    models:
+      - fallback
+  # - provider: openai
+  #   models: ["gpt-4o", "gpt-4o-mini"]
+  #   cost_per_token: 0.00003
+  # - provider: anthropic
+  #   models: ["claude-sonnet-4-20250514"]
+  #   cost_per_token: 0.00002
+
+tasks:
+  - title: "Real-time Chat App"
+    description: >
+      Design a real-time chat application. Requirements: websockets,
+      redis pubsub, autoscaling.
+    tags: ["python", "websocket", "redis"]
+  - title: "REST API with Postgres"
+    description: >
+      Design a REST API backed by PostgreSQL. Requirements: JWT auth,
+      rate limiting, pagination.
+    tags: ["python", "fastapi", "postgres"]
+
+repetitions: 2
+
+settings:
+  neurosymbolic: false   # reserved: wired to NOEMA_NEUROSYMBOLIC__ENABLED
+  retrieval: false       # reserved: Phase 2 (chromadb / embeddings pipeline)
+  sandbox: false         # reserved: Phase 3 (AST/lint/run validation per cell)

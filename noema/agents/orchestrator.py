@@ -62,7 +62,7 @@ class AgentOrchestrator:
         self._initialized = False
 
     async def initialize(self) -> None:
-        """РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ Рё СЂРµРіРёСЃС‚СЂР°С†РёСЏ Р°РіРµРЅС‚РѕРІ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ."""
+        """Инициализация и регистрация агентов по умолчанию."""
         if self._initialized:
             return
 

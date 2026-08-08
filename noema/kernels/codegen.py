@@ -62,7 +62,7 @@ async def create_{resource}(payload: dict):
     # TODO: implement business logic
     return {{"created": True, "data": payload}}
 ''',
-        "data_model": '''"""Data models вЂ” auto-generated."""
+        "data_model": '''"""Data models — auto-generated."""
 
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -83,7 +83,7 @@ class {model_name}(BaseRecord):
     class Config:
         from_attributes = True
 ''',
-        "repository": '''"""Repository pattern вЂ” auto-generated."""
+        "repository": '''"""Repository pattern — auto-generated."""
 
 from typing import TypeVar, Generic, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -128,7 +128,7 @@ class BaseRepository(Generic[T]):
             return True
         return False
 ''',
-        "service": '''"""Service layer вЂ” auto-generated."""
+        "service": '''"""Service layer — auto-generated."""
 
 from dataclasses import dataclass
 from typing import Optional

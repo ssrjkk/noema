@@ -1,4 +1,4 @@
-"""Knowledge service вЂ” wraps KnowledgeStore + KnowledgeGraph."""
+"""Knowledge service — wraps KnowledgeStore + KnowledgeGraph."""
 
 from __future__ import annotations
 

@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Real-time Chat App",
+    "description": "Design a real-time chat application. Requirements: websockets, redis pubsub, autoscaling.",
+    "tags": ["python", "websocket", "redis"]
+  },
+  {
+    "title": "REST API with Postgres",
+    "description": "Design a REST API backed by PostgreSQL. Requirements: JWT auth, rate limiting, pagination.",
+    "tags": ["python", "fastapi", "postgres"]
+  }
+]

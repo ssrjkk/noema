@@ -108,7 +108,7 @@ DATABASE_POOL_RECYCLE=1800
             {
                 "category": "database",
                 "strategy": "Query Optimization",
-                "description": "РРЅРґРµРєСЃС‹, EXPLAIN ANALYZE, batch inserts",
+                "description": "Индексы, EXPLAIN ANALYZE, batch inserts",
                 "priority": "high",
                 "impact": "10-100x query speed improvement",
             },

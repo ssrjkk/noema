@@ -10,7 +10,6 @@ import typer
 
 from noema.cli.ui import STATUS_DOT, data_table, panel
 from noema.config.settings import get_settings
-from noema.db.engine import get_db
 
 logger = structlog.get_logger(__name__)
 health_app = typer.Typer(help="System health checks", rich_markup_mode="rich")
@@ -31,6 +30,8 @@ async def _check_llm() -> dict:
 async def _check_db() -> dict:
     """Check database connectivity."""
     try:
+        from noema.db.engine import get_db
+
         db = get_db()
         healthy = await db.health_check()
         return {

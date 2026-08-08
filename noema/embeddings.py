@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from typing import Any, cast
 
 import numpy as np
@@ -57,18 +56,32 @@ class DenseEmbedder:
         return cast("np.ndarray", self.embed([text])[0]).reshape(1, -1)
 
     def _fallback_embed(self, texts: list[str]) -> np.ndarray:
-        vectors = []
-        for text in texts:
-            ngrams: set[int] = set()
+        vectors = np.empty((len(texts), self._dim), dtype=np.float32)
+        for i, text in enumerate(texts):
             text_lower = text.lower()
+            if not text_lower:
+                continue
+            codes = np.frombuffer(text_lower.encode("utf-32-le"), dtype="<u4")
+            buckets: set[int] = set()
             for n in (3, 4):
-                for i in range(max(len(text_lower) - n + 1, 0)):
-                    ng = text_lower[i : i + n]
-                    idx = int(hashlib.md5(ng.encode()).hexdigest()[:8], 16) % 10000
-                    ngrams.add(idx)
+                if codes.size < n:
+                    continue
+                windows = np.lib.stride_tricks.sliding_window_view(codes, n)
+                if n == 3:
+                    hv = (
+                        windows[:, 0] * 257 * 257 + windows[:, 1] * 257 + windows[:, 2]
+                    ) & 0xFFFFFFFF
+                else:
+                    hv = (
+                        windows[:, 0] * 257 * 257 * 257
+                        + windows[:, 1] * 257 * 257
+                        + windows[:, 2] * 257
+                        + windows[:, 3]
+                    ) & 0xFFFFFFFF
+                buckets.update((hv % 10000).astype(np.int32).tolist())
             vec = np.zeros(10000, dtype=np.float32)
-            for idx in ngrams:
-                vec[idx] = 1.0
+            for bucket in buckets:
+                vec[bucket] = 1.0
             norm = np.linalg.norm(vec)
             if norm > 1e-10:
                 vec = vec / norm
@@ -76,8 +89,8 @@ class DenseEmbedder:
             dnorm = np.linalg.norm(dense)
             if dnorm > 1e-10:
                 dense = dense / dnorm
-            vectors.append(dense)
-        return np.array(vectors, dtype=np.float32)
+            vectors[i] = dense
+        return vectors
 
     @staticmethod
     def cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:

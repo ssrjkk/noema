@@ -1,9 +1,9 @@
 """DAG-based Chain-of-Thought engine — параллельное рассуждение с Reflexion.
 
 Architecture:
-- :class:`StepPlanner` вЂ” pure function mapping (tags, complexity, error context) to an
+- :class:`StepPlanner` — pure function mapping (tags, complexity, error context) to an
   ordered step list; deterministic, no I/O.
-- :class:`ChainOfThought` вЂ” DAG executor: builds a step graph, computes topological
+- :class:`ChainOfThought` — DAG executor: builds a step graph, computes topological
   levels, then runs every level's steps concurrently via ``asyncio``.
 
 Concurrency contract:
@@ -93,6 +93,7 @@ class ThoughtNode:
     role: str
     prompt: str
     response: str
+    name: str = ""
     confidence: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
     children: list[ThoughtNode] = field(default_factory=list)
@@ -205,8 +206,13 @@ class ChainOfThought:
         complexity: str = "moderate",
         reflexion_errors: list[str] | None = None,
         reflexion_attempt: int = 1,
+        resume_context: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Run the planned DAG and return the accumulated step context.
+
+        When ``resume_context`` maps step name → previous result, matching steps
+        are restored from the checkpoint instead of calling the LLM again
+        (resumable execution for crashed/interrupted tasks).
 
         Complexity: ``O(V · L)`` LLM calls in the worst case, where ``V`` is the
         number of selected steps and ``L`` the DAG depth; per-level scheduling is
@@ -248,6 +254,18 @@ class ChainOfThought:
             graph_context,
         )
 
+        resume_context = resume_context or {}
+        for step in self._steps:
+            if step.name in resume_context:
+                step.status = StepStatus.COMPLETED
+                step.result = resume_context[step.name]
+                self._context[step.name] = step.result
+        if resume_context:
+            logger.info(
+                "resuming_steps",
+                restored=[s.name for s in self._steps if s.status == StepStatus.COMPLETED],
+            )
+
         steps_by_name: dict[str, CoTStep] = {step.name: step for step in self._steps}
         levels = self._topological_levels()
         total = len(self._steps)
@@ -259,8 +277,12 @@ class ChainOfThought:
 
             tasks: dict[str, asyncio.Task[None]] = {}
             for step in level:
-                if step.status == StepStatus.SKIPPED:
+                if step.status in (StepStatus.SKIPPED, StepStatus.COMPLETED):
                     completed += 1
+                    if step.status == StepStatus.COMPLETED and self.on_step_end:
+                        cb = self.on_step_end
+                        if asyncio.iscoroutinefunction(cb):
+                            await cb(step.name, step.result[:200], completed, total)
                     continue
                 step.status = StepStatus.RUNNING
                 if self.on_step_start:
@@ -536,6 +558,7 @@ class ChainOfThought:
             role=step.role,
             prompt=step.user_prompt[:500],
             response=response.content,
+            name=step.name,
             confidence=step.confidence,
         )
         self.chain.append(node)

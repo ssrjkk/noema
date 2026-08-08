@@ -147,7 +147,7 @@ BUILTIN_KNOWLEDGE: list[KnowledgeEntry] = [
     KnowledgeEntry(
         category="best-practice",
         title="Database Optimization Strategies",
-        content="РСЃРїРѕР»СЊР·СѓР№С‚Рµ: 1) Proper indexing (B-tree, GIN, GiST), 2) Query plan analysis (EXPLAIN ANALYZE), 3) Connection pooling (PgBouncer), 4) Read replicas, 5) Partitioning for large tables, 6) Materialized views for complex queries, 7) Vacuum tuning, 8) pg_stat_statements monitoring",
+        content="Используйте: 1) Proper indexing (B-tree, GIN, GiST), 2) Query plan analysis (EXPLAIN ANALYZE), 3) Connection pooling (PgBouncer), 4) Read replicas, 5) Partitioning for large tables, 6) Materialized views for complex queries, 7) Vacuum tuning, 8) pg_stat_statements monitoring",
         tags=["database", "postgresql", "performance"],
         weight=0.85,
     ),
@@ -196,14 +196,14 @@ BUILTIN_KNOWLEDGE: list[KnowledgeEntry] = [
     KnowledgeEntry(
         category="security",
         title="OWASP Top 10 Mitigations",
-        content="A01 Broken Access Control в†’ RBAC + resource-level perms. A02 Cryptographic Failures в†’ TLS 1.3 + AES-256. A03 Injection в†’ parameterized queries. A04 Insecure Design в†’ threat modeling. A05 Security Misconfiguration в†’ hardened defaults. A06 Vulnerable Components в†’ SCA scanning. A07 Auth Failures в†’ MFA + rate limiting. A08 Data Integrity в†’ signed commits + SBOM. A09 Logging в†’ audit trail. A10 SSRF в†’ allowlist outbound.",
+        content="A01 Broken Access Control → RBAC + resource-level perms. A02 Cryptographic Failures → TLS 1.3 + AES-256. A03 Injection → parameterized queries. A04 Insecure Design → threat modeling. A05 Security Misconfiguration → hardened defaults. A06 Vulnerable Components → SCA scanning. A07 Auth Failures → MFA + rate limiting. A08 Data Integrity → signed commits + SBOM. A09 Logging → audit trail. A10 SSRF → allowlist outbound.",
         tags=["security", "owasp", "web", "api"],
         weight=0.92,
     ),
     KnowledgeEntry(
         category="performance",
         title="Caching Strategy L1/L2/L3",
-        content="L1: In-memory (dict/LRU) вЂ” nanoseconds, per-process. L2: Redis/Memcached вЂ” milliseconds, shared. L3: CDN вЂ” edge, static + API caching. Cache-aside for reads, write-through for consistency, write-behind for write performance. TTL-based expiration + event-driven invalidation.",
+        content="L1: In-memory (dict/LRU) — nanoseconds, per-process. L2: Redis/Memcached — milliseconds, shared. L3: CDN — edge, static + API caching. Cache-aside for reads, write-through for consistency, write-behind for write performance. TTL-based expiration + event-driven invalidation.",
         tags=["caching", "performance", "redis", "architecture"],
         weight=0.86,
     ),

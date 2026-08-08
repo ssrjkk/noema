@@ -34,7 +34,7 @@ class BaseKernel(abc.ABC):
     @property
     @abc.abstractmethod
     def name(self) -> str:
-        """РРјСЏ СЏРґСЂР°."""
+        """Имя ядра."""
         ...
 
     @property

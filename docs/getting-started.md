@@ -44,11 +44,13 @@ from noema import NoemaEngine, Task
 noema = NoemaEngine()
 await noema.initialize()
 
-solution, thought = await noema.think(Task(
-    title="Build a REST API",
-    description="Design a FastAPI-based user management API",
-    tags=["api", "python"],
-))
+solution, thought = await noema.think(
+    Task(
+        title="Build a REST API",
+        description="Design a FastAPI-based user management API",
+        tags=["api", "python"],
+    )
+)
 
 print(f"Quality: {solution.quality.value}")
 print(f"Confidence: {solution.confidence:.0%}")

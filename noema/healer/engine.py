@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import time
 import uuid
 from enum import StrEnum
@@ -9,6 +10,20 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+def _supports_kwarg(func: Callable, name: str) -> bool:
+    """Return True when ``func`` can be called with keyword argument ``name``."""
+    try:
+        sig = inspect.signature(func)
+    except (TypeError, ValueError):
+        return True
+    for param in sig.parameters.values():
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+        if param.name == name:
+            return True
+    return False
 
 
 class HealingAction(StrEnum):
@@ -65,13 +80,18 @@ class SelfHealer:
     ) -> Any:
         """Execute a function with automatic healing on failure."""
         last_error: Exception | None = None
-        context: dict[str, Any] = {"args": args, "kwargs": kwargs, "attempts": []}
+        context: dict[str, Any] = {"args": args, "kwargs": dict(kwargs), "attempts": []}
+        healing_context: dict[str, Any] = {}
+        supports_context = _supports_kwarg(func, "_healing_context")
 
         for action in self.strategy.actions:
             for attempt in range(self.strategy.max_retries):
+                call_kwargs = dict(kwargs)
+                if healing_context and supports_context:
+                    call_kwargs["_healing_context"] = healing_context
                 try:
                     start = time.time()
-                    result = await func(*args, **kwargs)
+                    result = await func(*args, **call_kwargs)
                     elapsed = (time.time() - start) * 1000
 
                     self._success_count += 1
@@ -95,23 +115,13 @@ class SelfHealer:
                         self._strategies_applied.get(action.value, 0) + 1
                     )
 
-                    if action == HealingAction.RETRY:
-                        delay = min(
-                            self.strategy.backoff_base * (2**attempt),
-                            self.strategy.backoff_max,
-                        )
-                        import asyncio
-
-                        await asyncio.sleep(delay)
-                        continue
-
-                    elif action == HealingAction.RETRY_WITH_CONTEXT:
-                        # pass error context to next attempt
-                        kwargs["_healing_context"] = {
-                            "previous_error": str(e),
-                            "attempt": attempt,
-                            "retry_count": attempt,
-                        }
+                    if action in (HealingAction.RETRY, HealingAction.RETRY_WITH_CONTEXT):
+                        if action == HealingAction.RETRY_WITH_CONTEXT:
+                            healing_context = {
+                                "previous_error": str(e),
+                                "attempt": attempt,
+                                "retry_count": attempt,
+                            }
                         delay = min(
                             self.strategy.backoff_base * (2**attempt),
                             self.strategy.backoff_max,
