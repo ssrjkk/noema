@@ -23,7 +23,7 @@ jobs:
       - name: Run experiments (fallback provider, no API keys)
         run: python -m noema.experiments.runner experiments/experiments.yaml --out results
       - name: Upload experiment artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: experiment-results
           path: results/
