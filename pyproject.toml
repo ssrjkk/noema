@@ -57,7 +57,7 @@ dev = [
     "pre-commit>=4.6.1",
 ]
 db = [
-    "sqlalchemy[asyncio]>=2.0",
+    "sqlalchemy[asyncio]>=2.0.51",
     "asyncpg>=0.31.0",
     "alembic>=1.19.0",
 ]
