@@ -11,6 +11,7 @@ Report only; never edits files.
 
 from __future__ import annotations
 
+import contextlib
 import pathlib
 import re
 import sys
@@ -90,6 +91,10 @@ def _text_files() -> list[pathlib.Path]:
 
 
 def main() -> int:
+    # Windows consoles default to cp1251/cp437; force UTF-8 output so the
+    # report itself never dies with UnicodeEncodeError.
+    with contextlib.suppress(AttributeError, ValueError):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     problems = []
     for p in _text_files():
         data = p.read_bytes()

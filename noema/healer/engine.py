@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import time
 import uuid
@@ -10,6 +11,23 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+async def _maybe_await(value: Any) -> Any:
+    """Await ``value`` when it is awaitable (e.g. a coroutine), else return it."""
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+async def _notify(callback: Callable, hr: Any) -> None:
+    """Invoke an ``on_heal`` callback whether it is sync or async."""
+    try:
+        result = callback(hr)
+        if inspect.isawaitable(result):
+            await result
+    except Exception:  # noqa: BLE001 - a notifier must never mask the result
+        pass
 
 
 def _supports_kwarg(func: Callable, name: str) -> bool:
@@ -91,7 +109,8 @@ class SelfHealer:
                     call_kwargs["_healing_context"] = healing_context
                 try:
                     start = time.time()
-                    result = await func(*args, **call_kwargs)
+                    result = _maybe_await(func(*args, **call_kwargs))
+                    result = await result
                     elapsed = (time.time() - start) * 1000
 
                     self._success_count += 1
@@ -103,7 +122,7 @@ class SelfHealer:
                     )
                     self.history.append(hr)
                     if on_heal:
-                        on_heal(hr)
+                        await _notify(on_heal, hr)
                     return result
 
                 except Exception as e:
@@ -126,8 +145,6 @@ class SelfHealer:
                             self.strategy.backoff_base * (2**attempt),
                             self.strategy.backoff_max,
                         )
-                        import asyncio
-
                         await asyncio.sleep(delay)
                         continue
 
@@ -141,7 +158,7 @@ class SelfHealer:
                         )
                         self.history.append(hr)
                         if on_heal:
-                            on_heal(hr)
+                            await _notify(on_heal, hr)
                         return fallback
 
                     elif action == HealingAction.SKIP:
@@ -154,7 +171,7 @@ class SelfHealer:
                         )
                         self.history.append(hr)
                         if on_heal:
-                            on_heal(hr)
+                            await _notify(on_heal, hr)
                         return None
 
                     elif action == HealingAction.ROLLBACK:
@@ -167,7 +184,7 @@ class SelfHealer:
                         )
                         self.history.append(hr)
                         if on_heal:
-                            on_heal(hr)
+                            await _notify(on_heal, hr)
                         raise
 
                     elif action == HealingAction.ESCALATE:
@@ -180,7 +197,7 @@ class SelfHealer:
                         )
                         self.history.append(hr)
                         if on_heal:
-                            on_heal(hr)
+                            await _notify(on_heal, hr)
                         raise
 
         # all strategies exhausted
@@ -192,7 +209,7 @@ class SelfHealer:
         )
         self.history.append(hr)
         if on_heal:
-            on_heal(hr)
+            await _notify(on_heal, hr)
         if last_error:
             raise last_error
         return fallback

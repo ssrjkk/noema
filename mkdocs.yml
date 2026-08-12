@@ -53,6 +53,8 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Architecture: architecture.md
+  - Roadmap: ROADMAP.md
+  - Whitepaper: WHITEPAPER.md
   - API Reference:
       - Noema Engine: api/noema.md
       - Types: api/types.md

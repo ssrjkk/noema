@@ -83,28 +83,40 @@ def _text_files() -> list[pathlib.Path]:
     return files
 
 
+def _process_text(data: bytes) -> bytes | None:
+    """Repair mojibake lines, preserving the file's original line endings."""
+    sep = b"\r\n" if b"\r\n" in data else b"\n"
+    parts = data.split(sep)
+    changed = False
+    out = []
+    for part in parts:
+        text = part.decode("utf-8")
+        if LOSSY_RE.search(text):
+            out.append(part)
+            continue
+        restored = _roundtrip(text)
+        if restored is not None:
+            out.append(restored.encode("utf-8"))
+            changed = True
+        else:
+            out.append(part)
+    if not changed:
+        return None
+    return sep.join(out)
+
+
 def main() -> int:
     fixed = 0
     lossy = []
     for p in _text_files():
         data = p.read_bytes()
         try:
-            text = data.decode("utf-8")
+            data.decode("utf-8")
         except UnicodeDecodeError:
             continue
-        lines = text.splitlines(keepends=True)
-        changed = False
-        for i, line in enumerate(lines):
-            if LOSSY_RE.search(line):
-                lossy.append(f"{p.relative_to(ROOT)}:{i + 1}")
-                continue
-            restored = _roundtrip(line.rstrip("\r\n"))
-            if restored is not None:
-                ending = "\n" if line.endswith("\n") else ""
-                lines[i] = restored + ending
-                changed = True
-        if changed:
-            p.write_text("".join(lines), encoding="utf-8")
+        new_data = _process_text(data)
+        if new_data is not None and new_data != data:
+            p.write_bytes(new_data)
             fixed += 1
             print(f"fixed {p.relative_to(ROOT)}")
     print(f"\n{fixed} file(s) fixed.")

@@ -52,8 +52,19 @@ async def think_task(ctx: dict, task_data: dict) -> dict:
         return {"status": "failed", "error": str(e)}
 
 
+async def fix_incident_task(ctx: dict, payload: dict) -> dict:
+    """Run the incident→PR autonomy loop as a background job (T2.1)."""
+    from noema.autonomy.fixer import IncidentFixer, build_github_client_from_settings
+
+    fixer = IncidentFixer(github=build_github_client_from_settings())
+    try:
+        return await fixer.handle_incident(payload)
+    finally:
+        await fixer.close()
+
+
 class NoemaWorkerSettings:
-    functions = [think_task]
+    functions = [think_task, fix_incident_task]
     on_startup = startup
     on_shutdown = shutdown
     poll_delay = 1.0
@@ -92,5 +103,16 @@ async def enqueue_think(redis_url: str, task_data: dict) -> str | None:
 
     pool = await create_pool(ArqRedisSettings.from_dsn(redis_url))
     job = await pool.enqueue_job("think_task", task_data)
+    await pool.close()
+    return job.job_id if job else None
+
+
+async def enqueue_fix_incident(redis_url: str, payload: dict) -> str | None:
+    """Enqueue an incident→PR fix task and return job ID."""
+    from arq import create_pool
+    from arq.connections import RedisSettings as ArqRedisSettings
+
+    pool = await create_pool(ArqRedisSettings.from_dsn(redis_url))
+    job = await pool.enqueue_job("fix_incident_task", payload)
     await pool.close()
     return job.job_id if job else None

@@ -35,6 +35,9 @@ jobs:
       - name: Encoding check
         run: python scripts/check_encoding.py
 
+      - name: Mojibake gate
+        run: python scripts/find_mojibake.py
+
       - name: Mypy
         run: mypy noema/ --ignore-missing-imports --no-error-summary
         continue-on-error: true
@@ -117,3 +120,42 @@ jobs:
             bandit-report.json
             safety-report.json
             pip-audit-report.json
+
+  gate:
+    name: Merge Gate (judge + sandbox)
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the gate can diff the PR branch against its base.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev,db]"
+
+      - name: Run merge gate
+        id: gate
+        env:
+          NOEMA_LLM_PROVIDER: fallback
+          NOEMA_API_RATE_LIMIT_ENABLED: "false"
+        run: |
+          python -m noema.experiments.gate \
+            --diff-target "origin/${{ github.base_ref }}" \
+            --judge-threshold "${{ vars.GATE_JUDGE_THRESHOLD || '0.0' }}" \
+            --out gate.json
+
+      - name: Upload gate report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: merge-gate-report
+          path: gate.json

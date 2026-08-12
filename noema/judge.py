@@ -239,6 +239,21 @@ async def critique_solution(
         return {"issues": [], "summary": f"Critique failed: {e}", "trust_score": 0.5}
 
 
+def _score(value: Any, default: float = 0.0) -> float:
+    """Coerce an LLM-provided score to ``0.0..1.0``.
+
+    Real models frequently return scores as strings (``"0.7"``), booleans or
+    out-of-range numbers; those must not crash or distort the verdict.
+    """
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed != parsed:  # NaN
+        return default
+    return max(0.0, min(1.0, parsed))
+
+
 def _parse_verdict(raw: str, solution: Solution) -> JudgeVerdict:
     text = strip_fences(raw)
 
@@ -253,13 +268,13 @@ def _parse_verdict(raw: str, solution: Solution) -> JudgeVerdict:
 
     scores_data = data.get("scores", {})
     scores = JudgeScore(
-        architecture=scores_data.get("architecture", 0.0),
-        code_quality=scores_data.get("code_quality", 0.0),
-        security=scores_data.get("security", 0.0),
-        performance=scores_data.get("performance", 0.0),
-        maintainability=scores_data.get("maintainability", 0.0),
-        completeness=scores_data.get("completeness", 0.0),
-        overall=scores_data.get("overall", 0.0),
+        architecture=_score(scores_data.get("architecture")),
+        code_quality=_score(scores_data.get("code_quality")),
+        security=_score(scores_data.get("security")),
+        performance=_score(scores_data.get("performance")),
+        maintainability=_score(scores_data.get("maintainability")),
+        completeness=_score(scores_data.get("completeness")),
+        overall=_score(scores_data.get("overall")),
     )
 
     passed = scores.overall >= 0.5
@@ -308,13 +323,13 @@ def _parse_pairwise(raw: str, solution_a: Solution, solution_b: Solution) -> Pai
 
     def _parse_scores(d: dict) -> JudgeScore:
         return JudgeScore(
-            architecture=d.get("architecture", 0.0),
-            code_quality=d.get("code_quality", 0.0),
-            security=d.get("security", 0.0),
-            performance=d.get("performance", 0.0),
-            maintainability=d.get("maintainability", 0.0),
-            completeness=d.get("completeness", 0.0),
-            overall=d.get("overall", 0.0),
+            architecture=_score(d.get("architecture")),
+            code_quality=_score(d.get("code_quality")),
+            security=_score(d.get("security")),
+            performance=_score(d.get("performance")),
+            maintainability=_score(d.get("maintainability")),
+            completeness=_score(d.get("completeness")),
+            overall=_score(d.get("overall")),
         )
 
     return PairwiseResult(

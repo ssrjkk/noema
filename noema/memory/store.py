@@ -23,6 +23,14 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
+def _log_save_failure(task: asyncio.Task) -> None:
+    """Surface failures of the fire-and-forget debounced save instead of losing them."""
+    with suppress(asyncio.CancelledError):
+        exc = task.exception()
+        if exc is not None:
+            log.error("memory_debounced_save_failed", error=str(exc))
+
+
 class EpisodicMemory(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     timestamp: float = Field(default_factory=time.time)
@@ -201,7 +209,8 @@ class MemoryStore:
             except RuntimeError:
                 asyncio.run(cast("Coroutine[Any, Any, None]", result))
             else:
-                asyncio.ensure_future(cast("Coroutine[Any, Any, None]", result))
+                task = asyncio.ensure_future(cast("Coroutine[Any, Any, None]", result))
+                task.add_done_callback(_log_save_failure)
 
     def flush(self) -> None:
         if self._dirty:

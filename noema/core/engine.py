@@ -283,16 +283,14 @@ class NoemaEngine:
 
         set_tenant_id(self._tenant_id)
 
-        # Check for existing checkpoint (resumable execution). A checkpoint is
-        # consumed exactly once: restored step results are passed into the CoT
-        # run and the file is deleted immediately, so stale checkpoints can
-        # never leak into later runs.
+        # Check for existing checkpoint (resumable execution). The checkpoint
+        # file is kept until the run completes: if the process crashes mid-run
+        # the recorded progress survives, so it can be resumed on retry.
         ckpt = await self.checkpointer.load(task.id, self._tenant_id)
         resume_context: dict[str, str] | None = None
         if ckpt:
             log.info("resuming_from_checkpoint", task=task.id, steps=len(ckpt.completed_steps))
             resume_context = dict(ckpt.step_results or {})
-            await self.checkpointer.delete(task.id, self._tenant_id)
 
         thought = ThoughtProcess(task_id=task.id)
         t0 = time.monotonic()

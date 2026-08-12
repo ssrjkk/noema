@@ -30,6 +30,8 @@ class LLMResponse(BaseModel):
     content: str
     model: str = ""
     tokens_used: int = 0
+    tokens_input: int = 0
+    tokens_output: int = 0
     latency_ms: float = 0.0
     finish_reason: str = ""
 
@@ -119,6 +121,8 @@ class BaseLLMProvider(abc.ABC):
                 response=response.content,
                 tokens_used=response.tokens_used,
                 latency_ms=latency,
+                tokens_input=response.tokens_input,
+                tokens_output=response.tokens_output,
             )
             return response
         except Exception as e:
@@ -265,6 +269,8 @@ class OpenAIProvider(BaseLLMProvider):
             content=choice.message.content or "",
             model=response.model,
             tokens_used=response.usage.total_tokens if response.usage else 0,
+            tokens_input=response.usage.prompt_tokens if response.usage else 0,
+            tokens_output=response.usage.completion_tokens if response.usage else 0,
             latency_ms=(time.monotonic() - t0) * 1000,
             finish_reason=choice.finish_reason or "",
         )
@@ -338,6 +344,8 @@ class AnthropicProvider(BaseLLMProvider):
                 if response.usage
                 else 0
             ),
+            tokens_input=response.usage.input_tokens if response.usage else 0,
+            tokens_output=response.usage.output_tokens if response.usage else 0,
             latency_ms=(time.monotonic() - t0) * 1000,
             finish_reason=response.stop_reason or "",
         )
@@ -398,6 +406,8 @@ class OllamaProvider(BaseLLMProvider):
             content=data.get("message", {}).get("content", ""),
             model=self._model,
             tokens_used=data.get("eval_count", 0) + data.get("prompt_eval_count", 0),
+            tokens_input=data.get("prompt_eval_count", 0),
+            tokens_output=data.get("eval_count", 0),
             latency_ms=(time.monotonic() - t0) * 1000,
             finish_reason="stop",
         )

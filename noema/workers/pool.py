@@ -168,9 +168,13 @@ class WorkerPool:
         self._stats["total_submitted"] += 1
 
         await self._queue.put(worker_task)
-        await done.wait()
-
-        self._done_events.pop(task_id, None)
+        try:
+            await done.wait()
+        finally:
+            # Always release the task bookkeeping, including on failure or
+            # shutdown cancellation, so the pool does not accumulate entries.
+            self._tasks.pop(task_id, None)
+            self._done_events.pop(task_id, None)
 
         if worker_task.state == TaskState.FAILED:
             raise worker_task.error  # type: ignore

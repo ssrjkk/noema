@@ -20,9 +20,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import inspect
 import json
 import os
 import random
+import shutil
+import tempfile
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -42,6 +46,12 @@ from noema.judge import evaluate_solution
 from noema.logging import get_logger
 
 log = get_logger(__name__)
+
+# ``run_experiment`` mutates the process environment while the matrix runs;
+# the lock serializes concurrent runs across threads (API + CLI) so one run's
+# settings can never bleed into another's engine construction. It is held for
+# the whole run and blocks only experiment threads, never the event loop.
+_ENV_LOCK = threading.Lock()
 
 RECORD_FIELDS = [
     "experiment_id",
@@ -102,65 +112,78 @@ def _default_engine_factory(provider: str, model: str | None, project_root: str)
     return NoemaEngine(llm_provider=provider, llm_model=model, project_root=project_root)
 
 
-# в”Ђв”Ђ Config в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ============================== Config ==============================
 
 
 def load_experiment(path: str | Path) -> dict[str, Any]:
-    """Parse and validate an experiment YAML file.
+    """Parse and validate an experiment YAML file from disk.
 
     Raises ``ValueError`` on structural problems so CI fails loudly instead of
     silently skipping a misconfigured experiment.
     """
     cfg_path = Path(path)
     with open(cfg_path, encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
+        return parse_experiment(f.read())
 
+
+def parse_experiment(text: str) -> dict[str, Any]:
+    """Parse and validate experiment config from YAML/JSON text.
+
+    YAML is a superset of JSON, so JSON request bodies work unchanged. Raises
+    ``ValueError`` on structural problems.
+    """
+    cfg = yaml.safe_load(text) or {}
+    return _validate_experiment(cfg)
+
+
+def _validate_experiment(cfg: Any) -> dict[str, Any]:
+    """Structural validation shared by file, CLI and API entry points."""
     if not isinstance(cfg, dict):
-        raise ValueError(f"experiment {path}: top-level must be a mapping")
+        raise ValueError("experiment: top-level must be a mapping")
 
     meta = cfg.get("meta")
     if not isinstance(meta, dict) or not meta.get("name"):
-        raise ValueError(f"experiment {path}: missing 'meta.name'")
+        raise ValueError("experiment: missing 'meta.name'")
 
     providers = cfg.get("providers")
     if not isinstance(providers, list) or not providers:
-        raise ValueError(f"experiment {path}: 'providers' must be a non-empty list")
+        raise ValueError("experiment: 'providers' must be a non-empty list")
 
     seen: set[str] = set()
     for p in providers:
         if not isinstance(p, dict) or not p.get("provider"):
-            raise ValueError(f"experiment {path}: each provider needs a 'provider' name")
+            raise ValueError("experiment: each provider needs a 'provider' name")
         models = p.get("models")
         if not isinstance(models, list) or not models:
-            raise ValueError(
-                f"experiment {path}: provider {p['provider']!r} needs non-empty 'models'"
-            )
+            raise ValueError(f"experiment: provider {p['provider']!r} needs non-empty 'models'")
         seen.add(p["provider"])
         for m in models:
             if not isinstance(m, str) or not m:
-                raise ValueError(f"experiment {path}: models must be non-empty strings")
+                raise ValueError("experiment: models must be non-empty strings")
 
     tasks = cfg.get("tasks")
     if not isinstance(tasks, list) or not tasks:
-        raise ValueError(f"experiment {path}: 'tasks' must be a non-empty list")
+        raise ValueError("experiment: 'tasks' must be a non-empty list")
     for t in tasks:
         if not isinstance(t, dict) or not t.get("title"):
-            raise ValueError(f"experiment {path}: each task needs a 'title'")
+            raise ValueError("experiment: each task needs a 'title'")
 
     repetitions = cfg.get("repetitions", 1)
     if not isinstance(repetitions, int) or repetitions < 1:
-        raise ValueError(f"experiment {path}: 'repetitions' must be a positive integer")
+        raise ValueError("experiment: 'repetitions' must be a positive integer")
 
     return cfg
 
 
-# в”Ђв”Ђ Measurement в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ============================ Measurement ============================
 
 
-def _delta_stats(after: dict[str, Any], before: dict[str, Any]) -> tuple[int, int]:
+def _delta_stats(after: dict[str, Any], before: dict[str, Any]) -> tuple[int, int, int, int]:
     return (
         int(after.get("total_tokens", 0) - before.get("total_tokens", 0)),
         int(after.get("llm_calls", 0) - before.get("llm_calls", 0)),
+        int(after.get("tokens_input", 0) - before.get("tokens_input", 0)),
+        int(after.get("tokens_output", 0) - before.get("tokens_output", 0)),
     )
 
 
@@ -198,21 +221,29 @@ async def _run_once(
     experiment_id: str,
     run_id: str,
     cost_per_token: float,
+    timeout_seconds: float | None = None,
 ) -> RunRecord:
     started_at = datetime.now(UTC).isoformat()
     before = engine.tracer.get_stats()
-    t0 = time.monotonic()
     error: str | None = None
     solution: Solution | None = None
     thought: ThoughtProcess | None = None
+
+    # Measure only the reasoning step; judge and sandbox are tracked separately
+    # so latency/tokens reflect the cell itself, not the evaluators.
+    t0 = time.monotonic()
     try:
-        solution, thought = await engine.think(task)
+        if timeout_seconds is not None:
+            solution, thought = await asyncio.wait_for(engine.think(task), timeout_seconds)
+        else:
+            solution, thought = await engine.think(task)
+    except TimeoutError:
+        error = f"timeout after {timeout_seconds}s"
     except Exception as exc:  # noqa: BLE001 - benchmark must never die on one cell
         error = f"{type(exc).__name__}: {exc}"
-
     duration_ms = (time.monotonic() - t0) * 1000
     after = engine.tracer.get_stats()
-    total_tokens, llm_calls = _delta_stats(after, before)
+    total_tokens, llm_calls, tokens_input, tokens_output = _delta_stats(after, before)
 
     judge_score = 0.0
     judge_passed = False
@@ -245,8 +276,8 @@ async def _run_once(
         repeat_index=repeat_index,
         started_at=started_at,
         duration_ms=round(duration_ms, 2),
-        tokens_input=None,
-        tokens_output=None,
+        tokens_input=tokens_input,
+        tokens_output=tokens_output,
         total_tokens=total_tokens,
         llm_calls=llm_calls,
         judge_score=judge_score,
@@ -261,7 +292,11 @@ async def _run_once(
     )
 
 
-# в”Ђв”Ђ Orchestration в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ============================ Orchestration ===========================
+
+
+def _new_run_id(experiment_id: str) -> str:
+    return f"{experiment_id}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
 
 def run_experiment(
@@ -272,20 +307,28 @@ def run_experiment(
 ) -> dict[str, Any]:
     """Execute the experiment matrix and persist JSON + CSV artifacts."""
     experiment_id = str(cfg["meta"]["name"])
-    run_id = run_id or (
-        f"{experiment_id}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:6]}"
-    )
+    run_id = run_id or _new_run_id(experiment_id)
     seed = cfg.get("meta", {}).get("seed")
     if seed is not None:
         random.seed(seed)
 
     out_path = Path(out_dir) / experiment_id
     out_path.mkdir(parents=True, exist_ok=True)
-    _apply_settings(cfg.get("settings", {}))
 
-    records: list[RunRecord] = asyncio.run(
-        _run_matrix(cfg, out_path, engine_factory, experiment_id, run_id)
-    )
+    # Engines get an isolated throwaway workspace (not ``out_path``): their
+    # ``.noema/`` memory/checkpoints are run-local, so consecutive runs are
+    # reproducible and never pollute ``results/`` with hidden state.
+    workspace = Path(tempfile.mkdtemp(prefix=f"{run_id[:24]}_", dir=str(out_path)))
+    saved_env = os.environ.copy()
+    with _ENV_LOCK:
+        try:
+            _apply_settings(cfg.get("settings", {}))
+            records = asyncio.run(
+                _run_matrix(cfg, out_path, workspace, engine_factory, experiment_id, run_id)
+            )
+        finally:
+            _restore_environment(saved_env)
+            shutil.rmtree(workspace, ignore_errors=True)
 
     results: dict[str, Any] = {
         "experiment_id": experiment_id,
@@ -293,6 +336,7 @@ def run_experiment(
         "meta": cfg.get("meta", {}),
         "generated_at": datetime.now(UTC).isoformat(),
         "records": [asdict(r) for r in records],
+        "summary": _summarize(records),
     }
     _write_artifacts(out_path, run_id, records)
     log.info(
@@ -305,50 +349,91 @@ def run_experiment(
     return results
 
 
+def _restore_environment(saved_env: dict[str, str]) -> None:
+    """Undo ``_apply_settings`` so caller env is untouched after the run."""
+    for key, value in os.environ.copy().items():
+        if key not in saved_env:
+            os.environ.pop(key, None)
+        elif os.environ[key] != value:
+            os.environ[key] = value
+    reset_settings()
+
+
+async def _safe_shutdown(engine: Any) -> None:
+    shutdown = getattr(engine, "shutdown", None)
+    if shutdown is None:
+        return
+    try:
+        result = shutdown()
+        if inspect.isawaitable(result):
+            await result
+    except Exception as exc:  # noqa: BLE001 - teardown must never mask the run result
+        log.warning("engine_shutdown_failed", error=str(exc))
+
+
 async def _run_matrix(
     cfg: dict[str, Any],
     out_path: Path,
+    workspace: Path,
     engine_factory: EngineFactory,
     experiment_id: str,
     run_id: str,
 ) -> list[RunRecord]:
     tasks = [_build_task(t) for t in cfg["tasks"]]
     repetitions = int(cfg.get("repetitions", 1))
+    raw_timeout = cfg.get("settings", {}).get("timeout_seconds")
+    timeout_seconds: float | None = float(raw_timeout) if raw_timeout else None
     records: list[RunRecord] = []
+    run_dir = out_path / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
     engines: dict[tuple[str, str | None], Any] = {}
+    stale: set[tuple[str, str | None]] = set()
 
-    for provider_cfg in cfg["providers"]:
-        provider = provider_cfg["provider"]
-        cost_per_token = float(provider_cfg.get("cost_per_token", 0.0))
-        for model in provider_cfg["models"]:
-            key = (provider, model)
-            if key not in engines:
-                engines[key] = engine_factory(provider, model, str(out_path))
-            engine = engines[key]
-            for task in tasks:
-                for rep in range(1, repetitions + 1):
-                    record = await _run_once(
-                        engine,
-                        cfg,
-                        task,
-                        provider,
-                        model,
-                        rep,
-                        experiment_id,
-                        run_id,
-                        cost_per_token,
-                    )
-                    records.append(record)
-                    log.info(
-                        "run_cell",
-                        task=record.task_id,
-                        provider=record.provider,
-                        model=record.model,
-                        repeat=record.repeat_index,
-                        ms=record.duration_ms,
-                        error=record.error,
-                    )
-    return records
+    try:
+        for provider_cfg in cfg["providers"]:
+            provider = provider_cfg["provider"]
+            cost_per_token = float(provider_cfg.get("cost_per_token", 0.0))
+            for model in provider_cfg["models"]:
+                key = (provider, model)
+                if key in stale:
+                    await _safe_shutdown(engines.pop(key, None))
+                    stale.discard(key)
+                if key not in engines:
+                    engines[key] = engine_factory(provider, model, str(workspace))
+                engine = engines[key]
+                for task in tasks:
+                    for rep in range(1, repetitions + 1):
+                        record = await _run_once(
+                            engine,
+                            cfg,
+                            task,
+                            provider,
+                            model,
+                            rep,
+                            experiment_id,
+                            run_id,
+                            cost_per_token,
+                            timeout_seconds,
+                        )
+                        records.append(record)
+                        _append_incremental(run_dir, record)
+                        log.info(
+                            "run_cell",
+                            task=record.task_id,
+                            provider=record.provider,
+                            model=record.model,
+                            repeat=record.repeat_index,
+                            ms=record.duration_ms,
+                            error=record.error,
+                        )
+                        if record.error and record.error.startswith("timeout"):
+                            # A timed-out engine may be stuck mid-LLM call;
+                            # drop it so the next cell starts from a clean engine.
+                            stale.add(key)
+        return records
+    finally:
+        for key in list(engines):
+            await _safe_shutdown(engines.pop(key))
 
 
 def _build_task(raw: dict[str, Any]) -> Task:
@@ -359,17 +444,46 @@ def _build_task(raw: dict[str, Any]) -> Task:
     )
 
 
-# в”Ђв”Ђ Artifacts в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ============================= Artifacts ==============================
+
+
+def _append_incremental(run_dir: Path, record: RunRecord) -> None:
+    """Persist each finished cell immediately so a crash keeps partial results."""
+    with open(run_dir / "runs.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(asdict(record), ensure_ascii=False, default=str) + "\n")
+    _write_json(run_dir / "results.json", _load_jsonl(run_dir / "runs.jsonl"))
+
+
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
 
 
 def _write_artifacts(out_path: Path, run_id: str, records: list[RunRecord]) -> None:
     (out_path / run_id).mkdir(parents=True, exist_ok=True)
-    _write_json(out_path / run_id / "results.json", [asdict(r) for r in records])
-    _write_csv(out_path / run_id / "runs.csv", [asdict(r) for r in records])
-    _write_csv(out_path / run_id / "summary.csv", _summarize(records))
+    run_dir = out_path / run_id
+    _write_json(run_dir / "results.json", [asdict(r) for r in records])
+    _write_csv(run_dir / "runs.csv", [asdict(r) for r in records])
+    _write_csv(run_dir / "summary.csv", _summarize(records))
+    _write_json(
+        run_dir / "summary.json",
+        {
+            "run_id": run_id,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "n_records": len(records),
+            "summary": _summarize(records),
+        },
+    )
 
 
-def _write_json(path: Path, data: list[dict[str, Any]]) -> None:
+def _write_json(path: Path, data: list[dict[str, Any]] | dict[str, Any]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2, default=str)
 
@@ -413,7 +527,7 @@ def _summarize(records: list[RunRecord]) -> list[dict[str, Any]]:
     return rows
 
 
-# в”Ђв”Ђ CLI в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ================================= CLI ===============================
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -15,8 +15,40 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _DEFAULT_CONFIG = _PROJECT_ROOT / "settings.yaml"
 
 _SUBMODEL_KEYS = frozenset(
-    {"db", "redis", "llm", "api", "worker", "memory", "sandbox", "obs", "neurosymbolic", "audit"}
+    {
+        "db",
+        "redis",
+        "llm",
+        "api",
+        "worker",
+        "memory",
+        "sandbox",
+        "obs",
+        "neurosymbolic",
+        "audit",
+        "autonomy",
+    }
 )
+
+
+def _env_leaf_keys() -> set[str]:
+    """Normalized env keys that actually map onto a settings field.
+
+    Used to ignore stray ``NOEMA_*`` variables (including ``NOEMA_CONFIG``)
+    that do not correspond to a real field — otherwise a leftover env var
+    with a non-coercible value would break config loading entirely.
+    """
+    keys: set[str] = set()
+    for name, field in NoemaSettings.model_fields.items():
+        base = f"noema_{name.lower()}"
+        ann = field.annotation
+        if isinstance(ann, type) and issubclass(ann, BaseSettings):
+            for sub_name in ann.model_fields:
+                keys.add(f"{base}_{sub_name.lower()}")
+                keys.add(f"{base}__{sub_name.lower()}")
+        else:
+            keys.add(base)
+    return keys
 
 
 def _env_overrides() -> dict[str, Any]:
@@ -24,11 +56,18 @@ def _env_overrides() -> dict[str, Any]:
 
     Supports both ``NOEMA_LLM__PROVIDER`` (root prefix + nested delimiter) and
     ``NOEMA_LLM_PROVIDER`` (sub-model prefix) spellings; scalar root knobs like
-    ``NOEMA_COT_MAX_STEPS`` map to their root field.
+    ``NOEMA_COT_MAX_STEPS`` map to their root field. Variables that do not
+    correspond to a settings field are ignored, and empty values are treated
+    as unset so an empty ``int``/``bool`` env var cannot crash pydantic.
     """
+    valid = _env_leaf_keys()
     out: dict[str, Any] = {}
     for key, value in os.environ.items():
         if not key.startswith("NOEMA_"):
+            continue
+        if key.lower() not in valid:
+            continue
+        if value == "":
             continue
         rest = key[len("NOEMA_") :]
         parts = rest.split("__")
@@ -196,6 +235,18 @@ class AuditSettings(BaseSettings):
     merkle_chain_id: str = Field(default="")
 
 
+class AutonomySettings(BaseSettings):
+    """Configuration for the incident→PR autonomy loop (T2.1)."""
+
+    model_config = SettingsConfigDict(env_prefix="NOEMA_AUTONOMY_")
+
+    github_token: SecretStr = Field(
+        default=SecretStr(""), description="GitHub personal access token"
+    )
+    github_repo: str = Field(default="", description="'owner/name' repository for fix PRs")
+    github_base_branch: str = Field(default="main")
+
+
 # ─── Root config ─────────────────────────────────────────────────────────
 class NoemaSettings(BaseSettings):
     """Single source of truth for every tunable knob in Noema."""
@@ -217,6 +268,7 @@ class NoemaSettings(BaseSettings):
     obs: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     neurosymbolic: NeurosymbolicSettings = Field(default_factory=NeurosymbolicSettings)
     audit: AuditSettings = Field(default_factory=AuditSettings)
+    autonomy: AutonomySettings = Field(default_factory=AutonomySettings)
 
     # Chain-of-thought
     cot_max_steps: int = Field(default=12, ge=1)

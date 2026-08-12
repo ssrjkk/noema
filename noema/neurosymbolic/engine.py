@@ -15,6 +15,8 @@ Concurrency contract:
 
 Complexity:
 - Parsing: ``O(R + C)`` where ``R`` = requirements, ``C`` = constraints.
+- Static analysis: ``O(S · N)`` — ``S`` code snippets in the hypothesis, each
+  ``O(N)`` over its AST nodes (see :mod:`noema.neurosymbolic.static`).
 - Verification: ``O(A · V · S)`` — ``A`` attempts, ``V`` solution variables, ``S`` per-solver cost.
 - Causal analysis: ``O(R²)`` worst case for the pairwise dominance scan
   (inherent: the output edge set is quadratic in the requirement count), then
@@ -36,7 +38,13 @@ from noema.causal import CausalEngine
 from noema.errors import NoemaError
 from noema.neurosymbolic.evolution import EvolutionEngine
 from noema.neurosymbolic.neural import NeuralInterface
+from noema.neurosymbolic.static import StaticAnalysisVerdict, analyze_solution_static
 from noema.neurosymbolic.symbolic import SymbolicEngine
+from noema.tracing.reasoning_trace import (
+    VerificationRound,
+    build_reasoning_trace,
+    commit_reasoning_trace,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Mapping, Sequence
@@ -87,6 +95,10 @@ class ThinkEvent(TypedDict, total=False):
     hypothesis_keys: list[str]
     is_valid: bool
     violations_count: int
+    static_analyzed: bool
+    static_passed: bool
+    static_issues: list[str]
+    static_verdict: dict[str, Any]
     counterfactuals_count: int
     solution: dict[str, Any]
     attempts: int
@@ -171,6 +183,8 @@ class NeuroSymbolicEngine:
         enable_evolution: Record successful/failed outcomes for evolution.
         enable_causal: Run causal counterfactual analysis on success.
         max_counterfactuals: Maximum counterfactual results per task.
+        trace_dir: Directory for committed verifiable reasoning traces; empty
+            disables trace commit (T4.2).
 
     Raises:
         ValueError: If any configuration value is out of its allowed domain.
@@ -183,6 +197,7 @@ class NeuroSymbolicEngine:
         enable_evolution: bool = True,
         enable_causal: bool = True,
         max_counterfactuals: int = _DEFAULT_MAX_COUNTERFACTUALS,
+        trace_dir: str = "",
     ) -> None:
         # ── Fail-fast configuration validation (directive: strict inputs) ──
         if max_refinement_attempts < 1:
@@ -195,6 +210,7 @@ class NeuroSymbolicEngine:
         self.max_refinement_attempts = max_refinement_attempts
         self.enable_evolution = enable_evolution
         self.enable_causal = enable_causal
+        self.trace_dir = trace_dir
 
         self.symbolic = SymbolicEngine(verification_timeout=verification_timeout)
         self.neural = NeuralInterface()
@@ -283,6 +299,15 @@ class NeuroSymbolicEngine:
         task_dict: dict[str, Any] = validated_input.model_dump()
         correlation_id: str = uuid.uuid4().hex
 
+        # Pre-bind trace state so the error path below can commit whatever was
+        # recorded before the failure (T4.2).
+        violations: list[str] = []
+        static_verdict: StaticAnalysisVerdict = StaticAnalysisVerdict()
+        trace_rounds: list[VerificationRound] = []
+        final_hypothesis: dict[str, Any] | None = None
+        final_static_verdict: dict[str, Any] | None = None
+        final_symbolic_valid: bool | None = None
+
         logger.info(
             "think_started", correlation_id=correlation_id, task_keys=list(task_dict.keys())
         )
@@ -318,15 +343,32 @@ class NeuroSymbolicEngine:
 
             # max_refinement_attempts >= 1 (validated in __init__); pre-bind so
             # the failure path below can reference the last verification round.
-            violations: list[str] = []
             for attempt in range(self.max_refinement_attempts):
+                # AST structure analysis of any code inside the hypothesis,
+                # reported alongside the Z3 verdict (T4.1).
+                static_verdict = analyze_solution_static(hypothesis)
                 yield {
                     "stage": ThinkStage.VERIFICATION.value,
                     "attempt": attempt + 1,
                     "status": "started",
                     "correlation_id": correlation_id,
+                    "static_analyzed": static_verdict.analyzed,
+                    "static_passed": static_verdict.passed,
+                    "static_issues": static_verdict.issues,
                 }
                 is_valid, violations = await self.symbolic.verify_solution(hypothesis, task_graph)
+                trace_rounds.append(
+                    VerificationRound(
+                        attempt=attempt + 1,
+                        hypothesis=dict(hypothesis),
+                        static_verdict=static_verdict.as_dict(),
+                        symbolic_valid=bool(is_valid),
+                        violations=list(violations),
+                    )
+                )
+                final_hypothesis = dict(hypothesis)
+                final_static_verdict = static_verdict.as_dict()
+                final_symbolic_valid = bool(is_valid)
                 yield {
                     "stage": ThinkStage.VERIFICATION.value,
                     "attempt": attempt + 1,
@@ -334,6 +376,9 @@ class NeuroSymbolicEngine:
                     "correlation_id": correlation_id,
                     "is_valid": is_valid,
                     "violations_count": len(violations),
+                    "static_analyzed": static_verdict.analyzed,
+                    "static_passed": static_verdict.passed,
+                    "static_issues": static_verdict.issues,
                 }
 
                 if is_valid:
@@ -365,12 +410,25 @@ class NeuroSymbolicEngine:
                         "solution": hypothesis,
                         "correlation_id": correlation_id,
                         "attempts": attempt + 1,
+                        "static_verdict": static_verdict.as_dict(),
                     }
                     if causal_analysis and self.causal is not None:
                         result["causal_analysis"] = causal_analysis
                         result["causal_metrics"] = dict(self.causal.get_metrics())
 
                     yield result
+
+                    await self._commit_trace(
+                        correlation_id=correlation_id,
+                        task=task_dict,
+                        rounds=trace_rounds,
+                        outcome="completed",
+                        attempts=attempt + 1,
+                        final_hypothesis=final_hypothesis,
+                        final_static_verdict=final_static_verdict,
+                        final_symbolic_valid=final_symbolic_valid,
+                        final_violations=list(violations),
+                    )
 
                     logger.info(
                         "think_completed",
@@ -415,7 +473,19 @@ class NeuroSymbolicEngine:
                 "reason": "max_refinements_exceeded",
                 "correlation_id": correlation_id,
                 "attempts": self.max_refinement_attempts,
+                "static_verdict": static_verdict.as_dict(),
             }
+            await self._commit_trace(
+                correlation_id=correlation_id,
+                task=task_dict,
+                rounds=trace_rounds,
+                outcome="failed",
+                attempts=self.max_refinement_attempts,
+                final_hypothesis=final_hypothesis,
+                final_static_verdict=final_static_verdict,
+                final_symbolic_valid=final_symbolic_valid,
+                final_violations=list(violations),
+            )
             logger.warning(
                 "think_failed", correlation_id=correlation_id, reason="max_refinements_exceeded"
             )
@@ -435,7 +505,51 @@ class NeuroSymbolicEngine:
                 "error_type": type(exc).__name__,
                 "correlation_id": correlation_id,
             }
+            await self._commit_trace(
+                correlation_id=correlation_id,
+                task=task_dict,
+                rounds=trace_rounds,
+                outcome="error",
+                attempts=len(trace_rounds) or 1,
+                final_hypothesis=final_hypothesis,
+                final_static_verdict=final_static_verdict,
+                final_symbolic_valid=final_symbolic_valid,
+                final_violations=list(violations),
+                error=f"{type(exc).__name__}: {exc}",
+            )
             raise
+
+    async def _commit_trace(
+        self,
+        *,
+        correlation_id: str,
+        task: dict[str, Any],
+        rounds: list[VerificationRound],
+        outcome: str,
+        attempts: int,
+        final_hypothesis: dict[str, Any] | None,
+        final_static_verdict: dict[str, Any] | None,
+        final_symbolic_valid: bool | None,
+        final_violations: list[str],
+        error: str = "",
+    ) -> None:
+        """Commit the verifiable reasoning trace when ``trace_dir`` is configured."""
+        if not self.trace_dir:
+            return
+        trace = build_reasoning_trace(
+            correlation_id=correlation_id,
+            task=task,
+            rounds=rounds,
+            outcome=outcome,
+            attempts=attempts,
+            final_hypothesis=final_hypothesis,
+            final_static_verdict=final_static_verdict,
+            final_symbolic_valid=final_symbolic_valid,
+            final_violations=final_violations,
+            error=error,
+        )
+        # File I/O off the event loop (directive: no blocking calls in the loop).
+        await asyncio.to_thread(commit_reasoning_trace, trace, self.trace_dir)
 
     async def _run_causal_analysis(self, task: Mapping[str, Any]) -> list[dict[str, Any]]:
         """Estimate causal counterfactuals for a validated task, off the event loop.

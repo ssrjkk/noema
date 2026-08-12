@@ -10,6 +10,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from noema.core.types import KnowledgeEntry, Pattern, Task, TechStack
+from noema.knowledge.domains import DOMAIN_KNOWLEDGE
 from noema.logging import get_logger
 
 logger = get_logger(__name__)
@@ -140,73 +141,100 @@ BUILTIN_KNOWLEDGE: list[KnowledgeEntry] = [
     KnowledgeEntry(
         category="best-practice",
         title="12-Factor App Principles",
-        content="Следуйте 12-factor методологии: кодовая база в VCI, зависимости явные, конфигурация через ENV, бэкенд-серVICES как附加资源, build/release/run разделены, процесс stateless, порты exports, масштабирование через processes, быстрый старт/graceful shutdown, DEV=PROD паритет, логи как event stream, admin tasks as one-off",
+        content="Follow the 12-factor methodology: codebase in VCS, explicit dependencies, "
+        "config via environment, backing services as attached resources, build/release/run "
+        "separated, stateless processes, port binding, concurrency via processes, fast startup "
+        "and graceful shutdown, dev/prod parity, logs as event streams, admin tasks as one-off.",
         tags=["architecture", "best-practice", "devops"],
         weight=0.9,
     ),
     KnowledgeEntry(
         category="best-practice",
         title="Database Optimization Strategies",
-        content="Используйте: 1) Proper indexing (B-tree, GIN, GiST), 2) Query plan analysis (EXPLAIN ANALYZE), 3) Connection pooling (PgBouncer), 4) Read replicas, 5) Partitioning for large tables, 6) Materialized views for complex queries, 7) Vacuum tuning, 8) pg_stat_statements monitoring",
+        content="Use: 1) Proper indexing (B-tree, GIN, GiST), 2) Query plan analysis "
+        "(EXPLAIN ANALYZE), 3) Connection pooling (PgBouncer), 4) Read replicas, 5) Partitioning "
+        "for large tables, 6) Materialized views for complex queries, 7) Vacuum tuning, "
+        "8) pg_stat_statements monitoring.",
         tags=["database", "postgresql", "performance"],
         weight=0.85,
     ),
     KnowledgeEntry(
         category="best-practice",
         title="Microservices Communication Patterns",
-        content="Синхронные: REST (простота), gRPC (производительность, типизация). Асинхронные: Event-driven (слабая связанность), Saga (распределённые транзакции), CQRS (разделение read/write). Circuit breaker для fault tolerance. Service mesh (Istio/Linkerd) для управления трафиком.",
+        content="Synchronous: REST (simple), gRPC (fast, typed). Asynchronous: event-driven "
+        "(loose coupling), saga (distributed transactions), CQRS (read/write split). Use circuit "
+        "breakers for fault tolerance and a service mesh (Istio/Linkerd) for traffic control.",
         tags=["microservices", "distributed", "architecture"],
         weight=0.88,
     ),
     KnowledgeEntry(
         category="best-practice",
         title="Kubernetes Production Checklist",
-        content="1) Resource limits & requests, 2) Health probes (liveness/readiness/startup), 3) Pod disruption budgets, 4) HorizontalPodAutoscaler, 5) Network policies, 6) RBAC, 7) Secret management (Vault), 8) Log aggregation (EFK/Loki), 9) Metrics (Prometheus), 10) Distributed tracing (Jaeger/Tempo)",
+        content="1) Resource limits & requests, 2) Health probes (liveness/readiness/startup), "
+        "3) Pod disruption budgets, 4) HorizontalPodAutoscaler, 5) Network policies, 6) RBAC, "
+        "7) Secret management (Vault), 8) Log aggregation (EFK/Loki), 9) Metrics (Prometheus), "
+        "10) Distributed tracing (Jaeger/Tempo).",
         tags=["kubernetes", "devops", "production"],
         weight=0.9,
     ),
     KnowledgeEntry(
         category="stack",
         title="Python High-Performance Stack",
-        content="FastAPI (async), SQLAlchemy 2.0 (async ORM), Pydantic v2 (validation), uvicorn (ASGI), Redis (cache), PostgreSQL (DB), Celery (task queue), Docker + Kubernetes, pytest + httpx (testing), structlog (logging)",
+        content="FastAPI (async), SQLAlchemy 2.0 (async ORM), Pydantic v2 (validation), uvicorn "
+        "(ASGI), Redis (cache), PostgreSQL (DB), Celery (task queue), Docker + Kubernetes, "
+        "pytest + httpx (testing), structlog (logging).",
         tags=["python", "web", "api", "high-performance"],
         weight=0.87,
     ),
     KnowledgeEntry(
         category="stack",
         title="Go Microservices Stack",
-        content="Chi/Gin (router), sqlx (database), go-redis, Kafka/NATS (messaging), gRPC, OpenTelemetry, Zap (logging), Viper (config), GoReleaser, Docker, Kubernetes",
+        content="Chi/Gin (router), sqlx (database), go-redis, Kafka/NATS (messaging), gRPC, "
+        "OpenTelemetry, Zap (logging), Viper (config), GoReleaser, Docker, Kubernetes.",
         tags=["go", "microservices", "high-performance"],
         weight=0.86,
     ),
     KnowledgeEntry(
         category="stack",
         title="TypeScript Full-Stack",
-        content="Next.js (frontend), Fastify/Express (backend), Prisma (ORM), PostgreSQL, Redis, tRPC (type-safe API), Tailwind CSS, Vitest (testing), Turborepo (monorepo), Vercel (deployment)",
+        content="Next.js (frontend), Fastify/Express (backend), Prisma (ORM), PostgreSQL, Redis, "
+        "tRPC (type-safe API), Tailwind CSS, Vitest (testing), Turborepo (monorepo), Vercel "
+        "(deployment).",
         tags=["typescript", "fullstack", "react", "nextjs"],
         weight=0.85,
     ),
     KnowledgeEntry(
         category="stack",
         title="ML/AI Production Stack",
-        content="Python, PyTorch/TensorFlow, FastAPI (inference API), MLflow (experiment tracking), DVC (data versioning), Airflow/Prefect (orchestration), Redis (feature cache), PostgreSQL (metadata), Docker + GPU support, Prometheus + Grafana (monitoring)",
+        content="Python, PyTorch/TensorFlow, FastAPI (inference API), MLflow (experiment "
+        "tracking), DVC (data versioning), Airflow/Prefect (orchestration), Redis (feature "
+        "cache), PostgreSQL (metadata), Docker + GPU support, Prometheus + Grafana (monitoring).",
         tags=["ml", "ai", "python", "production"],
         weight=0.84,
     ),
     KnowledgeEntry(
         category="security",
         title="OWASP Top 10 Mitigations",
-        content="A01 Broken Access Control → RBAC + resource-level perms. A02 Cryptographic Failures → TLS 1.3 + AES-256. A03 Injection → parameterized queries. A04 Insecure Design → threat modeling. A05 Security Misconfiguration → hardened defaults. A06 Vulnerable Components → SCA scanning. A07 Auth Failures → MFA + rate limiting. A08 Data Integrity → signed commits + SBOM. A09 Logging → audit trail. A10 SSRF → allowlist outbound.",
+        content="A01 Broken Access Control -> RBAC + resource-level perms. A02 Cryptographic "
+        "Failures -> TLS 1.3 + AES-256. A03 Injection -> parameterized queries. A04 Insecure "
+        "Design -> threat modeling. A05 Security Misconfiguration -> hardened defaults. A06 "
+        "Vulnerable Components -> SCA scanning. A07 Auth Failures -> MFA + rate limiting. A08 "
+        "Data Integrity -> signed commits + SBOM. A09 Logging -> audit trail. A10 SSRF -> "
+        "allowlist outbound.",
         tags=["security", "owasp", "web", "api"],
         weight=0.92,
     ),
     KnowledgeEntry(
         category="performance",
         title="Caching Strategy L1/L2/L3",
-        content="L1: In-memory (dict/LRU) — nanoseconds, per-process. L2: Redis/Memcached — milliseconds, shared. L3: CDN — edge, static + API caching. Cache-aside for reads, write-through for consistency, write-behind for write performance. TTL-based expiration + event-driven invalidation.",
+        content="L1: In-memory (dict/LRU) — nanoseconds, per-process. L2: Redis/Memcached — "
+        "milliseconds, shared. L3: CDN — edge, static + API caching. Cache-aside for reads, "
+        "write-through for consistency, write-behind for write performance. TTL-based expiration "
+        "+ event-driven invalidation.",
         tags=["caching", "performance", "redis", "architecture"],
         weight=0.86,
     ),
+    *DOMAIN_KNOWLEDGE,
 ]
 
 

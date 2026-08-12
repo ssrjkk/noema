@@ -25,6 +25,7 @@ import ast
 import asyncio
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -37,9 +38,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from noema.logging import get_logger
+from noema.sandbox.static_check import _STDLIB_MODULES, analyze_code
 
 if TYPE_CHECKING:
     from asyncio.subprocess import Process
+    from collections.abc import Callable
 
 log = get_logger(__name__)
 
@@ -59,7 +62,7 @@ def _set_resource_limits(cpu_sec: float = 10, mem_mb: int = 256) -> None:
         resource.setrlimit(resource.RLIMIT_NPROC, (10, 10))  # type: ignore[attr-defined]
         resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))  # type: ignore[attr-defined]
         resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 10 * 1024 * 1024))  # type: ignore[attr-defined]
-    except (ImportError, ResourceWarning, ValueError):
+    except (ImportError, OSError, ResourceWarning, ValueError):
         log.warning("resource_limits_unavailable")
 
 
@@ -112,14 +115,43 @@ class ValidationLevel(Enum):
     TEST = "test"
 
 
+def _parse_pytest_counts(output: str, returncode: int) -> tuple[int, int]:
+    """Extract ``(passed, failed)`` test counts from pytest's summary line.
+
+    ``pytest -q`` does not emit the uppercase ``PASSED``/``FAILED`` markers, so
+    counting those substrings misreports green runs as zero passed. The summary
+    line ``"N passed, M failed"`` is parsed instead; when it is missing the
+    return code is the source of truth (0 ⇒ all green, else ≥1 failure).
+    """
+    passed = 0
+    failed = 0
+    tail = output[-2000:]
+    match_passed = re.search(r"(\d+)\s+passed", tail)
+    match_failed = re.search(r"(\d+)\s+failed", tail)
+    match_errors = re.search(r"(\d+)\s+error", tail)
+    if match_passed:
+        passed = int(match_passed.group(1))
+    if match_failed:
+        failed += int(match_failed.group(1))
+    if match_errors:
+        failed += int(match_errors.group(1))
+    if not match_passed and not match_failed and not match_errors:
+        passed = 1 if returncode == 0 else 0
+        failed = 0 if returncode == 0 else 1
+    return passed, failed
+
+
 @dataclass
 class SandboxConfig:
     enabled: bool = True
     timeout: float = 60.0
     max_memory_mb: int = 256
     max_cpu_seconds: float = 10.0
+    max_cpus: float = 0.5
     network_isolation: bool = True
     docker_image: str = "python:3.12-slim"
+    static_check_enabled: bool = True
+    static_allow_imports: tuple[str, ...] = ()
     lint_enabled: bool = True
     type_check_enabled: bool = True
     run_enabled: bool = True
@@ -134,6 +166,8 @@ class CodeValidationResult:
     language: str
     ast_valid: bool = True
     ast_errors: list[str] = field(default_factory=list)
+    static_passed: bool = True
+    static_issues: list[str] = field(default_factory=list)
     lint_passed: bool = True
     lint_errors: list[str] = field(default_factory=list)
     type_check_passed: bool = True
@@ -217,9 +251,13 @@ class SandboxEngine:
             return False
 
     async def validate_code_block(
-        self, code: str, language: str = "python", filename: str = "main.py"
+        self,
+        code: str,
+        language: str = "python",
+        filename: str = "main.py",
+        allowed_imports: set[str] | None = None,
     ) -> CodeValidationResult:
-        """Validate a single code block (AST parse for Python).
+        """Validate a single code block (AST parse + static pass for Python).
 
         Never raises: syntax problems are captured in the result's error list.
         Complexity: ``O(len(code))``.
@@ -235,8 +273,21 @@ class SandboxEngine:
                 result.ast_valid = False
                 result.ast_errors.append(str(e))
 
+            if result.ast_valid and self.config.static_check_enabled:
+                allowed = (
+                    allowed_imports if allowed_imports is not None else self._allowed_imports()
+                )
+                issues = analyze_code(code, allowed_imports=allowed)
+                if issues:
+                    result.static_passed = False
+                    result.static_issues = [issue.render() for issue in issues]
+
         result.duration_ms = (time.monotonic() - t0) * 1000
         return result
+
+    def _allowed_imports(self) -> set[str]:
+        """Import roots permitted by the sandbox: stdlib + configured extras."""
+        return set(_STDLIB_MODULES) | set(self.config.static_allow_imports)
 
     async def validate_files(
         self, files: list[dict[str, str]], run_tests: bool = False
@@ -253,11 +304,21 @@ class SandboxEngine:
         t0 = time.monotonic()
         result = SandboxResult()
 
+        sibling_roots = set()
+        for raw in files:
+            name = raw.get("path", raw.get("filename", "main.py"))
+            parts = name.replace("\\", "/").split("/")
+            root = parts[0] if len(parts) > 1 else Path(parts[-1]).stem
+            if root:
+                sibling_roots.add(root)
+        allowed = self._allowed_imports() | sibling_roots
+
         for f in files:
             vr = await self.validate_code_block(
                 code=f.get("content", ""),
                 language=f.get("language", "python"),
                 filename=f.get("path", f.get("filename", "main.py")),
+                allowed_imports=allowed,
             )
             result.files.append(vr)
 
@@ -280,11 +341,12 @@ class SandboxEngine:
                 result = await self._run_tests_direct(result, files)
 
         result.all_valid = all(
-            vr.ast_valid and vr.lint_passed and vr.run_passed for vr in result.files
+            vr.ast_valid and vr.static_passed and vr.lint_passed and vr.run_passed
+            for vr in result.files
         )
         result.total_duration_ms = (time.monotonic() - t0) * 1000
 
-        passed = sum(1 for vr in result.files if vr.ast_valid)
+        passed = sum(1 for vr in result.files if vr.ast_valid and vr.static_passed)
         total = len(result.files)
         result.summary = (
             f"{passed}/{total} files valid"
@@ -327,6 +389,7 @@ class SandboxEngine:
                         text=True,
                         timeout=self.config.max_cpu_seconds,
                         env=_build_isolated_env(),
+                        preexec_fn=self._resource_limits_preexec(),
                     )
                     if proc.returncode != 0:
                         result.files[i].lint_passed = False
@@ -362,51 +425,55 @@ class SandboxEngine:
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 file_path.write_text(content, encoding="utf-8")
 
-            async def _run_one(i: int, f: dict[str, str]) -> None:
-                async with semaphore:
-                    path = f.get("path", f.get("filename", "main.py"))
-                    lang = f.get("language", "python")
-                    if lang != "python":
-                        return
-                    file_path = _safe_join(tmp_dir, path)
-                    t0 = time.monotonic()
-                    proc: Process | None = None
-                    try:
-                        run_cmd = [sys.executable, str(file_path)]
-                        if self._has_bwrap:
-                            run_cmd = self._bwrap_cmd(run_cmd, tmp_dir)
-                        proc = await asyncio.create_subprocess_exec(
-                            *run_cmd,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE,
-                            env=_build_isolated_env(),
-                            preexec_fn=_set_resource_limits
-                            if _IS_UNIX and not self._has_bwrap
-                            else None,
-                        )
-                        stdout, stderr = await asyncio.wait_for(
-                            proc.communicate(), timeout=self.config.max_cpu_seconds
-                        )
-                        result.files[i].duration_ms = (time.monotonic() - t0) * 1000
-                        combined = (stdout + stderr).decode("utf-8", errors="replace")
-                        if proc.returncode == 0:
-                            result.files[i].run_passed = True
-                            result.files[i].run_output = combined[:500]
-                        else:
+                async def _run_one(i: int, f: dict[str, str]) -> None:
+                    async with semaphore:
+                        path = f.get("path", f.get("filename", "main.py"))
+                        lang = f.get("language", "python")
+                        if lang != "python":
+                            return
+                        if not result.files[i].static_passed:
+                            return
+                        file_path = _safe_join(tmp_dir, path)
+                        t0 = time.monotonic()
+                        proc: Process | None = None
+                        try:
+                            run_cmd = [sys.executable, str(file_path)]
+                            if self._has_bwrap:
+                                run_cmd = self._bwrap_cmd(run_cmd, tmp_dir)
+                            proc = await asyncio.create_subprocess_exec(
+                                *run_cmd,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                                env=_build_isolated_env(),
+                                preexec_fn=self._resource_limits_preexec()
+                                if not self._has_bwrap
+                                else None,
+                            )
+                            stdout, stderr = await asyncio.wait_for(
+                                proc.communicate(), timeout=self.config.max_cpu_seconds
+                            )
+                            result.files[i].duration_ms = (time.monotonic() - t0) * 1000
+                            combined = (stdout + stderr).decode("utf-8", errors="replace")
+                            if proc.returncode == 0:
+                                result.files[i].run_passed = True
+                                result.files[i].run_output = combined[:500]
+                            else:
+                                result.files[i].run_passed = False
+                                result.files[i].run_errors = combined[:1000]
+                        except TimeoutError:
                             result.files[i].run_passed = False
-                            result.files[i].run_errors = combined[:1000]
-                    except TimeoutError:
-                        result.files[i].run_passed = False
-                        result.files[
-                            i
-                        ].run_errors = f"Execution timed out after {self.config.max_cpu_seconds}s"
-                    except Exception as e:
-                        result.files[i].run_passed = False
-                        result.files[i].run_errors = str(e)[:500]
-                    finally:
-                        if proc is not None and proc.returncode is None:
-                            proc.kill()
-                            await proc.wait()
+                            result.files[
+                                i
+                            ].run_errors = (
+                                f"Execution timed out after {self.config.max_cpu_seconds}s"
+                            )
+                        except Exception as e:
+                            result.files[i].run_passed = False
+                            result.files[i].run_errors = str(e)[:500]
+                        finally:
+                            if proc is not None and proc.returncode is None:
+                                proc.kill()
+                                await proc.wait()
 
             await asyncio.gather(*(_run_one(i, f) for i, f in enumerate(files)))
 
@@ -451,16 +518,15 @@ class SandboxEngine:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=_build_isolated_env(),
-                    preexec_fn=_set_resource_limits if _IS_UNIX and not self._has_bwrap else None,
+                    preexec_fn=self._resource_limits_preexec() if not self._has_bwrap else None,
                 )
                 stdout, stderr = await asyncio.wait_for(
                     proc.communicate(), timeout=min(60.0, self.config.timeout)
                 )
-
-                if proc.returncode == 0:
-                    result.tests_passed = stdout.decode("utf-8", errors="replace").count("PASSED")
-                else:
-                    result.tests_failed = stdout.decode("utf-8", errors="replace").count("FAILED")
+                combined = (stdout + stderr).decode("utf-8", errors="replace")
+                result.tests_passed, result.tests_failed = _parse_pytest_counts(
+                    combined, proc.returncode or 0
+                )
             except TimeoutError:
                 log.warning("tests_timeout")
             except Exception as e:
@@ -481,6 +547,18 @@ class SandboxEngine:
 
     # ── Docker-based execution (with network isolation) ────────────────
 
+    def _resource_limits_preexec(self) -> Callable[[], None] | None:
+        """Build the ``preexec_fn`` applying this engine's configured limits."""
+        if not _IS_UNIX:
+            return None
+        cpu = self.config.max_cpu_seconds
+        mem = self.config.max_memory_mb
+
+        def _apply() -> None:
+            _set_resource_limits(cpu_sec=cpu, mem_mb=mem)
+
+        return _apply
+
     def _docker_run_flags(self) -> list[str]:
         flags = ["--rm"]
         if self.config.network_isolation:
@@ -490,7 +568,7 @@ class SandboxEngine:
                 "--memory",
                 f"{self.config.max_memory_mb}m",
                 "--cpus",
-                "0.5",
+                f"{self.config.max_cpus}",
             ]
         )
         return flags
@@ -568,55 +646,59 @@ class SandboxEngine:
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 file_path.write_text(content, encoding="utf-8")
 
-            async def _run_one(i: int, f: dict[str, str]) -> None:
-                async with semaphore:
-                    path = f.get("path", f.get("filename", "main.py"))
-                    lang = f.get("language", "python")
-                    if lang != "python":
-                        return
+                async def _run_one(i: int, f: dict[str, str]) -> None:
+                    async with semaphore:
+                        path = f.get("path", f.get("filename", "main.py"))
+                        lang = f.get("language", "python")
+                        if lang != "python":
+                            return
+                        if not result.files[i].static_passed:
+                            return
 
-                    file_path = _safe_join(tmp_dir, path)
-                    t0 = time.monotonic()
-                    proc: Process | None = None
-                    try:
-                        proc = await asyncio.create_subprocess_exec(
-                            "docker",
-                            "run",
-                            *self._docker_run_flags(),
-                            "-v",
-                            f"{tmp_dir}:/sandbox:ro",
-                            "-w",
-                            "/sandbox",
-                            self.config.docker_image,
-                            "python",
-                            f"/sandbox/{file_path.name}",
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE,
-                        )
-                        stdout, stderr = await asyncio.wait_for(
-                            proc.communicate(), timeout=self.config.max_cpu_seconds
-                        )
-                        result.files[i].duration_ms = (time.monotonic() - t0) * 1000
-                        combined = (stdout + stderr).decode("utf-8", errors="replace")
+                        file_path = _safe_join(tmp_dir, path)
+                        t0 = time.monotonic()
+                        proc: Process | None = None
+                        try:
+                            proc = await asyncio.create_subprocess_exec(
+                                "docker",
+                                "run",
+                                *self._docker_run_flags(),
+                                "-v",
+                                f"{tmp_dir}:/sandbox:ro",
+                                "-w",
+                                "/sandbox",
+                                self.config.docker_image,
+                                "python",
+                                f"/sandbox/{file_path.name}",
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                            )
+                            stdout, stderr = await asyncio.wait_for(
+                                proc.communicate(), timeout=self.config.max_cpu_seconds
+                            )
+                            result.files[i].duration_ms = (time.monotonic() - t0) * 1000
+                            combined = (stdout + stderr).decode("utf-8", errors="replace")
 
-                        if proc.returncode == 0:
-                            result.files[i].run_passed = True
-                            result.files[i].run_output = combined[:500]
-                        else:
+                            if proc.returncode == 0:
+                                result.files[i].run_passed = True
+                                result.files[i].run_output = combined[:500]
+                            else:
+                                result.files[i].run_passed = False
+                                result.files[i].run_errors = combined[:1000]
+                        except TimeoutError:
                             result.files[i].run_passed = False
-                            result.files[i].run_errors = combined[:1000]
-                    except TimeoutError:
-                        result.files[i].run_passed = False
-                        result.files[
-                            i
-                        ].run_errors = f"Execution timed out after {self.config.max_cpu_seconds}s"
-                    except Exception as e:
-                        result.files[i].run_passed = False
-                        result.files[i].run_errors = str(e)[:500]
-                    finally:
-                        if proc is not None and proc.returncode is None:
-                            proc.kill()
-                            await proc.wait()
+                            result.files[
+                                i
+                            ].run_errors = (
+                                f"Execution timed out after {self.config.max_cpu_seconds}s"
+                            )
+                        except Exception as e:
+                            result.files[i].run_passed = False
+                            result.files[i].run_errors = str(e)[:500]
+                        finally:
+                            if proc is not None and proc.returncode is None:
+                                proc.kill()
+                                await proc.wait()
 
             await asyncio.gather(*(_run_one(i, f) for i, f in enumerate(files)))
 
@@ -668,11 +750,9 @@ class SandboxEngine:
                 )
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
                 combined = (stdout + stderr).decode("utf-8", errors="replace")
-
-                if proc.returncode == 0:
-                    result.tests_passed = combined.count("PASSED")
-                else:
-                    result.tests_failed = combined.count("FAILED")
+                result.tests_passed, result.tests_failed = _parse_pytest_counts(
+                    combined, proc.returncode or 0
+                )
             except TimeoutError:
                 log.warning("tests_docker_timeout")
             except Exception as e:

@@ -190,6 +190,8 @@ class Tracer:
         tokens_used: int,
         latency_ms: float,
         error: str = "",
+        tokens_input: int | None = None,
+        tokens_output: int | None = None,
     ) -> TraceSpan:
         attrs: dict[str, Any] = {
             "llm.provider": provider,
@@ -197,6 +199,10 @@ class Tracer:
             "llm.tokens": tokens_used,
             "llm.latency_ms": round(latency_ms, 1),
         }
+        if tokens_input is not None:
+            attrs["llm.tokens_input"] = int(tokens_input)
+        if tokens_output is not None:
+            attrs["llm.tokens_output"] = int(tokens_output)
         if self.config.trace_prompts:
             raw = json.dumps(messages)
             attrs["llm.prompt"] = redact_text(raw)[: self.config.max_prompt_length]
@@ -213,11 +219,15 @@ class Tracer:
     def get_stats(self) -> dict[str, Any]:
         llm_spans = [s for s in self._spans if s.kind == "llm"]
         total_tokens = sum(s.attributes.get("llm.tokens", 0) for s in llm_spans)
+        total_input = sum(s.attributes.get("llm.tokens_input", 0) for s in llm_spans)
+        total_output = sum(s.attributes.get("llm.tokens_output", 0) for s in llm_spans)
         total_latency = sum(s.duration_ms for s in llm_spans)
         return {
             "total_spans": len(self._spans),
             "llm_calls": len(llm_spans),
             "total_tokens": total_tokens,
+            "tokens_input": total_input,
+            "tokens_output": total_output,
             "total_llm_latency_ms": round(total_latency, 1),
             "errors": sum(1 for s in self._spans if s.status == "error"),
         }

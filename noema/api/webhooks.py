@@ -223,3 +223,38 @@ async def list_webhooks() -> dict[str, dict[str, Any]]:
     """List all registered webhooks (URLs masked)."""
     dispatcher = get_webhook_dispatcher()
     return dispatcher.list_registrations()
+
+
+# ─── Incident ingestion (T2.1) ────────────────────────────────────────
+
+
+class IncidentWebhookRequest(BaseModel):
+    """A Sentry alert or generic incident webhook body."""
+
+    event: str = Field(default="incident", max_length=64)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/incident")
+async def incident_webhook(body: IncidentWebhookRequest) -> dict[str, Any]:
+    """Consume an incident (Sentry alert / webhook) and enqueue a fix task.
+
+    Prefers the async worker (arq over Redis) when available; falls back to
+    running the incident→PR loop inline so a standalone deployment still
+    produces a fix PR. Returns ``{"status": "queued", "job_id"}`` or the
+    fixer's result (e.g. ``{"status": "pr_created", "pr_url": ...}``).
+    """
+    from noema.autonomy.fixer import IncidentFixer, build_github_client_from_settings
+    from noema.config.settings import get_settings
+    from noema.workers.arq_worker import enqueue_fix_incident
+
+    try:
+        job_id = await enqueue_fix_incident(get_settings().redis.url, body.payload)
+        return {"status": "queued", "job_id": job_id}
+    except Exception:
+        logger.warning("incident_enqueue_failed_running_inline")
+        fixer = IncidentFixer(github=build_github_client_from_settings())
+        try:
+            return await fixer.handle_incident(body.payload)
+        finally:
+            await fixer.close()

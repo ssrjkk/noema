@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -56,8 +58,17 @@ class CheckpointStore:
     def _checkpoint_key(self, task_id: str, tenant_id: str) -> str:
         return f"noema:ckpt:{tenant_id}:{task_id}"
 
+    @staticmethod
+    def _safe_name(value: str) -> str:
+        """Keep only filesystem-safe characters; separators could escape the dir."""
+        value = re.sub(r"[^A-Za-z0-9_.-]", "_", value)
+        value = value.strip("._")
+        return value or "unknown"
+
     def _file_path(self, task_id: str, tenant_id: str) -> Path:
-        return self._dir / f"{tenant_id}__{task_id}.json"
+        safe_tenant = self._safe_name(tenant_id)
+        safe_task = self._safe_name(task_id)
+        return self._dir / f"{safe_tenant}__{safe_task}.json"
 
     async def save(self, cp: DAGCheckpoint) -> None:
         data = {
@@ -72,11 +83,16 @@ class CheckpointStore:
             "timestamp": time.time(),
         }
         payload = json.dumps(data, ensure_ascii=False)
-        await asyncio.to_thread(
-            self._file_path(cp.task_id, cp.tenant_id).write_text,
-            payload,
-            encoding="utf-8",
-        )
+        # Atomic write: write to a temp file in the same directory, then rename,
+        # so a crash mid-save can never leave a truncated checkpoint behind.
+        path = self._file_path(cp.task_id, cp.tenant_id)
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+
+        def _write() -> None:
+            tmp_path.write_text(payload, encoding="utf-8")
+            os.replace(tmp_path, path)
+
+        await asyncio.to_thread(_write)
         log.debug("checkpoint_saved", task=cp.task_id, steps=len(cp.completed_steps))
 
     async def load(self, task_id: str, tenant_id: str) -> DAGCheckpoint | None:

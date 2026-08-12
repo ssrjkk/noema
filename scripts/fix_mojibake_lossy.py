@@ -45,6 +45,29 @@ def _restore(line: str) -> str | None:
     return restored
 
 
+def _process_text(data: bytes) -> tuple[bytes | None, int]:
+    """Repair lossy mojibake lines, preserving original line endings."""
+    sep = b"\r\n" if b"\r\n" in data else b"\n"
+    parts = data.split(sep)
+    changed = False
+    repaired = 0
+    remaining = []
+    for i, part in enumerate(parts):
+        line = part.decode("utf-8")
+        if not C1_RE.search(line):
+            continue
+        restored = _restore(line)
+        if restored is not None:
+            parts[i] = restored.encode("utf-8")
+            changed = True
+            repaired += 1
+        else:
+            remaining.append(f":{i + 1} {line.rstrip()!r}")
+    if not changed:
+        return None, 0
+    return sep.join(parts), repaired
+
+
 def main() -> int:
     files = []
     for base in TARGETS:
@@ -57,23 +80,15 @@ def main() -> int:
     remaining = []
     total = 0
     for p in files:
-        text = p.read_text(encoding="utf-8")
-        lines = text.splitlines(keepends=True)
-        changed = False
-        for i, line in enumerate(lines):
-            if not C1_RE.search(line):
-                continue
-            body = line.rstrip("\r\n")
-            restored = _restore(body)
-            if restored is not None:
-                ending = "\n" if line.endswith("\n") else ""
-                lines[i] = restored + ending
-                changed = True
-                total += 1
-            else:
-                remaining.append(f"{p.relative_to(ROOT)}:{i + 1} {line.rstrip()!r}")
-        if changed:
-            p.write_text("".join(lines), encoding="utf-8")
+        data = p.read_bytes()
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        new_data, repaired = _process_text(data)
+        if new_data is not None and new_data != data:
+            p.write_bytes(new_data)
+            total += repaired
             print(f"fixed {p.relative_to(ROOT)}")
 
     print(f"\n{total} lossy line(s) repaired.")
