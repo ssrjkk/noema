@@ -1,29 +1,146 @@
-"""Arq worker for background noema tasks."""
+"""Arq worker for background noema tasks.
+
+Includes liveness (heartbeat) and node identity so an operator or autoscaler
+can observe worker fleet size and drain a node gracefully before shutdown.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+import contextlib
+import os
+import socket
+import time
+import uuid
+from typing import TYPE_CHECKING, Any
 
 import structlog
+from redis.asyncio import Redis
 
 from noema.core.engine import NoemaEngine
 from noema.core.types import Task, TaskComplexity
 
+if TYPE_CHECKING:
+    from redis.asyncio import Redis as AsyncRedis
+
 logger = structlog.get_logger(__name__)
 
+HEARTBEAT_PREFIX = "noema:workers:"
+HEARTBEAT_TTL = 15
+HEARTBEAT_INTERVAL = 5
 
 noema_instance: NoemaEngine | None = None
 
 
+def make_node_id() -> str:
+    """Stable per-process worker identity: ``host:pid:token``."""
+    return f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+
+
+class NodeHeartbeat:
+    """Publishes worker liveness to Redis under an auto-expiring key.
+
+    Absence of a key (TTL expiry) means the node died without draining. A
+    ``draining=1`` flag is set before a graceful shutdown so observers can
+    stop routing new work to this node.
+    """
+
+    def __init__(
+        self,
+        node_id: str,
+        redis_url: str = "",
+        redis: AsyncRedis | None = None,
+    ) -> None:
+        self.node_id = node_id
+        self.redis_url = redis_url
+        self._redis: AsyncRedis | None = redis
+        self._task: asyncio.Task | None = None
+        self.draining = False
+        self.started_at = int(time.time())
+
+    async def start(self) -> None:
+        if self._redis is None:
+            self._redis = Redis.from_url(self.redis_url, decode_responses=True)
+        await self._beat()
+        self._task = asyncio.create_task(self._loop())
+        logger.info("worker_heartbeat_started", node_id=self.node_id)
+
+    async def stop(self) -> None:
+        """Publish draining, delete the liveness key, and cancel the loop."""
+        if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
+        if self._redis is not None:
+            await self._redis.delete(self._key())
+            await self._redis.aclose()
+            self._redis = None
+
+    async def mark_draining(self) -> None:
+        """Flag the node as draining before the final heartbeat dies."""
+        self.draining = True
+        await self._beat()
+
+    def _key(self) -> str:
+        return f"{HEARTBEAT_PREFIX}{self.node_id}"
+
+    async def _beat(self) -> None:
+        if self._redis is None:
+            return
+        await self._redis.hset(
+            self._key(),
+            mapping={
+                "node_id": self.node_id,
+                "hostname": socket.gethostname(),
+                "pid": str(os.getpid()),
+                "started_at": str(self.started_at),
+                "last_heartbeat": str(int(time.time())),
+                "draining": "1" if self.draining else "0",
+            },
+        )
+        await self._redis.expire(self._key(), HEARTBEAT_TTL)
+
+    async def _loop(self) -> None:
+        while True:
+            await asyncio.sleep(HEARTBEAT_INTERVAL)
+            try:
+                await self._beat()
+            except Exception as e:
+                # Liveness must never kill the worker; just warn and retry.
+                logger.warning("worker_heartbeat_failed", error=str(e))
+
+
 async def startup(ctx: dict) -> None:
+    from noema.config.settings import get_settings
+
     ctx["noema"] = NoemaEngine()
     await ctx["noema"].initialize()
-    logger.info("arq_worker_startup_complete")
+    node_id = make_node_id()
+    ctx["node_id"] = node_id
+    ctx["heartbeat"] = NodeHeartbeat(node_id, get_settings().redis.url)
+    await ctx["heartbeat"].start()
+    logger.info("arq_worker_startup_complete", node_id=node_id)
+
+
+async def drain(ctx: dict) -> None:
+    """Graceful drain: mark draining, drop the heartbeat, stop the engine.
+
+    Arq itself stops polling and lets the in-flight job complete on SIGTERM;
+    this publishes that state so external observers stop routing work here.
+    """
+    heartbeat: NodeHeartbeat | None = ctx.get("heartbeat")
+    if heartbeat is not None:
+        await heartbeat.mark_draining()
+        await heartbeat.stop()
+    noema: NoemaEngine | None = ctx.get("noema")
+    if noema is not None:
+        await noema.shutdown()
+    logger.info("arq_worker_drained", node_id=ctx.get("node_id", "?"))
 
 
 async def shutdown(ctx: dict) -> None:
-    if ctx.get("noema"):
-        await ctx["noema"].shutdown()
+    await drain(ctx)
     logger.info("arq_worker_shutdown_complete")
 
 
@@ -48,7 +165,7 @@ async def think_task(ctx: dict, task_data: dict) -> dict:
             "duration_ms": thought.duration_ms,
         }
     except Exception as e:
-        logger.error("arq_think_task_failed", error=str(e))
+        logger.error("arq_think_task_failed", error=str(e), exc_info=e)
         return {"status": "failed", "error": str(e)}
 
 
@@ -72,7 +189,7 @@ class NoemaWorkerSettings:
     retry_delay = 5.0
 
 
-async def create_worker(redis_url: str | None = None) -> Any:
+async def create_worker(redis_url: str | None = None, burst: bool = False) -> Any:
     """Create and return an Arq worker."""
     from arq import Worker as ArqWorker
     from arq.connections import RedisSettings as ArqRedisSettings
@@ -92,8 +209,19 @@ async def create_worker(redis_url: str | None = None) -> Any:
         poll_delay=NoemaWorkerSettings.poll_delay,
         max_retries=NoemaWorkerSettings.max_retries,
         retry_delay=NoemaWorkerSettings.retry_delay,
+        burst=burst,
     )
     return worker
+
+
+async def run_worker(redis_url: str | None = None, burst: bool = False) -> None:
+    """Blocking entrypoint: run the arq worker until signalled.
+
+    The worker drains gracefully on SIGINT/SIGTERM (in-flight job completes,
+    liveness key removed).
+    """
+    worker = await create_worker(redis_url, burst=burst)
+    await worker.async_run()
 
 
 async def enqueue_think(redis_url: str, task_data: dict) -> str | None:
@@ -116,3 +244,35 @@ async def enqueue_fix_incident(redis_url: str, payload: dict) -> str | None:
     job = await pool.enqueue_job("fix_incident_task", payload)
     await pool.close()
     return job.job_id if job else None
+
+
+async def list_active_workers(
+    redis_url: str, redis: AsyncRedis | None = None
+) -> list[dict[str, str]]:
+    """List live worker nodes from their Redis heartbeat keys."""
+    r: AsyncRedis = redis or Redis.from_url(redis_url, decode_responses=True)
+    owned = redis is None
+    try:
+        keys = await r.keys(f"{HEARTBEAT_PREFIX}*")
+        workers: list[dict[str, str]] = []
+        for key in keys:
+            data = await r.hgetall(key)
+            if not data:
+                continue
+            decoded = {
+                str(k, errors="replace") if isinstance(k, bytes) else str(k): _as_str(v)
+                for k, v in data.items()
+            }
+            decoded["key"] = key if isinstance(key, str) else str(key, errors="replace")
+            workers.append(decoded)
+        workers.sort(key=lambda w: w.get("started_at", "0"))
+        return workers
+    finally:
+        if owned:
+            await r.aclose()
+
+
+def _as_str(value: Any) -> str:
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return str(value)

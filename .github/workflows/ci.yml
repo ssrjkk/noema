@@ -40,7 +40,6 @@ jobs:
 
       - name: Mypy
         run: mypy noema/ --ignore-missing-imports --no-error-summary
-        continue-on-error: true
 
   test:
     name: Tests
@@ -58,7 +57,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev,db]"
+          pip install -e ".[dev,db,grpc,arq]"
 
       - name: Run tests
         env:

@@ -256,8 +256,25 @@ class TestRateLimitMiddleware:
                 resp = await client.get("/hello")
                 assert resp.status_code == 200
 
-    async def test_ip_based_client_key(self, app: FastAPI):
+    async def test_ip_based_client_key_ignores_spoofed_forwarding(self, app: FastAPI):
+        """X-Forwarded-For from an untrusted peer must NOT change client identity."""
         _override_api_settings(rate_limit_enabled=True, rate_limit_rpm=1)
+        app.add_middleware(RateLimitMiddleware)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/hello", headers={"X-Forwarded-For": "10.0.0.1"})
+            assert resp.status_code == 200
+            # Spoofed header is ignored -> same client key -> already over limit
+            resp2 = await client.get("/hello", headers={"X-Forwarded-For": "10.0.0.2"})
+            assert resp2.status_code == 429
+
+    async def test_ip_based_client_key_from_trusted_proxy(self, app: FastAPI):
+        """Forwarded headers ARE honored when the direct peer is a trusted proxy."""
+        _override_api_settings(
+            rate_limit_enabled=True,
+            rate_limit_rpm=1,
+            trusted_proxies=["127.0.0.1"],  # httpx ASGI peer host
+        )
         app.add_middleware(RateLimitMiddleware)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:

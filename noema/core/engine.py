@@ -25,19 +25,21 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import re
 import time
 from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any
 
 from noema.agents.orchestrator import AgentOrchestrator
 from noema.budget.token_budget import TokenBudget
-from noema.config.settings import get_settings
+from noema.config.settings import SandboxSettings, get_settings
 from noema.context import get_tenant_id, set_tenant_id
 from noema.core.chain_of_thought import ChainOfThought, ReflexionState
 from noema.core.checkpoint import CheckpointStore, DAGCheckpoint
 from noema.core.types import (
     ArchitecturePattern,
     CodeBlock,
+    SandboxValidationError,
     Solution,
     SolutionQuality,
     Task,
@@ -76,6 +78,37 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 StreamCallback = Callable[[str, str, int, int], Coroutine[Any, Any, None] | None]
+
+
+def _parse_memory_mb(value: str) -> int:
+    """Parse a Docker-style memory limit (``256m``, ``1g``, ``512``) into MB."""
+    match = re.fullmatch(r"\s*(\d+)\s*([kmg]?)\s*", value.lower())
+    if not match:
+        return 256
+    amount = int(match.group(1))
+    unit = match.group(2)
+    if unit == "g":
+        return max(1, amount * 1024)
+    if unit == "k":
+        return max(1, amount // 1024)
+    return max(1, amount)
+
+
+def _sandbox_config_from_settings(sb: SandboxSettings) -> SandboxConfig:
+    """Map the pydantic ``SandboxSettings`` onto the runtime :class:`SandboxConfig`.
+
+    Removes the historical hard-coded sandbox configuration in
+    :class:`NoemaEngine` so every cap (memory, CPUs, image, network isolation,
+    timeout) flows from ``NOEMA_SANDBOX_*`` env vars / ``settings.yaml``.
+    """
+    return SandboxConfig(
+        enabled=sb.enabled,
+        timeout=sb.timeout,
+        max_memory_mb=_parse_memory_mb(sb.max_memory),
+        max_cpus=sb.max_cpus,
+        network_isolation=sb.network_disabled,
+        docker_image=sb.docker_image,
+    )
 
 
 class NoemaEngine:
@@ -123,18 +156,10 @@ class NoemaEngine:
         self.healer = SelfHealer()
         self.ingestion = KnowledgeLoader(knowledge_store=self.knowledge)
         self.modules = get_registry()
-        self.sandbox = SandboxEngine(
-            SandboxConfig(
-                enabled=True,
-                lint_enabled=True,
-                type_check_enabled=True,
-                run_enabled=True,
-                test_enabled=True,
-            )
-        )
+        self._settings = get_settings()
+        self.sandbox = SandboxEngine(_sandbox_config_from_settings(self._settings.sandbox))
         self.tracer: Tracer = get_tracer()
         self.checkpointer = CheckpointStore(persist_dir=f"{project_root}/.noema/checkpoints")
-        self._settings = get_settings()
         ns_cfg = self._settings.neurosymbolic
         self.neurosymbolic = (
             NeuroSymbolicEngine(
@@ -293,7 +318,7 @@ class NoemaEngine:
             resume_context = dict(ckpt.step_results or {})
 
         thought = ThoughtProcess(task_id=task.id)
-        t0 = time.monotonic()
+        t0 = time.perf_counter()
 
         log.info(f"[Noema] Thinking about: {task.title} (LLM: {self.llm.name})")
 
@@ -330,20 +355,16 @@ class NoemaEngine:
                     solution = await self._convert_neurosymbolic_to_solution(
                         final_solution, task, completed_result
                     )
-                    thought.duration_ms = (time.monotonic() - t0) * 1000
-                    thought.final_reasoning = self._build_reasoning(thought, solution)
-                    log.info(
-                        f"[Noema] NeuroSymbolic solution in {thought.duration_ms:.0f}ms | "
-                        f"Quality: {solution.quality.value}"
-                    )
                     if completed_result and completed_result.get("causal_analysis"):
                         solution.metadata["causal_analysis"] = completed_result["causal_analysis"]
                         solution.metadata["causal_metrics"] = completed_result.get(
                             "causal_metrics", {}
                         )
-                    self.tracer.end_span(trace_span, status="ok")
+                    await self._finalize_solution(task, solution, thought, t0, trace_span)
                     return solution, thought
                 log.info("neurosymbolic_fallback_to_cot_proceeding")
+            except SandboxValidationError:
+                raise
             except MaxRefinementsExceededError:
                 raise
             except Exception as e:
@@ -468,8 +489,92 @@ class NoemaEngine:
             solution = await self._assemble_solution_from_reasoning(task, reasoning_result)
             solution = self._evaluate_quality(solution, thought)
 
-        thought.duration_ms = (time.monotonic() - t0) * 1000
+        thought.duration_ms = (time.perf_counter() - t0) * 1000
         thought.final_reasoning = self._build_reasoning(thought, solution)
+
+        await self._finalize_solution(task, solution, thought, t0, trace_span)
+        return solution, thought
+
+    async def _verify_think_solution(self, solution: Solution) -> dict[str, Any]:
+        """Run the think() verification gate on a generated solution.
+
+        Enabled by ``NOEMA_SANDBOX__VERIFY_THINK``. Every Python code block is
+        checked with the pure-AST static pass (syntax + import hygiene +
+        undefined-name call graph) — the deterministic, fail-closed half of the
+        sandbox contract. The full sandbox run is intentionally *not* executed
+        here: it stays where execution is already wired (experiments runner and
+        the autonomy fixer), so this gate is fast and works without Docker.
+
+        Returns a verdict dict merged into ``solution.metadata["sandbox"]``.
+        Never raises unless ``verify_think_enforce`` is set (fail-closed).
+        """
+        verdict: dict[str, Any] = {
+            "enabled": bool(self._settings.sandbox.verify_think),
+            "passed": True,
+            "files": [],
+            "summary": "",
+        }
+        if not verdict["enabled"]:
+            return verdict
+
+        python_blocks = [b for b in solution.code_blocks if b.language == "python"]
+        if not python_blocks:
+            verdict["summary"] = "no python code blocks to verify"
+            return verdict
+
+        for block in python_blocks:
+            vr = await self.sandbox.validate_code_block(
+                code=block.content,
+                language="python",
+                filename=block.filename,
+            )
+            record = {
+                "file": block.filename,
+                "ast_valid": vr.ast_valid,
+                "static_passed": vr.static_passed,
+                "ast_errors": vr.ast_errors,
+                "static_issues": vr.static_issues,
+            }
+            verdict["files"].append(record)
+            if not (vr.ast_valid and vr.static_passed):
+                verdict["passed"] = False
+
+        passed = sum(1 for f in verdict["files"] if f["ast_valid"] and f["static_passed"])
+        total = len(verdict["files"])
+        verdict["summary"] = f"{passed}/{total} python files passed the static gate"
+        log.info(
+            "think_sandbox_gate",
+            passed=passed,
+            total=total,
+            enforce=bool(self._settings.sandbox.verify_think_enforce),
+        )
+        return verdict
+
+    async def _finalize_solution(
+        self,
+        task: Task,
+        solution: Solution,
+        thought: ThoughtProcess,
+        t0: float,
+        trace_span: Any,
+    ) -> None:
+        """Shared post-processing for every think() exit path.
+
+        Both the neurosymbolic fast path and the Chain-of-Thought path converge
+        here so a solution can never leak checkpoints, skip memory recording, or
+        bypass the sandbox gate (previously the NS path returned early).
+
+        Order matters: the sandbox gate runs first so an enforced rejection
+        leaves the checkpoint in place and the run stays resumable.
+        """
+        thought.duration_ms = (time.perf_counter() - t0) * 1000
+        thought.final_reasoning = self._build_reasoning(thought, solution)
+
+        sandbox_verdict = await self._verify_think_solution(solution)
+        if sandbox_verdict.get("enabled"):
+            solution.metadata["sandbox"] = sandbox_verdict
+            if not sandbox_verdict["passed"] and self._settings.sandbox.verify_think_enforce:
+                raise SandboxValidationError(sandbox_verdict["summary"])
 
         self.memory.record_episode(
             task_description=f"{task.title}: {task.description}",
@@ -515,8 +620,6 @@ class NoemaEngine:
             }
         )
         self.tracer.end_span(trace_span, status="ok")
-
-        return solution, thought
 
     def _prepare_neurosymbolic_task(self, task: Task) -> dict[str, Any]:
         """Project a :class:`Task` onto the strict neurosymbolic input contract.

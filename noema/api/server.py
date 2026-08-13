@@ -21,6 +21,7 @@ Complexity:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 from contextlib import asynccontextmanager
@@ -28,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from noema.api.admin import router as admin_router
@@ -45,12 +46,20 @@ from noema.api.rate_limit import RateLimitMiddleware
 from noema.api.versioning import APIVersionMiddleware
 from noema.api.webhooks import get_webhook_dispatcher
 from noema.audit.logger import AuditLogger
-from noema.billing.quotas import QuotaManager
+from noema.billing.cost_tracker import CostTracker
+from noema.billing.quotas import QuotaExceededError, QuotaManager
 from noema.config.feature_flags import FeatureFlagService
 from noema.config.settings import get_settings
+from noema.context import get_tenant_id, reset_tenant_id, set_tenant_id
 from noema.core.engine import NoemaEngine
-from noema.core.types import Requirement, Task, TaskComplexity, TechStack
+from noema.core.types import Requirement, SandboxValidationError, Task, TaskComplexity, TechStack
 from noema.logging import get_logger, setup_logging
+from noema.observability.metrics import (
+    CONTENT_TYPE_LATEST,
+    generate_latest,
+    spawn_metrics_server,
+    update_system_gauges,
+)
 from noema.observability.sentry import init_sentry
 from noema.resilience.cancellation import CancellationManager, CancelledTaskError
 from noema.resilience.graceful_degradation import GracefulDegradation
@@ -94,6 +103,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.quota_manager = QuotaManager(pg_pool=None)
     await app.state.quota_manager.initialize()
 
+    app.state.cost_tracker = CostTracker(redis_url=settings.redis.url)
+
     app.state.feature_flags = FeatureFlagService()
     await app.state.feature_flags.initialize()
 
@@ -103,16 +114,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await webhook_dispatcher.start()
     app.state.webhook_dispatcher = webhook_dispatcher
 
+    # Prometheus: standalone exporter on its own port + gauge refresher
+    gauge_task: asyncio.Task | None = None
+    if settings.obs.metrics_enabled:
+        spawn_metrics_server(port=settings.obs.metrics_port)
+        gauge_task = asyncio.create_task(_refresh_gauges())
+
     _start_time = time.monotonic()
     log.info("api_ready")
 
     yield
 
     log.info("api_shutting_down")
+    if gauge_task:
+        gauge_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await gauge_task
     await webhook_dispatcher.stop()
     if _noema:
         await _noema.shutdown()
     log.info("api_stopped")
+
+
+async def _refresh_gauges() -> None:
+    """Periodically push engine state into Prometheus gauges (best-effort)."""
+    while True:
+        try:
+            noema = _get_noema()
+            update_system_gauges(
+                worker_stats=noema.worker_pool.stats,
+                knowledge_stats=noema.knowledge.get_stats(),
+            )
+        except Exception as e:
+            log.debug("gauge_refresh_failed", error=str(e))
+        await asyncio.sleep(10)
 
 
 # ─── App ─────────────────────────────────────────────────────────────────
@@ -261,14 +296,68 @@ router = APIRouter()
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> ProblemResponse:
-    """Catch-all exception handler -> RFC 7807."""
-    log.error("unhandled_exception", error=str(exc), path=str(request.url))
+    """Catch-all exception handler -> RFC 7807.
+
+    The real exception is logged server-side; the client only ever sees a
+    generic message so internal paths/DB errors are never leaked (zero-trust).
+    """
+    log.error("unhandled_exception", error=str(exc), exc_info=exc, path=str(request.url))
     return problem_response(
         status=500,
         title="Internal Server Error",
-        detail=str(exc),
+        detail="Internal server error",
         instance=str(request.url),
     )
+
+
+@asynccontextmanager
+async def _task_guard(request: Request, task_id: str) -> AsyncIterator[str]:
+    """Per-request quota enforcement + tenant context for a reasoning task.
+
+    Enforces the tenant's quotas before work starts (fail-closed 429), tracks
+    the active task while it runs, and guarantees the task is untracked and the
+    tenant context reset even on error.
+    """
+    tenant_id = request.headers.get("x-tenant-id") or get_tenant_id() or "default"
+    token = set_tenant_id(tenant_id)
+    quota: QuotaManager | None = getattr(request.app.state, "quota_manager", None)
+    tracked = False
+    try:
+        if quota is not None:
+            await quota.check_quota(tenant_id)
+            await quota.track_active_task(tenant_id, task_id)
+            tracked = True
+        yield tenant_id
+    except QuotaExceededError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from None
+    finally:
+        if quota is not None and tracked:
+            await quota.untrack_active_task(tenant_id, task_id)
+        reset_tenant_id(token)
+
+
+async def _record_task_cost(
+    request: Request, tenant_id: str, task_id: str, noema: NoemaEngine
+) -> None:
+    """Attribute a think() run's token spend to the tenant (economy of computation)."""
+    tracker: CostTracker | None = getattr(request.app.state, "cost_tracker", None)
+    if tracker is None:
+        return
+    total_tokens = int(noema.tracer.get_stats().get("total_tokens", 0) or 0)
+    if total_tokens <= 0:
+        return
+    try:
+        await tracker.record(
+            tenant_id=tenant_id,
+            task_id=task_id,
+            provider=noema.llm.name,
+            model=noema.llm.model_name,
+            input_tokens=total_tokens,
+            output_tokens=0,
+            step_name="think",
+        )
+    except Exception as e:
+        log.warning("cost_record_failed", error=str(e))
 
 
 @app.exception_handler(HTTPException)
@@ -314,6 +403,12 @@ async def health() -> HealthResponse:
     )
 
 
+@router.get("/metrics", tags=["ops"])
+async def metrics() -> Response:
+    """Prometheus text-format metrics on the main API (API-key protected)."""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @router.get("/ready", response_model=ReadinessResponse, tags=["ops"])
 async def readiness() -> ReadinessResponse:
     """Readiness probe — verifies all dependencies."""
@@ -335,7 +430,9 @@ async def readiness() -> ReadinessResponse:
     # Check workers
     noema = _get_noema()
     stats = noema.worker_pool.stats
-    if stats.get("active_workers", 0) >= settings.worker.pool_size:
+    busy = int(stats.get("workers_busy", 0) or 0)
+    total = int(stats.get("workers_total", 0) or settings.worker.pool_size)
+    if busy >= total:
         checks["workers"] = "saturated"
         ready = False
     else:
@@ -345,7 +442,7 @@ async def readiness() -> ReadinessResponse:
 
 
 @router.post("/think", response_model=SolutionResponse, tags=["reasoning"])
-async def think(request: TaskRequest) -> SolutionResponse:
+async def think(request: TaskRequest, http_request: Request) -> SolutionResponse:
     """Generate a solution for the given task.
 
     Complexity: dominated by ``noema.think`` (3 Reflexion attempts); response
@@ -355,42 +452,46 @@ async def think(request: TaskRequest) -> SolutionResponse:
     log.info("think_start", title=request.title, tags=request.tags)
 
     task = _build_task(request)
-    t0 = time.monotonic()
     task_id = request.task_id or task.id
-    try:
-        solution, thought = await _cancellation_mgr.execute_with_cancellation(
-            task_id, noema.think(task)
+    async with _task_guard(http_request, task_id) as tenant_id:
+        t0 = time.monotonic()
+        try:
+            solution, thought = await _cancellation_mgr.execute_with_cancellation(
+                task_id, noema.think(task)
+            )
+        except CancelledTaskError:
+            raise HTTPException(status_code=499, detail="Task cancelled by user") from None
+        except SandboxValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+        elapsed = (time.monotonic() - t0) * 1000
+        await _record_task_cost(http_request, tenant_id, task_id, noema)
+
+        log.info(
+            "think_done",
+            task_id=solution.task_id,
+            quality=solution.quality.value,
+            confidence=solution.confidence,
+            duration_ms=round(elapsed, 1),
         )
-    except CancelledTaskError:
-        raise HTTPException(status_code=499, detail="Task cancelled by user") from None
-    elapsed = (time.monotonic() - t0) * 1000
 
-    log.info(
-        "think_done",
-        task_id=solution.task_id,
-        quality=solution.quality.value,
-        confidence=solution.confidence,
-        duration_ms=round(elapsed, 1),
-    )
-
-    return SolutionResponse(
-        id=solution.id,
-        task_id=solution.task_id,
-        title=solution.title,
-        summary=solution.summary,
-        quality=solution.quality.value,
-        confidence=solution.confidence,
-        stack_summary=solution.stack.summary(),
-        code_blocks_count=len(solution.code_blocks),
-        performance_notes=solution.performance_notes,
-        security_notes=solution.security_notes,
-        thought_steps=len(thought.steps),
-        duration_ms=thought.duration_ms,
-    )
+        return SolutionResponse(
+            id=solution.id,
+            task_id=solution.task_id,
+            title=solution.title,
+            summary=solution.summary,
+            quality=solution.quality.value,
+            confidence=solution.confidence,
+            stack_summary=solution.stack.summary(),
+            code_blocks_count=len(solution.code_blocks),
+            performance_notes=solution.performance_notes,
+            security_notes=solution.security_notes,
+            thought_steps=len(thought.steps),
+            duration_ms=thought.duration_ms,
+        )
 
 
 @router.post("/think/detail", response_model=SolutionDetailResponse, tags=["reasoning"])
-async def think_detail(request: TaskRequest) -> SolutionDetailResponse:
+async def think_detail(request: TaskRequest, http_request: Request) -> SolutionDetailResponse:
     """Generate a full-detail solution.
 
     Complexity: dominated by ``noema.think``; serialization is ``O(B)`` for B
@@ -400,12 +501,17 @@ async def think_detail(request: TaskRequest) -> SolutionDetailResponse:
     log.info("think_detail_start", title=request.title)
 
     task = _build_task(request)
-    try:
-        solution, thought = await _cancellation_mgr.execute_with_cancellation(
-            request.task_id or task.id, noema.think(task)
-        )
-    except CancelledTaskError:
-        raise HTTPException(status_code=499, detail="Task cancelled by user") from None
+    task_id = request.task_id or task.id
+    async with _task_guard(http_request, task_id) as tenant_id:
+        try:
+            solution, thought = await _cancellation_mgr.execute_with_cancellation(
+                task_id, noema.think(task)
+            )
+        except CancelledTaskError:
+            raise HTTPException(status_code=499, detail="Task cancelled by user") from None
+        except SandboxValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+        await _record_task_cost(http_request, tenant_id, task_id, noema)
 
     return SolutionDetailResponse(
         id=solution.id,
@@ -443,7 +549,7 @@ async def worker_stats() -> dict[str, Any]:
 
 
 @router.post("/think/stream", tags=["reasoning"])
-async def think_stream(request: TaskRequest) -> StreamingResponse:
+async def think_stream(request: TaskRequest, http_request: Request) -> StreamingResponse:
     """Generate a solution with Server-Sent Events (SSE) streaming.
 
     Complexity: dominated by ``noema.think``; each event is ``O(1)``.
@@ -481,31 +587,33 @@ async def think_stream(request: TaskRequest) -> StreamingResponse:
 
         async def run_think() -> None:
             try:
-                solution, thought = await _cancellation_mgr.execute_with_cancellation(
-                    request.task_id or task.id,
-                    noema.think(task, on_step_start=on_step_start, on_step_end=on_step_end),
-                )
-                wd = get_webhook_dispatcher()
-                if wd:
-                    await wd.emit(
-                        "task.completed",
+                async with _task_guard(http_request, request.task_id or task.id) as tenant_id:
+                    solution, thought = await _cancellation_mgr.execute_with_cancellation(
+                        request.task_id or task.id,
+                        noema.think(task, on_step_start=on_step_start, on_step_end=on_step_end),
+                    )
+                    await _record_task_cost(http_request, tenant_id, task.id, noema)
+                    wd = get_webhook_dispatcher()
+                    if wd:
+                        await wd.emit(
+                            "task.completed",
+                            {
+                                "task_id": task.id,
+                                "solution_id": solution.id,
+                                "quality": solution.quality.value,
+                            },
+                        )
+                    await step_queue.put(
                         {
-                            "task_id": task.id,
+                            "type": "complete",
                             "solution_id": solution.id,
                             "quality": solution.quality.value,
-                        },
+                            "confidence": solution.confidence,
+                            "duration_ms": thought.duration_ms,
+                            "steps": len(thought.steps),
+                            "summary": solution.summary,
+                        }
                     )
-                await step_queue.put(
-                    {
-                        "type": "complete",
-                        "solution_id": solution.id,
-                        "quality": solution.quality.value,
-                        "confidence": solution.confidence,
-                        "duration_ms": thought.duration_ms,
-                        "steps": len(thought.steps),
-                        "summary": solution.summary,
-                    }
-                )
             except CancelledTaskError:
                 await step_queue.put(
                     {

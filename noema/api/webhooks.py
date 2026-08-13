@@ -13,7 +13,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from noema.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 
@@ -173,8 +176,6 @@ def get_webhook_dispatcher() -> WebhookDispatcher:
 
 # ─── REST Endpoints ───────────────────────────────────────────────────
 
-from pydantic import BaseModel, Field  # noqa: PLC0415, E402
-
 
 class WebhookRegisterRequest(BaseModel):
     url: str = Field(..., min_length=1, max_length=2048)
@@ -236,20 +237,35 @@ class IncidentWebhookRequest(BaseModel):
 
 
 @router.post("/incident")
-async def incident_webhook(body: IncidentWebhookRequest) -> dict[str, Any]:
+async def incident_webhook(
+    body: IncidentWebhookRequest,
+    request: Request,
+    x_noema_signature: str | None = Header(default=None),
+) -> dict[str, Any]:
     """Consume an incident (Sentry alert / webhook) and enqueue a fix task.
+
+    If ``settings.api.webhook_secret`` is set, the request must carry an
+    ``X-Noema-Signature: sha256=<hex>`` HMAC over the raw request body
+    (constant-time comparison, fail-closed).
 
     Prefers the async worker (arq over Redis) when available; falls back to
     running the incident→PR loop inline so a standalone deployment still
     produces a fix PR. Returns ``{"status": "queued", "job_id"}`` or the
     fixer's result (e.g. ``{"status": "pr_created", "pr_url": ...}``).
     """
+    settings = get_settings()
+    secret = settings.api.webhook_secret.get_secret_value()
+    if secret and not _verify_signature(secret, await request.body(), x_noema_signature):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing X-Noema-Signature",
+        )
+
     from noema.autonomy.fixer import IncidentFixer, build_github_client_from_settings
-    from noema.config.settings import get_settings
     from noema.workers.arq_worker import enqueue_fix_incident
 
     try:
-        job_id = await enqueue_fix_incident(get_settings().redis.url, body.payload)
+        job_id = await enqueue_fix_incident(settings.redis.url, body.payload)
         return {"status": "queued", "job_id": job_id}
     except Exception:
         logger.warning("incident_enqueue_failed_running_inline")
@@ -258,3 +274,17 @@ async def incident_webhook(body: IncidentWebhookRequest) -> dict[str, Any]:
             return await fixer.handle_incident(body.payload)
         finally:
             await fixer.close()
+
+
+def _verify_signature(secret: str, raw_body: bytes, provided: str | None) -> bool:
+    """Verify an ``sha256=<hex>`` HMAC signature in constant time (fail-closed)."""
+    if not provided:
+        return False
+    try:
+        algo, _, digest = provided.partition("=")
+        if algo != "sha256" or len(digest) != 64:
+            return False
+        expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, digest)
+    except Exception:
+        return False

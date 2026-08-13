@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import time
 from concurrent import futures
 from typing import TYPE_CHECKING, Any
@@ -55,22 +57,92 @@ class NoemaEngineServicer(NoemaEngineServiceServicer):
                 duration_ms=thought.duration_ms,
             )
         except Exception as e:
-            context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(str(e))
-            return ThinkResponse(error=str(e))
+            logger.error("grpc_think_failed", error=str(e), exc_info=e)
+            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+            raise  # pragma: no cover - abort() always raises
 
     async def ThinkStream(  # noqa: N802
         self, request: Any, context: grpc.aio.ServicerContext
     ) -> AsyncIterator[ThinkStatus]:
-        """Streaming Think — yield status updates."""
+        """Streaming Think — yield real per-step engine progress.
+
+        The engine's ``on_step_start``/``on_step_end`` callbacks feed an
+        asyncio queue which is drained into the gRPC response stream, so a
+        client sees each reasoning phase as it happens rather than a single
+        fabricated update.
+        """
         task = self._request_to_task(request)
+        queue: asyncio.Queue[ThinkStatus] = asyncio.Queue(maxsize=64)
+        correlation_id = request.task_id or task.id
+
+        async def on_step_start(name: str, label: str, done: int, total: int) -> None:
+            await queue.put(
+                ThinkStatus(
+                    stage=name,
+                    status="running",
+                    progress=done / total if total else 0.0,
+                    message=label,
+                    correlation_id=correlation_id,
+                )
+            )
+
+        async def on_step_end(name: str, result: str, done: int, total: int) -> None:
+            await queue.put(
+                ThinkStatus(
+                    stage=name,
+                    status="ok" if not result.startswith("FAILED") else "failed",
+                    progress=done / total if total else 1.0,
+                    message=result[:200],
+                    correlation_id=correlation_id,
+                )
+            )
+
+        run = asyncio.create_task(
+            self._run_think(task, queue, on_step_start, on_step_end, correlation_id)
+        )
         try:
-            solution, thought = await self.noema.think(task)
-            yield ThinkStatus(
-                stage="completed", status="ok", progress=1.0, message=f"Solution: {solution.id}"
+            while True:
+                status = await queue.get()
+                yield status
+                if status.stage in ("completed", "error"):
+                    break
+        finally:
+            run.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await run
+
+    async def _run_think(
+        self,
+        task: Task,
+        queue: asyncio.Queue[ThinkStatus],
+        on_step_start: Any,
+        on_step_end: Any,
+        correlation_id: str,
+    ) -> None:
+        try:
+            solution, _ = await self.noema.think(
+                task, on_step_start=on_step_start, on_step_end=on_step_end
+            )
+            await queue.put(
+                ThinkStatus(
+                    stage="completed",
+                    status="ok",
+                    progress=1.0,
+                    message=f"Solution: {solution.id}",
+                    correlation_id=correlation_id,
+                )
             )
         except Exception as e:
-            yield ThinkStatus(stage="error", status="failed", message=str(e))
+            logger.error("grpc_think_stream_failed", error=str(e), exc_info=e)
+            await queue.put(
+                ThinkStatus(
+                    stage="error",
+                    status="failed",
+                    progress=1.0,
+                    message=str(e),
+                    correlation_id=correlation_id,
+                )
+            )
 
     async def Health(self, request: Any, context: grpc.aio.ServicerContext) -> HealthResponse:  # noqa: N802
         return HealthResponse(
@@ -131,10 +203,18 @@ class NoemaEngineServicer(NoemaEngineServiceServicer):
 async def serve_grpc(
     noema: NoemaEngine, host: str = "[::]", port: int = 50051, cancellation_mgr: Any = None
 ) -> grpc.aio.Server:
-    """Start gRPC server."""
+    """Start a gRPC server bound to ``host:port`` (returns the running server).
+
+    Call :func:`stop_grpc` for a graceful drain on shutdown.
+    """
     server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
     add_NoemaEngineServiceServicer_to_server(NoemaEngineServicer(noema, cancellation_mgr), server)
     server.add_insecure_port(f"{host}:{port}")
     await server.start()
     logger.info("grpc_server_started", host=host, port=port)
     return server
+
+
+async def stop_grpc(server: grpc.aio.Server, grace: float = 5.0) -> None:
+    """Gracefully stop a gRPC server, letting in-flight RPCs drain."""
+    await server.stop(grace)

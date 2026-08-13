@@ -25,6 +25,7 @@ import typer
 
 from noema.cli.arq import arq_app
 from noema.cli.audit import audit_app
+from noema.cli.grpc import grpc_app
 from noema.cli.health import health_app
 from noema.cli.init_cmd import init_app
 from noema.cli.ui import (
@@ -760,6 +761,7 @@ async def _modules(action: str, name: str, tags: str) -> None:
 app.add_typer(health_app, name="health", rich_help_panel="System")
 app.add_typer(init_app, name="init", rich_help_panel="System")
 app.add_typer(arq_app, name="arq", rich_help_panel="Background")
+app.add_typer(grpc_app, name="grpc", rich_help_panel="Background")
 app.add_typer(audit_app, name="audit", rich_help_panel="Audit")
 
 if __name__ == "__main__":

@@ -34,6 +34,11 @@ class NoemaGRPCClient:
         if self._channel:
             await self._channel.close()
 
+    def _require_stub(self) -> NoemaEngineServiceStub:
+        if self._stub is None:
+            raise RuntimeError("Not connected. Call connect() first.")
+        return self._stub
+
     async def think(
         self,
         title: str,
@@ -41,12 +46,10 @@ class NoemaGRPCClient:
         complexity: str = "moderate",
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
-        if not self._stub:
-            raise RuntimeError("Not connected. Call connect() first.")
         request = ThinkRequest(
             title=title, description=description, complexity=complexity, tags=tags or []
         )
-        response = await self._stub.Think(request)
+        response = await self._require_stub().Think(request)
         return {
             "solution_id": response.solution_id,
             "task_id": response.task_id,
@@ -56,10 +59,32 @@ class NoemaGRPCClient:
             "error": response.error,
         }
 
+    async def think_stream(
+        self,
+        title: str,
+        description: str,
+        complexity: str = "moderate",
+        tags: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Consume the server-streamed ThinkStatus updates into a list of dicts."""
+        request = ThinkRequest(
+            title=title, description=description, complexity=complexity, tags=tags or []
+        )
+        updates: list[dict[str, Any]] = []
+        async for status in self._require_stub().ThinkStream(request):
+            updates.append(
+                {
+                    "stage": status.stage,
+                    "status": status.status,
+                    "attempt": status.attempt,
+                    "progress": status.progress,
+                    "message": status.message,
+                }
+            )
+        return updates
+
     async def health(self) -> dict:
-        if not self._stub:
-            raise RuntimeError("Not connected.")
-        response = await self._stub.Health(HealthRequest())
+        response = await self._require_stub().Health(HealthRequest())
         return {
             "status": response.status,
             "version": response.version,
@@ -67,9 +92,7 @@ class NoemaGRPCClient:
         }
 
     async def metrics(self, tenant_id: str = "") -> dict:
-        if not self._stub:
-            raise RuntimeError("Not connected.")
-        response = await self._stub.GetMetrics(MetricsRequest(tenant_id=tenant_id))
+        response = await self._require_stub().GetMetrics(MetricsRequest(tenant_id=tenant_id))
         return {
             "tasks_processed": response.tasks_processed,
             "tasks_successful": response.tasks_successful,

@@ -113,3 +113,71 @@ if _HAS_PROMETHEUS:
         ["module"],
         buckets=(0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0),
     )
+
+
+def build_metrics_app() -> Any:
+    """Standalone ASGI app exposing ``/metrics`` and ``/health``.
+
+    Served on ``settings.obs.metrics_port`` (default 9090) so the Prometheus
+    scrape target matches the advertised port.
+    """
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse, Response
+    from starlette.routing import Route
+
+    async def metrics(_: Any) -> Response:
+        return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+    async def health(_: Any) -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
+    return Starlette(routes=[Route("/metrics", metrics), Route("/health", health)])
+
+
+def spawn_metrics_server(port: int, host: str = "0.0.0.0") -> Any | None:
+    """Start the Prometheus exporter on its own port in a daemon thread.
+
+    Best-effort: returns ``None`` when ``prometheus_client`` is unavailable;
+    the caller must never crash because metrics could not start.
+    """
+    if not _HAS_PROMETHEUS:
+        return None
+    import threading
+
+    import uvicorn
+
+    server = uvicorn.Server(
+        uvicorn.Config(
+            build_metrics_app(),
+            host=host,
+            port=port,
+            log_level="warning",
+            access_log=False,
+        )
+    )
+    thread = threading.Thread(
+        target=server.run,
+        daemon=True,
+        name="noema-metrics",
+    )
+    thread.start()
+    log.info("metrics_server_started", port=port)
+    return server
+
+
+def update_system_gauges(
+    worker_stats: dict[str, Any] | None = None,
+    knowledge_stats: dict[str, Any] | None = None,
+) -> None:
+    """Refresh aggregate gauges from live engine state (best-effort)."""
+    if not _HAS_PROMETHEUS:
+        return
+    try:
+        if worker_stats:
+            WORKER_ACTIVE.set(int(worker_stats.get("workers_busy", 0) or 0))
+            WORKER_QUEUE_SIZE.set(int(worker_stats.get("queue_size", 0) or 0))
+        if knowledge_stats:
+            total = knowledge_stats.get("total_entries") or knowledge_stats.get("entries") or 0
+            KNOWLEDGE_ENTRIES.set(int(total))
+    except Exception as e:
+        log.debug("metrics_update_failed", error=str(e))

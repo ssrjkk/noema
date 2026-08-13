@@ -9,6 +9,16 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
 
+
+class SandboxValidationError(Exception):
+    """Generated code failed the sandbox verification gate (fail-closed).
+
+    Raised when ``NOEMA_SANDBOX__VERIFY_THINK`` is enabled and a solution's
+    code blocks are rejected by the pure-AST static pass (or the sandbox run),
+    so an unverified artifact never reaches the caller.
+    """
+
+
 # ── Enums ──────────────────────────────────────────────────────────────────
 
 

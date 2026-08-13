@@ -152,10 +152,21 @@ class APISettings(BaseSettings):
     )
     api_key_header: str = Field(default="X-API-Key")
 
+    # Inbound webhook verification
+    webhook_secret: SecretStr = Field(
+        default=SecretStr(""),
+        description="HMAC secret for /webhooks/incident. Empty = verification disabled.",
+    )
+
     # Rate limiting
     rate_limit_enabled: bool = Field(default=True)
     rate_limit_rpm: int = Field(default=60, ge=1, description="Requests per minute per key")
     rate_limit_burst: int = Field(default=10, ge=1, description="Burst allowance")
+    trusted_proxies: list[str] = Field(
+        default_factory=list,
+        description="IPs/CIDRs of trusted reverse proxies that may set X-Forwarded-For. "
+        "Empty = forwarded headers are ignored for client identity (anti-spoofing).",
+    )
 
     # CORS
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
@@ -197,6 +208,16 @@ class SandboxSettings(BaseSettings):
     max_cpus: float = Field(default=0.5, gt=0)
     network_disabled: bool = Field(default=True)
     read_only_root: bool = Field(default=True)
+    verify_think: bool = Field(
+        default=False,
+        description="Validate every generated Python block with the static pass "
+        "before returning a solution from think()",
+    )
+    verify_think_enforce: bool = Field(
+        default=False,
+        description="Raise SandboxValidationError when the think() static gate "
+        "rejects generated code (fail-closed)",
+    )
 
 
 class ObservabilitySettings(BaseSettings):

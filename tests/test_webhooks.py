@@ -12,6 +12,7 @@ from noema.api.webhooks import (
     WebhookDispatcher,
     WebhookRegistration,
     _mask_url,
+    _verify_signature,
     get_webhook_dispatcher,
 )
 
@@ -131,6 +132,40 @@ class TestMaskUrl:
         masked = _mask_url("https://hook.example.com:8443/callback")
         assert "***" in masked
         assert "8443" in masked
+
+
+class TestVerifySignature:
+    def _sig(self, secret: str, body: bytes) -> str:
+        return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+    def test_valid_signature_passes(self):
+        body = json.dumps({"event": "incident", "payload": {"a": 1}}, ensure_ascii=False).encode()
+        assert _verify_signature("s3cret", body, self._sig("s3cret", body))
+
+    def test_missing_header_fails(self):
+        body = b"{}"
+        assert not _verify_signature("s3cret", body, None)
+
+    def test_wrong_secret_fails(self):
+        body = b"{}"
+        assert not _verify_signature("other", body, self._sig("s3cret", body))
+
+    def test_wrong_body_fails(self):
+        sig = self._sig("s3cret", b"payload-a")
+        assert not _verify_signature("s3cret", b"payload-b", sig)
+
+    def test_wrong_algo_fails(self):
+        body = b"{}"
+        assert not _verify_signature("s3cret", body, "md5=" + "0" * 32)
+
+    def test_tampered_digest_fails(self):
+        body = b"{}"
+        sig = self._sig("s3cret", body)
+        tampered = sig[:-1] + ("0" if sig[-1] != "0" else "1")
+        assert not _verify_signature("s3cret", body, tampered)
+
+    def test_garbage_header_fails(self):
+        assert not _verify_signature("s3cret", b"{}", "sha256=zzz")
 
 
 class TestSingleton:

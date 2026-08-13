@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import ipaddress
 import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
@@ -14,6 +16,26 @@ from noema.config.settings import get_settings
 
 if TYPE_CHECKING:
     from fastapi import Request, Response
+
+
+def _ip_in_trusted(ip: str, trusted: list[str]) -> bool:
+    """True if ``ip`` falls in any trusted proxy IP/CIDR range."""
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    for entry in trusted:
+        try:
+            if ipaddress.ip_address(entry) == address:
+                return True
+        except ValueError:
+            pass
+        try:
+            if address in ipaddress.ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 class _SlidingWindowCounter:
@@ -103,19 +125,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
         self._enabled = settings.api.rate_limit_enabled
         self._key_header = settings.api.api_key_header
+        self._trusted_proxies = list(settings.api.trusted_proxies)
 
     def _client_key(self, request: Request) -> str:
-        """Extract client identifier: API key or IP."""
+        """Extract client identifier: API key or peer IP.
+
+        ``X-Forwarded-For`` is only trusted when the direct peer is a configured
+        reverse proxy; otherwise a spoofed header could trivially bypass limits.
+        """
         api_key = request.headers.get(self._key_header, "")
         if api_key:
             # Hash key to avoid storing raw secrets in memory
-            import hashlib
-
             return "k:" + hashlib.sha256(api_key.encode()).hexdigest()[:16]
+        peer = request.client.host if request.client else ""
         forwarded = request.headers.get("X-Forwarded-For", "")
-        if forwarded:
+        if forwarded and peer and _ip_in_trusted(peer, self._trusted_proxies):
             return "ip:" + forwarded.split(",")[0].strip()
-        return "ip:" + (request.client.host if request.client else "unknown")
+        return "ip:" + (peer or "unknown")
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not self._enabled:
