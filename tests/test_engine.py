@@ -160,6 +160,20 @@ async def test_analysis_kernel():
     assert "timeline" in result
 
 
+@pytest.mark.asyncio
+async def test_analysis_kernel_phase_gating():
+    kernel = AnalysisKernel()
+    task = Task(title="ML Pipeline", tags=["ml"], complexity=TaskComplexity.COMPLEX)
+
+    full = await kernel.execute(task, phase="full")
+    assert "timeline" in full and "team" in full and "tech_debt_estimate" in full
+
+    analyze = await kernel.execute(task, phase="analyze")
+    assert analyze["type"] == "analysis"
+    assert "requirements" in analyze and "complexity" in analyze and "risks" in analyze
+    assert "timeline" not in analyze and "team" not in analyze
+
+
 # ── Worker Pool Tests ──────────────────────────────────────────────────────
 
 
@@ -1454,6 +1468,28 @@ def test_command_bus():
     bus.register("CreateUser", lambda cmd: results.append(cmd))
     bus.dispatch("CreateUser", {"name": "John"})
     assert len(results) == 1
+
+
+def test_query_bus():
+    from noema.modules.events.kernel import QueryBus
+
+    bus = QueryBus()
+    bus.register("GetUser", lambda p: {"id": p["id"], "name": "John"})
+    assert bus.execute("GetUser", {"id": 1}) == {"id": 1, "name": "John"}
+    assert bus.has_handler("GetUser") is True
+    assert bus.has_handler("Missing") is False
+    assert bus.list_handlers() == ["GetUser"]
+
+
+def test_command_bus_missing_handler_raises():
+    import pytest
+
+    from noema.modules.events.kernel import CommandBus, QueryBus
+
+    with pytest.raises(ValueError, match="command: nope"):
+        CommandBus().dispatch("nope", {})
+    with pytest.raises(ValueError, match="query: nope"):
+        QueryBus().execute("nope", {})
 
 
 def test_events_module_execute():

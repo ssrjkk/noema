@@ -140,6 +140,7 @@ class MemoryStore:
         for path, cls, store in stores:
             data = atomic_read_json(path, default=[])
             try:
+                store.clear()
                 store.extend(cls(**item) for item in data)
                 log.debug("memory_loaded", path=str(path), count=len(store))
             except Exception as exc:

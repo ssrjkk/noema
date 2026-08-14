@@ -57,6 +57,28 @@ except ImportError:
 
     CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
 
+    # Null-object metric constants so ``from noema.observability import ...``
+    # and ``noema.services.modules`` keep importing when Prometheus is absent.
+    APP_INFO: Any = _NoopMetric()
+    REQUEST_COUNT: Any = _NoopMetric()
+    REQUEST_LATENCY: Any = _NoopMetric()
+    INFLIGHT_REQUESTS: Any = _NoopMetric()
+    LLM_REQUEST_COUNT: Any = _NoopMetric()
+    LLM_LATENCY: Any = _NoopMetric()
+    LLM_TOKENS_USED: Any = _NoopMetric()
+    LLM_CIRCUIT_STATE: Any = _NoopMetric()
+    WORKER_ACTIVE: Any = _NoopMetric()
+    WORKER_QUEUE_SIZE: Any = _NoopMetric()
+    WORKER_TASK_COUNT: Any = _NoopMetric()
+    WORKER_TASK_LATENCY: Any = _NoopMetric()
+    MEMORY_EPISODIC_COUNT: Any = _NoopMetric()
+    MEMORY_SEMANTIC_COUNT: Any = _NoopMetric()
+    MEMORY_PROCEDURAL_COUNT: Any = _NoopMetric()
+    KNOWLEDGE_ENTRIES: Any = _NoopMetric()
+    EVOLUTION_PATCHES: Any = _NoopMetric()
+    MODULE_EXECUTION_COUNT: Any = _NoopMetric()
+    MODULE_LATENCY: Any = _NoopMetric()
+
     log.info("prometheus_client_not_installed_metrics_disabled")
 
 

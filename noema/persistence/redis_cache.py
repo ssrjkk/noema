@@ -6,7 +6,8 @@ import contextlib
 import json
 from typing import Any, cast
 
-from noema.cache import SemanticCache
+from noema.cache import CacheEntry, SemanticCache
+from noema.context import get_tenant_id
 from noema.logging import get_logger
 
 log = get_logger(__name__)
@@ -76,8 +77,10 @@ class RedisBackedCache(SemanticCache):
                 key = self._hash_prompt(messages) + f":t={tenant_id or self.tenant_id}:m={model}"
                 cached = await self._redis_get(key)
                 if cached:
-                    self._entries[key] = self._deserialize_entry(cached)
-                    return self._entries[key].response
+                    entry = self._deserialize_entry(cached)
+                    memory_key = self._hash_prompt(messages) + f":t={tenant_id or get_tenant_id()}"
+                    self._entries[memory_key] = entry
+                    return entry.response
             except Exception as e:
                 log.debug("redis_cache_get_failed_falling_back_to_memory", error=str(e))
         return None
@@ -94,9 +97,13 @@ class RedisBackedCache(SemanticCache):
         self.set(messages, response, model, tokens_used, tenant_id=tenant_id)
         if self._redis:
             try:
-                key = self._hash_prompt(messages) + f":t={tenant_id or self.tenant_id}:m={model}"
-                entry = self._entries.get(key)
+                # set() keys the entry by prompt hash + effective tenant; resolve
+                # the same key here so the redis write always finds its entry.
+                effective_tenant = tenant_id or get_tenant_id()
+                memory_key = self._hash_prompt(messages) + f":t={effective_tenant}"
+                entry = self._entries.get(memory_key)
                 if entry:
+                    key = memory_key + f":m={model}"
                     await self._redis_set(key, self._serialize_entry(entry), ttl=ttl)
             except Exception as e:
                 log.debug("redis_cache_set_failed_keeping_memory_copy", error=str(e))
@@ -114,9 +121,7 @@ class RedisBackedCache(SemanticCache):
             }
         )
 
-    def _deserialize_entry(self, data: str) -> Any:
-        from noema.cache import CacheEntry
-
+    def _deserialize_entry(self, data: str) -> CacheEntry:
         d = json.loads(data)
         return CacheEntry(
             prompt_hash=d["prompt_hash"],

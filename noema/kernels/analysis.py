@@ -23,24 +23,26 @@ class AnalysisKernel(BaseKernel):
         return "Анализ требований, оценка сложности, выявление рисков"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
-        kwargs.get("phase", "full")
+        phase = kwargs.get("phase", "full")
 
         requirements_analysis = self._analyze_requirements(task)
         complexity = self._estimate_complexity(task)
         risks = self._identify_risks(task)
-        timeline = self._estimate_timeline(task, complexity)
-        team = self._suggest_team(task, complexity)
 
-        return {
+        result: dict[str, Any] = {
             "type": "analysis",
             "requirements": requirements_analysis,
             "complexity": complexity,
             "risks": risks,
-            "timeline": timeline,
-            "team": team,
-            "tech_debt_estimate": self._estimate_tech_debt(task),
             "_confidence": 0.78,
         }
+
+        if phase in ("full", "design"):
+            result["timeline"] = self._estimate_timeline(task, complexity)
+            result["team"] = self._suggest_team(task, complexity)
+            result["tech_debt_estimate"] = self._estimate_tech_debt(task)
+
+        return result
 
     def _analyze_requirements(self, task: Task) -> dict[str, Any]:
         functional = []

@@ -13,6 +13,7 @@ from hypothesis import strategies as st
 
 from noema.core.chain_of_thought import (
     ChainOfThought,
+    ReflexionState,
     StepPlanner,
     StepStatus,
 )
@@ -265,3 +266,58 @@ async def test_reason_step_failure_is_captured():
     analysis = next(s for s in cot._steps if s.name == "analysis")
     assert analysis.status == StepStatus.FAILED
     assert "Error" in analysis.result
+
+
+# ── Reflexion loop (reason_with_reflexion) ────────────────────────────────
+
+
+class _CountingCoT(ChainOfThought):
+    """ChainOfThought that records how many times ``reason`` was invoked."""
+
+    def __init__(self, llm: BaseLLMProvider) -> None:
+        super().__init__(llm)
+        self.reason_calls = 0
+
+    async def reason(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        self.reason_calls += 1
+        return await super().reason(*args, **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_reflexion_single_attempt_without_feedback():
+    """No judge feedback → exactly one reason() call and no reflexion state."""
+    cot = _CountingCoT(_MockLLM())
+    context, state = await cot.reason_with_reflexion(
+        "t", ["api"], [], judge_feedback=""
+    )
+    assert isinstance(context, dict)
+    assert state is None
+    assert cot.reason_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_reflexion_retries_bounded_by_max_attempts():
+    """Judge feedback → reason() is retried until ReflexionState.max_attempts."""
+    cot = _CountingCoT(_MockLLM())
+    _, state = await cot.reason_with_reflexion(
+        "t", ["api"], [], judge_feedback="needs improvement"
+    )
+    assert isinstance(state, ReflexionState)
+    assert cot.reason_calls == ReflexionState.max_attempts
+    assert len(state.last_errors) == ReflexionState.max_attempts - 1
+    assert "needs improvement" in state.last_errors[0]
+
+
+@pytest.mark.asyncio
+async def test_reflexion_retry_replans_with_repair():
+    """On retry the planner injects the repair step and receives past errors."""
+    llm = _MockLLM()
+    cot = ChainOfThought(llm)
+    _, state = await cot.reason_with_reflexion(
+        "t", ["api"], [], judge_feedback="redo the design"
+    )
+    assert state is not None
+    # the final attempt carries the reflexion errors into the planner
+    assert cot._context.get("_reflexion_errors")
+    assert "repair" in [step.name for step in cot._steps]
+    assert "redo the design" in cot._context["_reflexion_errors"][-1]

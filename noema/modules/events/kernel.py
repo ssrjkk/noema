@@ -96,42 +96,45 @@ class EventStore:
         return self.append(event)
 
 
-class CommandBus:
+class _HandlerBus:
+    """Shared CQRS handler registry powering both :class:`CommandBus` and :class:`QueryBus`."""
+
+    _label: str = "handler"
+
     def __init__(self) -> None:
         self._handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
 
-    def register(self, command_type: str, handler: Callable[[dict[str, Any]], Any]) -> None:
-        self._handlers[command_type] = handler
+    def register(self, handler_type: str, handler: Callable[[dict[str, Any]], Any]) -> None:
+        self._handlers[handler_type] = handler
+
+    def _invoke(self, handler_type: str, payload: dict[str, Any]) -> Any:
+        if handler_type not in self._handlers:
+            raise ValueError(f"No handler registered for {self._label}: {handler_type}")
+        return self._handlers[handler_type](payload)
+
+    def has_handler(self, handler_type: str) -> bool:
+        return handler_type in self._handlers
+
+    def list_handlers(self) -> list[str]:
+        return list(self._handlers.keys())
+
+
+class CommandBus(_HandlerBus):
+    """Registry + dispatcher for commands (write side of CQRS)."""
+
+    _label = "command"
 
     def dispatch(self, command_type: str, payload: dict[str, Any]) -> Any:
-        if command_type not in self._handlers:
-            raise ValueError(f"No handler registered for command: {command_type}")
-        return self._handlers[command_type](payload)
-
-    def has_handler(self, command_type: str) -> bool:
-        return command_type in self._handlers
-
-    def list_handlers(self) -> list[str]:
-        return list(self._handlers.keys())
+        return self._invoke(command_type, payload)
 
 
-class QueryBus:
-    def __init__(self) -> None:
-        self._handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
+class QueryBus(_HandlerBus):
+    """Registry + executor for queries (read side of CQRS)."""
 
-    def register(self, query_type: str, handler: Callable[[dict[str, Any]], Any]) -> None:
-        self._handlers[query_type] = handler
+    _label = "query"
 
     def execute(self, query_type: str, params: dict[str, Any]) -> Any:
-        if query_type not in self._handlers:
-            raise ValueError(f"No handler registered for query: {query_type}")
-        return self._handlers[query_type](params)
-
-    def has_handler(self, query_type: str) -> bool:
-        return query_type in self._handlers
-
-    def list_handlers(self) -> list[str]:
-        return list(self._handlers.keys())
+        return self._invoke(query_type, params)
 
 
 class Saga:

@@ -257,3 +257,62 @@ async def test_sibling_imports_pass_static_in_multifile() -> None:
     )
     assert all(vr.static_passed for vr in result.files)
     assert result.all_valid is True
+
+
+# ── Engine plumbing (capabilities, env, bwrap, safe-join defaults) ─────────
+
+
+def test_safe_join_defaults_to_main_py() -> None:
+    path = _safe_join(BASE, "")
+    assert path.name == "main.py"
+    assert BASE.resolve() in path.resolve().parents
+
+
+def test_isolated_env_strips_proxy_vars() -> None:
+    from noema.sandbox.engine import _build_isolated_env
+
+    env = _build_isolated_env()
+    assert env["NO_PROXY"] == "*"
+    assert env["HTTP_PROXY"] == ""
+    assert env["HTTPS_PROXY"] == ""
+    assert env["PYTHONIOENCODING"] == "utf-8"
+
+
+def test_bwrap_cmd_passthrough_when_unavailable() -> None:
+    engine = SandboxEngine()
+    engine._has_bwrap = False
+    assert engine._bwrap_cmd(["python", "main.py"], BASE) == ["python", "main.py"]
+
+
+def test_is_available_returns_bool() -> None:
+    assert isinstance(SandboxEngine().is_available(), bool)
+
+
+async def test_validate_files_skips_run_for_non_python() -> None:
+    cfg = SandboxConfig(lint_enabled=False, test_enabled=False, run_enabled=True)
+    engine = SandboxEngine(config=cfg)
+    result = await engine.validate_files(
+        [{"path": "script.js", "language": "javascript", "content": "console.log(1)\n"}]
+    )
+    vr = result.files[0]
+    assert vr.ast_valid is True
+    assert vr.run_passed is True  # run stage short-circuits on non-python
+    assert result.all_valid is True
+
+
+async def test_lint_direct_captures_syntax_errors() -> None:
+    cfg = SandboxConfig(
+        lint_enabled=True,
+        run_enabled=False,
+        test_enabled=False,
+        static_check_enabled=False,
+    )
+    engine = SandboxEngine(config=cfg)
+    engine._has_docker = False
+    result = await engine.validate_files(
+        [{"path": "broken.py", "language": "python", "content": "def broken(:\n    pass\n"}]
+    )
+    vr = result.files[0]
+    assert vr.lint_passed is False
+    assert vr.lint_errors
+    assert any("invalid-syntax" in line or "E999" in line for line in vr.lint_errors)

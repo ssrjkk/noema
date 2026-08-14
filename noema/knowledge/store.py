@@ -273,6 +273,13 @@ class KnowledgeStore:
 
     async def persist(self) -> None:
         """Сохранение знаний в файл."""
+        self._write()
+
+    def save(self) -> None:
+        """Синхронное сохранение — интерфейс, ожидаемый ``KnowledgeLoader``."""
+        self._write()
+
+    def _write(self) -> None:
         data = {
             "entries": [e.model_dump(mode="json") for e in self.entries if not e.embeddings],
             "patterns": [p.model_dump(mode="json") for p in self.patterns],
@@ -367,6 +374,27 @@ class KnowledgeStore:
     async def add_entry(self, entry: KnowledgeEntry) -> None:
         """Добавить новую запись."""
         self.entries.append(entry)
+        self._build_index()
+
+    def learn_fact(
+        self,
+        topic: str,
+        fact: str,
+        confidence: float = 0.7,
+        source: str = "",
+        tags: list[str] | None = None,
+    ) -> None:
+        """Записать факт — интерфейс, ожидаемый ``KnowledgeLoader``."""
+        self.entries.append(
+            KnowledgeEntry(
+                category=topic,
+                title=(fact[:60] or topic),
+                content=fact,
+                tags=tags or [],
+                weight=min(max(confidence, 0.0), 1.0),
+                source=source,
+            )
+        )
         self._build_index()
 
     async def add_pattern(self, pattern: Pattern) -> None:
