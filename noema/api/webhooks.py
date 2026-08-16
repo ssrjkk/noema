@@ -269,7 +269,10 @@ async def incident_webhook(
         return {"status": "queued", "job_id": job_id}
     except Exception:
         logger.warning("incident_enqueue_failed_running_inline")
-        fixer = IncidentFixer(github=build_github_client_from_settings())
+        fixer = IncidentFixer(
+            github=build_github_client_from_settings(),
+            cost_tracker=getattr(request.app.state, "cost_tracker", None),
+        )
         try:
             return await fixer.handle_incident(body.payload)
         finally:

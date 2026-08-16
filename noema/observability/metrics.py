@@ -78,6 +78,8 @@ except ImportError:
     EVOLUTION_PATCHES: Any = _NoopMetric()
     MODULE_EXECUTION_COUNT: Any = _NoopMetric()
     MODULE_LATENCY: Any = _NoopMetric()
+    PR_COST_USD: Any = _NoopMetric()
+    CODE_COST_PER_MODULE: Any = _NoopMetric()
 
     log.info("prometheus_client_not_installed_metrics_disabled")
 
@@ -134,6 +136,16 @@ if _HAS_PROMETHEUS:
         "Module execution latency",
         ["module"],
         buckets=(0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0),
+    )
+    PR_COST_USD = Counter(
+        "noema_pr_cost_usd",
+        "USD spent generating a pull request, attributed per changed module",
+        ["repo", "pr", "module"],
+    )
+    CODE_COST_PER_MODULE = Gauge(
+        "noema_code_cost_per_module",
+        "Latest generation cost per code module (line-weighted attribution)",
+        ["repo", "module"],
     )
 
 

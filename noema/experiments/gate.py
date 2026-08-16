@@ -58,6 +58,7 @@ class GateConfig:
     run_tests: bool = False
     diff_target: str = "origin/main"
     include_suffixes: tuple[str, ...] = (".py",)
+    explicit_files: list[dict[str, str]] | None = None
     git: GitRunner = run_git
     judge: JudgeRunner | None = None
     sandbox: SandboxEngine | None = None
@@ -82,7 +83,22 @@ class GateReport:
 
 
 def _collect_files(cfg: GateConfig) -> list[dict[str, str]]:
-    """Read the changed files (filtered by suffix) from the worktree."""
+    """Read the changed files (filtered by suffix) from the worktree.
+
+    When ``cfg.explicit_files`` is set (e.g. the autonomy loop has the PR's
+    file contents in memory), those are used verbatim instead of diffing the
+    local checkout — no git repository is required.
+    """
+    if cfg.explicit_files is not None:
+        return [
+            {
+                "path": str(f["path"]),
+                "language": "python" if str(f["path"]).endswith(".py") else "text",
+                "content": str(f["content"]),
+            }
+            for f in cfg.explicit_files
+            if str(f["path"]).endswith(cfg.include_suffixes)
+        ]
     files: list[dict[str, str]] = []
     for path in _changed_file_paths(cfg.git, cfg.diff_target):
         if not path.endswith(cfg.include_suffixes):

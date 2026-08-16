@@ -267,6 +267,15 @@ class AutonomySettings(BaseSettings):
     github_repo: str = Field(default="", description="'owner/name' repository for fix PRs")
     github_base_branch: str = Field(default="main")
 
+    auto_approve: bool = Field(
+        default=False,
+        description="Approve the fix PR (GitHub review) when the merge gate passes",
+    )
+    auto_merge: bool = Field(
+        default=False,
+        description="Merge the fix PR when the merge gate passes (requires auto_approve)",
+    )
+
 
 # ─── Root config ─────────────────────────────────────────────────────────
 class NoemaSettings(BaseSettings):

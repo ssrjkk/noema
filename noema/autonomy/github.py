@@ -135,6 +135,39 @@ class GitHubClient:
         data = resp.json()
         return {"number": int(data["number"]), "url": str(data["html_url"])}
 
+    async def approve_pr(
+        self, pr_number: int, body: str = "LGTM — Noema merge gate passed."
+    ) -> dict[str, Any]:
+        """Approve a pull request as the Synthetic Architect reviewer.
+
+        Used by the autonomy loop when the merge gate passed: the PR gets an
+        ``APPROVE`` review so branch protection sees a green review before
+        auto-merge.
+        """
+        resp = await self._client.post(
+            f"/pulls/{pr_number}/reviews",
+            json={"event": "APPROVE", "body": body},
+        )
+        _raise_for_status(resp, f"approve PR #{pr_number}")
+        data = resp.json()
+        logger.info("github_pr_approved", repo=self.repo, pr_number=pr_number)
+        return {"id": int(data.get("id", 0)), "state": str(data.get("state", "APPROVED"))}
+
+    async def merge_pr(self, pr_number: int, merge_method: str = "squash") -> dict[str, Any]:
+        """Merge a pull request (Evolution Auto-Apply step).
+
+        Squash by default; failures (e.g. required checks pending) raise
+        :class:`GitHubError` and are reported back to the autonomy loop.
+        """
+        resp = await self._client.put(
+            f"/pulls/{pr_number}/merge",
+            json={"merge_method": merge_method},
+        )
+        _raise_for_status(resp, f"merge PR #{pr_number}")
+        data = resp.json()
+        logger.info("github_pr_merged", repo=self.repo, pr_number=pr_number)
+        return {"merged": bool(data.get("merged", True)), "sha": str(data.get("sha", ""))}
+
     # ── High-level flow ──────────────────────────────────────────────
 
     async def submit_fix_pr(

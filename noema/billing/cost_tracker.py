@@ -41,6 +41,37 @@ class CostRecord:
     step_name: str = ""
 
 
+@dataclass
+class FileCost:
+    """Line-attributed cost of one changed file (module) in a PR."""
+
+    file_path: str
+    lines_added: int
+    tokens_input: int = 0
+    tokens_output: int = 0
+    cost_usd: float = 0.0
+    model: str = ""
+    task_id: str = ""
+    repo: str = ""
+    pr_number: str = ""
+
+
+def calculate_line_costs(total_cost: float, lines_by_file: dict[str, int]) -> dict[str, float]:
+    """Attribute a task's total cost across changed files, weighted by line count.
+
+    Files with zero lines (deletions/renames) get no weight: the cost of
+    *producing* new code lands on the modules that grew. The weights always
+    sum back to ``total_cost``.
+    """
+    total_lines = sum(max(lines, 0) for lines in lines_by_file.values())
+    if total_lines <= 0 or total_cost <= 0:
+        return dict.fromkeys(lines_by_file, 0.0)
+    return {
+        path: round(total_cost * max(lines, 0) / total_lines, 6)
+        for path, lines in lines_by_file.items()
+    }
+
+
 class CostTracker:
     """Tracks LLM costs per tenant/task/step with Redis + in-memory backends."""
 
@@ -48,6 +79,7 @@ class CostTracker:
         self._records: list[CostRecord] = []
         self._daily: dict[str, float] = {}
         self._monthly: dict[str, float] = {}
+        self._file_costs: list[FileCost] = []
         self._redis = None
         if redis_url:
             try:
@@ -112,6 +144,84 @@ class CostTracker:
 
     def get_task_cost(self, task_id: str) -> float:
         return round(sum(r.cost_usd for r in self._records if r.task_id == task_id), 6)
+
+    def attribute_pr_cost(
+        self,
+        repo: str,
+        pr_number: int,
+        task_id: str,
+        files: list[tuple[str, str]],
+        model: str = "",
+    ) -> list[FileCost]:
+        """Attribute a task's generation cost onto the PR's changed modules.
+
+        ``files`` are ``(path, content)`` pairs as produced by the fixer; the
+        cost of the task (see :meth:`get_task_cost`) is distributed across
+        files weighted by their line counts, then pushed into the
+        ``noema_pr_cost_usd`` / ``noema_code_cost_per_module`` metrics.
+
+        Returns the per-file attribution records.
+        """
+        if not files:
+            return []
+        total_cost = self.get_task_cost(task_id)
+        lines_by_file = {path: len(content.splitlines()) for path, content in files}
+        costs = calculate_line_costs(total_cost, lines_by_file)
+        pr_key = str(pr_number)
+        attributed: list[FileCost] = []
+        for path, content in files:
+            fc = FileCost(
+                file_path=path,
+                lines_added=len(content.splitlines()),
+                cost_usd=costs.get(path, 0.0),
+                model=model,
+                task_id=task_id,
+                repo=repo,
+                pr_number=pr_key,
+            )
+            attributed.append(fc)
+            self._file_costs.append(fc)
+            try:
+                from noema.observability.metrics import CODE_COST_PER_MODULE, PR_COST_USD
+
+                PR_COST_USD.labels(repo=repo, pr=pr_key, module=path).inc(fc.cost_usd)
+                CODE_COST_PER_MODULE.labels(repo=repo, module=path).set(fc.cost_usd)
+            except Exception as e:  # noqa: BLE001 - metrics must never break billing
+                log.debug("pr_cost_metric_failed", error=str(e))
+        log.info(
+            "pr_cost_attributed",
+            repo=repo,
+            pr=pr_key,
+            task_id=task_id,
+            total_usd=round(total_cost, 6),
+            modules=len(attributed),
+        )
+        return attributed
+
+    def get_pr_cost(self, repo: str, pr_number: int) -> dict[str, Any]:
+        """Per-module cost breakdown of one PR."""
+        pr_key = str(pr_number)
+        records = [f for f in self._file_costs if f.repo == repo and f.pr_number == pr_key]
+        modules = {f.file_path: round(f.cost_usd, 6) for f in records}
+        return {
+            "repo": repo,
+            "pr_number": pr_number,
+            "total_usd": round(sum(modules.values()), 6),
+            "modules": modules,
+        }
+
+    def module_cost_stats(self, repo: str = "") -> dict[str, Any]:
+        """Aggregate per-module cost across all attributed PRs."""
+        records = self._file_costs
+        if repo:
+            records = [f for f in records if f.repo == repo]
+        modules: dict[str, float] = {}
+        for f in records:
+            modules[f.file_path] = modules.get(f.file_path, 0.0) + f.cost_usd
+        return {
+            "modules": {k: round(v, 6) for k, v in modules.items()},
+            "total_usd": round(sum(modules.values()), 6),
+        }
 
     def get_breakdown(self, tenant_id: str = "") -> dict[str, Any]:
         filtered = self._records

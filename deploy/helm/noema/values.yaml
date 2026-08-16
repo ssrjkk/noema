@@ -71,6 +71,19 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
+# Background arq worker deployment (incident→PR jobs). Enabled separately
+# from the API; requires Redis.
+worker:
+  enabled: false
+  replicas: 1
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
@@ -85,13 +98,31 @@ env:
   NOEMA_OBS_LOGGING_LEVEL: "INFO"
   NOEMA_OBS_LOGGING_FORMAT: "json"
   NOEMA_OBS_METRICS_ENABLED: "true"
-  NOEMA_DB_URL: "postgresql+asyncpg://noema:noema@noema-postgresql:5432/noema"
-  NOEMA_REDIS_URL: "redis://noema-redis:6379/0"
+  NOEMA_AUTONOMY__GITHUB_REPO: ""
+  NOEMA_AUTONOMY__GITHUB_BASE_BRANCH: "main"
+  NOEMA_AUTONOMY__AUTO_APPROVE: "false"
+  NOEMA_AUTONOMY__AUTO_MERGE: "false"
 
-# ─── Sub-chart toggles ──────────────────────────────────────────────────
+# Secrets are mounted as env vars via a Secret (never in ConfigMap).
+secrets:
+  apiKey: ""
+  webhookSecret: ""
+  githubToken: ""
+  llmOpenAIKey: ""
+  llmAnthropicKey: ""
+  postgresPassword: ""
+  redisPassword: ""
+
+# External infrastructure (used when the bundled sub-charts are disabled).
+external:
+  postgresUrl: "postgresql+asyncpg://noema:noema@noema-postgresql:5432/noema"
+  redisUrl: "redis://noema-redis:6379/0"
+
+# ─── Sub-chart toggles (bundled PostgreSQL/Redis) ────────────────────────
+# Enable after `helm dependency update` (see NOTES.txt).
 
 postgresql:
-  enabled: true
+  enabled: false
   auth:
     username: noema
     password: noema
@@ -101,8 +132,10 @@ postgresql:
       size: 10Gi
 
 redis:
-  enabled: true
+  enabled: false
   architecture: standalone
+  auth:
+    password: noema
   master:
     persistence:
       size: 2Gi

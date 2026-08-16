@@ -1,0 +1,39 @@
+Noema is deployed inside your cluster — an autonomous SRE & engineering agent.
+
+1. Confirm the API is healthy:
+
+   kubectl port-forward svc/{{ include "noema.fullname" . }} 8000:80
+   curl http://localhost:8000/health
+
+2. Prometheus metrics:
+
+   kubectl port-forward svc/{{ include "noema.fullname" . }} 9090:9090
+   curl http://localhost:9090/metrics
+   # Look for: noema_pr_cost_usd, noema_code_cost_per_module, noema_llm_* ...
+
+3. Point Sentry / Datadog / PagerDuty at the incident webhook:
+
+   POST https://<your-host>/webhooks/incident
+   Header: X-Noema-Signature: sha256=<hmac of raw body with NOEMA_API__WEBHOOK_SECRET>
+   Body:   {"event": "incident", "payload": { ...Sentry event... }}
+
+   Noema will: normalize the incident → generate a fix → validate it in the
+   sandbox → open a PR → run the merge gate → approve/merge when
+   autonomy.auto_approve / autonomy.auto_merge are enabled.
+
+4. Required configuration (helm install --set):
+
+   --set secrets.webhookSecret="<shared secret for Sentry HMAC>"
+   --set secrets.githubToken="<token with repo scope>"
+   --set secrets.apiKey="<API key for /think and friends>"
+   --set autonomy.githubRepo="owner/repo"
+   --set external.redisUrl="redis://..." --set external.postgresUrl="postgresql+asyncpg://..."
+
+5. Bundled PostgreSQL/Redis (optional):
+
+   helm repo add bitnami https://charts.bitnami.com/bitnami
+   helm dependency update deploy/helm/noema
+   helm install noema deploy/helm/noema --set postgresql.enabled=true --set redis.enabled=true
+
+   The arq worker deployment (background fix jobs) is enabled with
+   --set worker.enabled=true.
