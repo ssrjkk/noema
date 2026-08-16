@@ -52,6 +52,10 @@ async def _default_gate_runner(files: list[tuple[str, str]]) -> Any:
     Uses ``explicit_files`` so no local git diff is needed; the judge threshold
     is 0.0 (the sandbox is the hard gate), and any judge/LLM failure surfaces
     as a raised error which the fixer treats as *blocked* (fail-closed).
+
+    When ``autonomy.lean_verifier`` is enabled the gate additionally compiles
+    every ``.lean`` proof obligation with the Lean 4 theorem prover (if the
+    binary is present) and blocks on a failed proof.
     """
     from noema.experiments.gate import GateConfig, run_merge_gate
 
@@ -62,6 +66,17 @@ async def _default_gate_runner(files: list[tuple[str, str]]) -> Any:
         run_tests=False,
         explicit_files=[{"path": path, "content": content} for path, content in files],
     )
+    from noema.config.settings import get_settings
+
+    if get_settings().autonomy.lean_verifier:
+        try:
+            from noema.verifiers.lean import LeanVerifier
+
+            verifier = LeanVerifier()
+            if verifier.available():
+                cfg.verifier = verifier
+        except Exception as e:  # noqa: BLE001 - never break the gate over the prover
+            logger.warning("lean_verifier_unavailable", error=str(e))
     return await run_merge_gate(cfg)
 
 

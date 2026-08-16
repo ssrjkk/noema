@@ -62,6 +62,7 @@ class GateConfig:
     git: GitRunner = run_git
     judge: JudgeRunner | None = None
     sandbox: SandboxEngine | None = None
+    verifier: Any | None = None
 
 
 @dataclass
@@ -75,6 +76,8 @@ class GateReport:
     judge_summary: str = ""
     sandbox_all_valid: bool | None = None
     sandbox_summary: str = ""
+    formal_verified: bool | None = None
+    formal_error: str = ""
     blocked_by: list[str] = field(default_factory=list)
     note: str = ""
 
@@ -82,12 +85,11 @@ class GateReport:
         return asdict(self)
 
 
-def _collect_files(cfg: GateConfig) -> list[dict[str, str]]:
-    """Read the changed files (filtered by suffix) from the worktree.
+def _raw_changed_files(cfg: GateConfig) -> list[dict[str, str]]:
+    """Read every changed file (no suffix filter) from explicit files or git.
 
-    When ``cfg.explicit_files`` is set (e.g. the autonomy loop has the PR's
-    file contents in memory), those are used verbatim instead of diffing the
-    local checkout — no git repository is required.
+    ``cfg.explicit_files`` short-circuits the git diff so the autonomy loop
+    can gate in-memory PR contents without a repository checkout.
     """
     if cfg.explicit_files is not None:
         return [
@@ -97,12 +99,9 @@ def _collect_files(cfg: GateConfig) -> list[dict[str, str]]:
                 "content": str(f["content"]),
             }
             for f in cfg.explicit_files
-            if str(f["path"]).endswith(cfg.include_suffixes)
         ]
     files: list[dict[str, str]] = []
     for path in _changed_file_paths(cfg.git, cfg.diff_target):
-        if not path.endswith(cfg.include_suffixes):
-            continue
         file_path = Path(path)
         try:
             content = file_path.read_text(encoding="utf-8")
@@ -113,14 +112,26 @@ def _collect_files(cfg: GateConfig) -> list[dict[str, str]]:
     return files
 
 
+def _collect_files(cfg: GateConfig) -> list[dict[str, str]]:
+    """Read the changed files (filtered by suffix) from the worktree.
+
+    When ``cfg.explicit_files`` is set (e.g. the autonomy loop has the PR's
+    file contents in memory), those are used verbatim instead of diffing the
+    local checkout — no git repository is required.
+    """
+    return [f for f in _raw_changed_files(cfg) if f["path"].endswith(cfg.include_suffixes)]
+
+
 async def run_merge_gate(cfg: GateConfig) -> GateReport:
     """Evaluate the PR's changed files and decide pass/block.
 
     Blocks when:
     - the sandbox verdict is not ``all_valid`` (structural/lint failures), or
+    - a configured formal verifier rejects a ``.lean`` proof obligation, or
     - the judge's overall score is below ``judge_threshold``.
     """
-    files = _collect_files(cfg)
+    raw_files = _raw_changed_files(cfg)
+    files = [f for f in raw_files if f["path"].endswith(cfg.include_suffixes)]
     if not files:
         return GateReport(passed=True, changed_files=0, note="no_changed_files")
 
@@ -143,6 +154,17 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
         sandbox_summary = str(result.summary)
         if not sandbox_all_valid:
             blocked_by.append("sandbox")
+
+    formal_verified: bool | None = None
+    formal_error = ""
+    if cfg.verifier is not None:
+        lean_files = [(f["path"], f["content"]) for f in raw_files if f["path"].endswith(".lean")]
+        if lean_files:
+            vres = await cfg.verifier.verify_files(lean_files)
+            formal_verified = bool(vres.verified)
+            formal_error = str(getattr(vres, "error", ""))
+            if not formal_verified:
+                blocked_by.append("formal_verification")
 
     solution = Solution(
         task_id="merge-gate",
@@ -167,6 +189,8 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
         judge_summary=str(verdict.summary),
         sandbox_all_valid=sandbox_all_valid,
         sandbox_summary=sandbox_summary,
+        formal_verified=formal_verified,
+        formal_error=formal_error,
         blocked_by=blocked_by,
     )
 

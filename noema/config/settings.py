@@ -275,6 +275,11 @@ class AutonomySettings(BaseSettings):
         default=False,
         description="Merge the fix PR when the merge gate passes (requires auto_approve)",
     )
+    lean_verifier: bool = Field(
+        default=False,
+        description="Require Lean 4 theorem-prover checks on PR specs (.lean files) "
+        "before the merge gate can pass",
+    )
 
 
 # ─── Root config ─────────────────────────────────────────────────────────
