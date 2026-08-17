@@ -262,6 +262,35 @@ async def test_fixer_no_changes_without_code_blocks():
     github.submit_fix_pr.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_fixer_merge_gate_error_is_fail_closed():
+    """A raised gate error must prevent approval, never crash the loop."""
+    github = AsyncMock()
+
+    async def _crashing_gate(files):
+        raise RuntimeError("lean toolchain broken")
+
+    fixer = IncidentFixer(
+        github=github,
+        gate_runner=_crashing_gate,
+        auto_approve=True,
+        auto_merge=True,
+    )
+    result: dict = {}
+    report = await fixer._run_merge_gate(
+        parse_incident(SENTRY_PAYLOAD),
+        _fake_solution(),
+        [("app/fix.py", "print('fixed')\n")],
+        {"pr_number": 1},
+        result,
+    )
+    assert report is None
+    assert "lean toolchain broken" in result["merge_gate_error"]
+    assert "merge_gate_approved" not in result
+    github.approve_pr.assert_not_awaited()
+    github.merge_pr.assert_not_awaited()
+
+
 def test_solution_files_dedupes_and_falls_back():
     solution = _fake_solution()
     files = _solution_files(solution)

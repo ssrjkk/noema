@@ -167,6 +167,10 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
 
     The formal stage runs over *every* changed file (including PRs that touch
     only ``.lean`` specs), so spec-only changes are still theorem-checked.
+
+    The gate never raises: a crashing verifier, sandbox, or judge maps to a
+    blocked verdict (``verifier_crashed`` / ``sandbox_error`` / ``judge_error``)
+    so every run produces a report artifact.
     """
     raw_files = _raw_changed_files(cfg)
     files = [f for f in raw_files if f["path"].endswith(cfg.include_suffixes)]
@@ -177,9 +181,13 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
     if cfg.verifier is not None:
         lean_files = [(f["path"], f["content"]) for f in raw_files if f["path"].endswith(".lean")]
         if lean_files:
-            vres = await cfg.verifier.verify_files(lean_files)
-            formal_verified = bool(vres.verified)
-            formal_error = str(getattr(vres, "error", ""))
+            try:
+                vres = await cfg.verifier.verify_files(lean_files)
+                formal_verified = bool(vres.verified)
+                formal_error = str(getattr(vres, "error", ""))
+            except Exception as e:  # noqa: BLE001 - a crashing verifier blocks
+                formal_verified = False
+                formal_error = f"verifier_crashed:{e}"
             if not formal_verified:
                 blocked_by.append("formal_verification")
         if cfg.require_spec_patterns:
@@ -210,9 +218,13 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
                 test_enabled=False,
             )
         )
-        result: SandboxResult = await sandbox.validate_files(files, run_tests=cfg.run_tests)
-        sandbox_all_valid = bool(result.all_valid)
-        sandbox_summary = str(result.summary)
+        try:
+            result: SandboxResult = await sandbox.validate_files(files, run_tests=cfg.run_tests)
+            sandbox_all_valid = bool(result.all_valid)
+            sandbox_summary = str(result.summary)
+        except Exception as e:  # noqa: BLE001 - a crashing sandbox blocks
+            sandbox_all_valid = False
+            sandbox_summary = f"sandbox_error:{e}"
         if not sandbox_all_valid:
             blocked_by.append("sandbox")
 
@@ -226,8 +238,16 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
         ],
     )
     judge = cfg.judge or _default_judge()
-    verdict: JudgeVerdict = await judge(solution)
-    judge_score = float(verdict.scores.overall or 0.0)
+    judge_score = 0.0
+    judge_passed = False
+    judge_summary = ""
+    try:
+        verdict: JudgeVerdict = await judge(solution)
+        judge_score = float(verdict.scores.overall or 0.0)
+        judge_passed = bool(verdict.passed)
+        judge_summary = str(verdict.summary)
+    except Exception as e:  # noqa: BLE001 - a failing judge blocks, never crashes
+        blocked_by.append(f"judge_error:{e}")
     if judge_score < cfg.judge_threshold:
         blocked_by.append(f"judge_score={judge_score:.3f} < threshold={cfg.judge_threshold:.3f}")
 
@@ -235,8 +255,8 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
         passed=not blocked_by,
         changed_files=len(files),
         judge_score=judge_score,
-        judge_passed=bool(verdict.passed),
-        judge_summary=str(verdict.summary),
+        judge_passed=judge_passed,
+        judge_summary=judge_summary,
         sandbox_all_valid=sandbox_all_valid,
         sandbox_summary=sandbox_summary,
         formal_verified=formal_verified,
@@ -309,7 +329,16 @@ async def run_gate_cli(argv: list[str] | None = None) -> int:
         from noema.verifiers.lean import LeanVerifier
 
         cfg.verifier = LeanVerifier()
-    report = await run_merge_gate(cfg)
+    try:
+        report = await run_merge_gate(cfg)
+    except Exception as e:  # noqa: BLE001 - every gate run must yield an artifact
+        log.error("merge_gate_crash", error=str(e))
+        report = GateReport(
+            passed=False,
+            changed_files=0,
+            blocked_by=[f"gate_error:{e}"],
+            note="gate_error",
+        )
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -49,16 +49,18 @@ async def _default_engine_factory() -> Any:
 async def _default_gate_runner(files: list[tuple[str, str]]) -> Any:
     """Run the merge gate over the fix's files (sandbox static pass + judge).
 
-    Uses ``explicit_files`` so no local git diff is needed; the judge threshold
-    is 0.0 (the sandbox is the hard gate), and any judge/LLM failure surfaces
-    as a raised error which the fixer treats as *blocked* (fail-closed).
+        Uses ``explicit_files`` so no local git diff is needed; the judge threshold
+        is 0.0 (the sandbox is the hard gate), and any judge/LLM failure surfaces
+        as a raised error which the fixer treats as *blocked* (fail-closed).
 
     When ``autonomy.lean_verifier`` is enabled the gate additionally compiles
-    every ``.lean`` proof obligation with the Lean 4 theorem prover and blocks
-    on a failed proof. Fail-closed: a missing ``lean`` binary blocks the gate
-    instead of silently skipping the formal stage. Files under
-    ``autonomy.lean_verifier_required_paths`` must ship a matching ``.lean``
-    spec (``missing_formal_spec``) or the gate blocks.
+        every ``.lean`` proof obligation with the Lean 4 theorem prover and blocks
+        on a failed proof. Fail-closed: a missing ``lean`` binary blocks the gate
+        instead of silently skipping the formal stage, and a verifier construction
+        failure raises — the fixer treats a raised gate error as blocked
+        (``merge_gate_error``), so the formal stage can never silently disappear.
+        Files under ``autonomy.lean_verifier_required_paths`` must ship a matching
+        ``.lean`` spec (``missing_formal_spec``) or the gate blocks.
     """
     from noema.experiments.gate import GateConfig, run_merge_gate
 
@@ -72,13 +74,10 @@ async def _default_gate_runner(files: list[tuple[str, str]]) -> Any:
     from noema.config.settings import get_settings
 
     if get_settings().autonomy.lean_verifier:
-        try:
-            from noema.verifiers.lean import LeanVerifier
+        from noema.verifiers.lean import LeanVerifier
 
-            cfg.verifier = LeanVerifier()
-            cfg.require_spec_patterns = tuple(get_settings().autonomy.lean_verifier_required_paths)
-        except Exception as e:  # noqa: BLE001 - never break the gate over the prover
-            logger.warning("lean_verifier_unavailable", error=str(e))
+        cfg.verifier = LeanVerifier()
+        cfg.require_spec_patterns = tuple(get_settings().autonomy.lean_verifier_required_paths)
     return await run_merge_gate(cfg)
 
 

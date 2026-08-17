@@ -253,6 +253,23 @@ class TestGateFormalVerification:
 
 @pytest.mark.asyncio
 class TestFixerGateIntegration:
+    async def test_fixer_gate_verifier_construction_failure_is_fail_closed(self, monkeypatch):
+        """A verifier construction failure must propagate (never skip the stage)."""
+        from noema.autonomy.fixer import _default_gate_runner
+        from noema.config.settings import reset_settings
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("verifier module broken")
+
+        monkeypatch.setenv("NOEMA_AUTONOMY__LEAN_VERIFIER", "true")
+        monkeypatch.setattr("noema.verifiers.lean.LeanVerifier", _boom)
+        reset_settings()
+        try:
+            with pytest.raises(RuntimeError, match="verifier module broken"):
+                await _default_gate_runner([("specs/billing.lean", make_lean_module(GOOD_THEOREM))])
+        finally:
+            reset_settings()
+
     async def test_fixer_gate_fail_closed_without_toolchain(self, monkeypatch):
         """lean_verifier=true + missing binary must BLOCK, not skip."""
         from noema.autonomy.fixer import _default_gate_runner

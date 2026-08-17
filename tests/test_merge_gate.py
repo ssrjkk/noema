@@ -165,3 +165,90 @@ async def test_cli_verifier_flags_plumb_into_config(tmp_path, monkeypatch):
     cfg = captured["cfg"]
     assert cfg.verifier is not None
     assert cfg.require_spec_patterns == ("crypto/",)
+
+
+@pytest.mark.asyncio
+async def test_gate_blocks_when_verifier_crashes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
+
+    class _CrashyVerifier:
+        async def verify_files(self, files):
+            raise RuntimeError("verifier exploded")
+
+    (tmp_path / "specs").mkdir()
+    (tmp_path / "specs" / "app.lean").write_text(
+        "theorem t : True := by trivial\n", encoding="utf-8"
+    )
+    cfg = GateConfig(
+        diff_target="origin/main",
+        git=_fake_git(["app.py", "specs/app.lean"]),
+        judge=await _judge_factory(0.9),
+        sandbox=_FakeSandbox(all_valid=True),
+        verifier=_CrashyVerifier(),
+    )
+    report = await run_merge_gate(cfg)
+    assert report.passed is False
+    assert "formal_verification" in report.blocked_by
+    assert report.formal_verified is False
+    assert "verifier_crashed" in report.formal_error
+
+
+@pytest.mark.asyncio
+async def test_gate_blocks_when_sandbox_crashes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
+
+    class _CrashySandbox:
+        async def validate_files(self, files, run_tests: bool = False):
+            raise OSError("sandbox tool missing")
+
+    cfg = GateConfig(
+        diff_target="origin/main",
+        git=_fake_git(["app.py"]),
+        judge=await _judge_factory(0.9),
+        sandbox=_CrashySandbox(),
+    )
+    report = await run_merge_gate(cfg)
+    assert report.passed is False
+    assert "sandbox" in report.blocked_by
+    assert report.sandbox_all_valid is False
+    assert "sandbox_error" in report.sandbox_summary
+
+
+@pytest.mark.asyncio
+async def test_gate_blocks_when_judge_crashes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
+
+    async def _crashing_judge(solution):
+        raise RuntimeError("llm unreachable")
+
+    cfg = GateConfig(
+        diff_target="origin/main",
+        git=_fake_git(["app.py"]),
+        judge=_crashing_judge,
+        sandbox=_FakeSandbox(all_valid=True),
+    )
+    report = await run_merge_gate(cfg)
+    assert report.passed is False
+    assert any("judge_error" in b for b in report.blocked_by)
+    assert report.judge_score == 0.0
+    assert report.judge_passed is False
+
+
+@pytest.mark.asyncio
+async def test_cli_writes_blocked_artifact_on_gate_crash(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    async def _crash(cfg):
+        raise RuntimeError("git diff exploded")
+
+    monkeypatch.setattr("noema.experiments.gate.run_merge_gate", _crash)
+
+    out = tmp_path / "gate.json"
+    code = await run_gate_cli(["--out", str(out)])
+    assert code == 1
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["passed"] is False
+    assert any("gate_error" in b for b in report["blocked_by"])
