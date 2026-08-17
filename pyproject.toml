@@ -80,7 +80,7 @@ vault = [
     "hvac>=2.4.0",
 ]
 arq = [
-    "arq>=0.26",
+    "arq>=0.28.0",
 ]
 
 [project.scripts]
