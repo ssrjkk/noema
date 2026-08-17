@@ -126,7 +126,7 @@ jobs:
     needs: lint
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so the gate can diff the PR branch against its base.
           fetch-depth: 0
