@@ -40,7 +40,7 @@ dependencies = [
     "structlog>=23.0",
 
     # Metrics
-    "prometheus-client>=0.19",
+    "prometheus-client>=0.26.0",
 ]
 
 [project.optional-dependencies]
