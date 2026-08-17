@@ -50,7 +50,14 @@ def _changed_file_paths(git: GitRunner, diff_target: str) -> list[str]:
 
 @dataclass
 class GateConfig:
-    """Tunables for one merge-gate run."""
+    """Tunables for one merge-gate run.
+
+    ``verifier``: optional formal verifier (e.g. :class:`LeanVerifier`).
+    When set, every ``.lean`` file in the change set is theorem-checked and a
+    failed proof blocks the gate. ``require_spec_patterns`` (path prefixes)
+    additionally blocks changed ``.py`` files under those prefixes that have
+    no matching ``.lean`` spec — the anti-vacuum guarantee for critical code.
+    """
 
     judge_threshold: float = 0.0
     sandbox_enabled: bool = True
@@ -63,6 +70,7 @@ class GateConfig:
     judge: JudgeRunner | None = None
     sandbox: SandboxEngine | None = None
     verifier: Any | None = None
+    require_spec_patterns: tuple[str, ...] = ()
 
 
 @dataclass
@@ -122,20 +130,73 @@ def _collect_files(cfg: GateConfig) -> list[dict[str, str]]:
     return [f for f in _raw_changed_files(cfg) if f["path"].endswith(cfg.include_suffixes)]
 
 
+def _missing_formal_specs(
+    files: list[dict[str, str]],
+    lean_paths: list[str],
+    require_patterns: tuple[str, ...],
+) -> list[str]:
+    """Changed ``.py`` files under a required prefix without a ``.lean`` spec.
+
+    A spec is considered matching when it sits next to the file
+    (``app/billing.lean``) or under ``specs/`` (``specs/app/billing.lean`` or
+    ``specs/billing.lean``). Any other layout must be covered by a follow-up
+    change to this policy.
+    """
+    spec_set = set(lean_paths)
+    missing: list[str] = []
+    for f in files:
+        path = f["path"]
+        if not path.endswith(".py") or not any(path.startswith(p) for p in require_patterns):
+            continue
+        stem = path[: -len(".py")]
+        candidates = (f"{stem}.lean", f"specs/{stem}.lean", f"specs/{Path(stem).name}.lean")
+        if not any(c in spec_set for c in candidates):
+            missing.append(path)
+    return missing
+
+
 async def run_merge_gate(cfg: GateConfig) -> GateReport:
     """Evaluate the PR's changed files and decide pass/block.
 
     Blocks when:
     - the sandbox verdict is not ``all_valid`` (structural/lint failures), or
     - a configured formal verifier rejects a ``.lean`` proof obligation, or
+    - a changed file under ``require_spec_patterns`` has no matching ``.lean``
+      spec (``missing_formal_spec``), or
     - the judge's overall score is below ``judge_threshold``.
+
+    The formal stage runs over *every* changed file (including PRs that touch
+    only ``.lean`` specs), so spec-only changes are still theorem-checked.
     """
     raw_files = _raw_changed_files(cfg)
     files = [f for f in raw_files if f["path"].endswith(cfg.include_suffixes)]
-    if not files:
-        return GateReport(passed=True, changed_files=0, note="no_changed_files")
 
     blocked_by: list[str] = []
+    formal_verified: bool | None = None
+    formal_error = ""
+    if cfg.verifier is not None:
+        lean_files = [(f["path"], f["content"]) for f in raw_files if f["path"].endswith(".lean")]
+        if lean_files:
+            vres = await cfg.verifier.verify_files(lean_files)
+            formal_verified = bool(vres.verified)
+            formal_error = str(getattr(vres, "error", ""))
+            if not formal_verified:
+                blocked_by.append("formal_verification")
+        if cfg.require_spec_patterns:
+            for path in _missing_formal_specs(
+                files, [p for p, _ in lean_files], cfg.require_spec_patterns
+            ):
+                blocked_by.append(f"missing_formal_spec:{path}")
+
+    if not files:
+        return GateReport(
+            passed=not blocked_by,
+            changed_files=0,
+            formal_verified=formal_verified,
+            formal_error=formal_error,
+            blocked_by=blocked_by,
+            note="no_changed_files",
+        )
 
     sandbox_all_valid: bool | None = None
     sandbox_summary = ""
@@ -154,17 +215,6 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
         sandbox_summary = str(result.summary)
         if not sandbox_all_valid:
             blocked_by.append("sandbox")
-
-    formal_verified: bool | None = None
-    formal_error = ""
-    if cfg.verifier is not None:
-        lean_files = [(f["path"], f["content"]) for f in raw_files if f["path"].endswith(".lean")]
-        if lean_files:
-            vres = await cfg.verifier.verify_files(lean_files)
-            formal_verified = bool(vres.verified)
-            formal_error = str(getattr(vres, "error", ""))
-            if not formal_verified:
-                blocked_by.append("formal_verification")
 
     solution = Solution(
         task_id="merge-gate",
@@ -231,6 +281,20 @@ async def run_gate_cli(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Execute the changed code (default: static/lint only)",
     )
+    parser.add_argument(
+        "--verifier",
+        action="store_true",
+        help="Enable the Lean 4 formal verification stage (compiles .lean "
+        "proof obligations; fail-closed when the binary is missing)",
+    )
+    parser.add_argument(
+        "--require-spec",
+        action="append",
+        default=[],
+        metavar="PREFIX",
+        help="Path prefix whose changed .py files must ship a matching .lean "
+        "spec or the gate blocks (repeatable)",
+    )
     parser.add_argument("--out", default="gate.json", help="Path for the JSON report")
     args = parser.parse_args(argv)
 
@@ -239,7 +303,12 @@ async def run_gate_cli(argv: list[str] | None = None) -> int:
         sandbox_enabled=args.sandbox == "on",
         sandbox_run=args.sandbox_run,
         diff_target=args.diff_target,
+        require_spec_patterns=tuple(args.require_spec),
     )
+    if args.verifier:
+        from noema.verifiers.lean import LeanVerifier
+
+        cfg.verifier = LeanVerifier()
     report = await run_merge_gate(cfg)
 
     out_path = Path(args.out)

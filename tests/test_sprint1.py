@@ -72,6 +72,31 @@ class TestNoemaSettings:
         s = NoemaSettings.from_yaml("/nonexistent/file.yaml")
         assert isinstance(s, NoemaSettings)
 
+    def test_env_json_list_override(self, monkeypatch):
+        monkeypatch.setenv("NOEMA_AUTONOMY__LEAN_VERIFIER_REQUIRED_PATHS", '["crypto/", "auth/"]')
+        s = NoemaSettings.from_yaml(None)
+        assert s.autonomy.lean_verifier_required_paths == ["crypto/", "auth/"]
+
+    def test_env_json_list_single_underscore_spelling(self, monkeypatch):
+        monkeypatch.setenv("NOEMA_AUTONOMY_LEAN_VERIFIER_REQUIRED_PATHS", '["crypto/"]')
+        s = NoemaSettings.from_yaml(None)
+        assert s.autonomy.lean_verifier_required_paths == ["crypto/"]
+
+    def test_env_json_list_malformed_raises_clear_error(self, monkeypatch):
+        monkeypatch.setenv("NOEMA_AUTONOMY__LEAN_VERIFIER_REQUIRED_PATHS", "not-json[")
+        with pytest.raises(ValueError, match="must be valid JSON"):
+            NoemaSettings.from_yaml(None)
+
+    def test_env_json_list_malformed_single_underscore_raises(self, monkeypatch):
+        monkeypatch.setenv("NOEMA_AUTONOMY_LEAN_VERIFIER_REQUIRED_PATHS", "not-json[")
+        with pytest.raises(ValueError, match="must be valid JSON"):
+            NoemaSettings.from_yaml(None)
+
+    def test_env_empty_container_value_is_skipped(self, monkeypatch):
+        monkeypatch.setenv("NOEMA_AUTONOMY__LEAN_VERIFIER_REQUIRED_PATHS", "")
+        s = NoemaSettings.from_yaml(None)
+        assert s.autonomy.lean_verifier_required_paths == []
+
     def test_dump_yaml(self, tmp_path):
         s = NoemaSettings()
         out = tmp_path / "out.yaml"

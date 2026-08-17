@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -59,6 +60,12 @@ def _env_overrides() -> dict[str, Any]:
     ``NOEMA_COT_MAX_STEPS`` map to their root field. Variables that do not
     correspond to a settings field are ignored, and empty values are treated
     as unset so an empty ``int``/``bool`` env var cannot crash pydantic.
+
+    Container fields (``list``/``tuple``/``dict``, e.g.
+    ``NOEMA_AUTONOMY__LEAN_VERIFIER_REQUIRED_PATHS``) expect a JSON value
+    (``["crypto/", "auth/"]``); malformed JSON raises a clear ``ValueError``
+    naming the variable rather than letting pydantic fail with a cryptic
+    ``EnvSettingsSource`` error.
     """
     valid = _env_leaf_keys()
     out: dict[str, Any] = {}
@@ -78,8 +85,32 @@ def _env_overrides() -> dict[str, Any]:
         node = out
         for part in parts[:-1]:
             node = node.setdefault(part.lower(), {})
-        node[parts[-1].lower()] = value
+        leaf = parts[-1].lower()
+        if _is_container_field([p.lower() for p in parts]):
+            try:
+                value = json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                raise ValueError(
+                    f"Env var {key} must be valid JSON for a list/dict/tuple field, got: {value!r}"
+                ) from None
+        node[leaf] = value
     return out
+
+
+def _is_container_field(parts: list[str]) -> bool:
+    """True when the env path resolves to a list/tuple/dict/set field."""
+    node: Any = NoemaSettings
+    for part in parts:
+        field = node.model_fields.get(part)
+        if field is None:
+            return False
+        ann = field.annotation
+        if isinstance(ann, type) and issubclass(ann, BaseSettings):
+            node = ann
+            continue
+        origin = getattr(ann, "__origin__", None)
+        return origin in (list, tuple, dict, set)
+    return False
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -278,7 +309,14 @@ class AutonomySettings(BaseSettings):
     lean_verifier: bool = Field(
         default=False,
         description="Require Lean 4 theorem-prover checks on PR specs (.lean files) "
-        "before the merge gate can pass",
+        "before the merge gate can pass. Fail-closed: when the lean binary is "
+        "missing, the gate blocks instead of skipping the formal stage",
+    )
+    lean_verifier_required_paths: list[str] = Field(
+        default_factory=list,
+        description="Path prefixes (e.g. 'crypto/') whose changed .py files must "
+        "ship a matching .lean spec or the merge gate blocks with "
+        "'missing_formal_spec'",
     )
 
 
@@ -291,6 +329,24 @@ class NoemaSettings(BaseSettings):
         env_nested_delimiter="__",
         extra="ignore",
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: Any,
+        env_settings: Any,
+        dotenv_settings: Any,
+        file_secret_settings: Any,
+    ) -> tuple[Any, ...]:
+        """Env vars flow *only* through :meth:`from_yaml`'s ``_env_overrides``.
+
+        Direct ``NoemaSettings()`` construction (init command, tests) must not
+        be surprised by stray ``NOEMA_*`` variables; and the override layer
+        rejects malformed JSON for container fields with a clear message
+        instead of pydantic's cryptic ``EnvSettingsSource`` error.
+        """
+        return (init_settings,)
 
     # Sub-configs
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)

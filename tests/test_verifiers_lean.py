@@ -4,9 +4,13 @@ Covers ``noema/verifiers/lean``:
 - module generation from a theorem,
 - graceful degradation when the ``lean`` binary is missing,
 - fake-runner success/failure verdicts,
+- bounded-parallel multi-file verification,
 - temp-file hygiene,
 - merge-gate integration: a configured verifier blocks failed proofs
-  (``formal_verification``) and passes proven ones.
+  (``formal_verification``), verifies spec-only PRs, and enforces
+  ``require_spec_patterns`` (anti-vacuum),
+- fail-closed fixer wiring: ``autonomy.lean_verifier`` blocks the gate when
+  the toolchain is absent.
 """
 
 from __future__ import annotations
@@ -113,6 +117,24 @@ class TestLeanVerifier:
         assert result.files_checked == 2
         assert "proof failed" in result.error
 
+    async def test_verify_files_parallel_many(self):
+        async def _ok(binary, path, timeout):
+            return 0, "", ""
+
+        verifier = LeanVerifier(runner=_ok)
+        result = await verifier.verify_files(
+            [
+                (
+                    f"specs/obligation_{i}.lean",
+                    make_lean_module(f"theorem t{i} : True := by trivial"),
+                )
+                for i in range(6)
+            ]
+        )
+        assert result.verified is True
+        assert result.files_checked == 6
+        assert result.error == ""
+
 
 @pytest.mark.asyncio
 class TestGateFormalVerification:
@@ -169,3 +191,112 @@ class TestGateFormalVerification:
         report = await run_merge_gate(cfg)
         assert report.passed is True
         assert report.formal_verified is None
+
+    async def test_gate_verifies_lean_only_pr(self):
+        """Spec-only PRs must still be theorem-checked (no early skip)."""
+        cfg = self._gate(
+            LeanVerifier(runner=_ok_runner("lean", "", 0)),
+            [{"path": "specs/billing.lean", "content": make_lean_module(GOOD_THEOREM)}],
+        )
+        report = await run_merge_gate(cfg)
+        assert report.passed is True
+        assert report.formal_verified is True
+        assert report.changed_files == 0
+        assert report.note == "no_changed_files"
+
+    async def test_gate_blocks_missing_required_spec(self):
+        cfg = self._gate(
+            LeanVerifier(runner=_ok_runner("lean", "", 0)),
+            [{"path": "app/billing.py", "content": "def total(a, b):\n    return a / b\n"}],
+        )
+        cfg.require_spec_patterns = ("app/",)
+        report = await run_merge_gate(cfg)
+        assert report.passed is False
+        assert "missing_formal_spec:app/billing.py" in report.blocked_by
+        assert "formal_verification" not in report.blocked_by
+
+    async def test_gate_passes_when_required_spec_present(self):
+        cfg = self._gate(
+            LeanVerifier(runner=_ok_runner("lean", "", 0)),
+            [
+                {"path": "app/billing.py", "content": "def total(a, b):\n    return a / b\n"},
+                {"path": "specs/app/billing.lean", "content": make_lean_module(GOOD_THEOREM)},
+            ],
+        )
+        cfg.require_spec_patterns = ("app/",)
+        report = await run_merge_gate(cfg)
+        assert report.passed is True
+        assert report.blocked_by == []
+        assert report.formal_verified is True
+
+    async def test_require_specs_not_enforced_without_verifier(self):
+        cfg = self._gate(
+            None,
+            [{"path": "app/billing.py", "content": "def total(a, b):\n    return a / b\n"}],
+        )
+        cfg.require_spec_patterns = ("app/",)
+        report = await run_merge_gate(cfg)
+        assert report.passed is True
+        assert report.blocked_by == []
+
+    async def test_gate_blocks_lean_only_pr_when_toolchain_missing(self, monkeypatch):
+        monkeypatch.setattr("noema.verifiers.lean.shutil.which", lambda *a, **k: None)
+        cfg = self._gate(
+            LeanVerifier(),
+            [{"path": "specs/billing.lean", "content": make_lean_module(GOOD_THEOREM)}],
+        )
+        report = await run_merge_gate(cfg)
+        assert report.passed is False
+        assert "formal_verification" in report.blocked_by
+        assert "lean_not_installed" in report.formal_error
+
+
+@pytest.mark.asyncio
+class TestFixerGateIntegration:
+    async def test_fixer_gate_fail_closed_without_toolchain(self, monkeypatch):
+        """lean_verifier=true + missing binary must BLOCK, not skip."""
+        from noema.autonomy.fixer import _default_gate_runner
+        from noema.config.settings import reset_settings
+
+        monkeypatch.setenv("NOEMA_AUTONOMY__LEAN_VERIFIER", "true")
+        monkeypatch.setattr("noema.verifiers.lean.shutil.which", lambda *a, **k: None)
+        reset_settings()
+        try:
+            report = await _default_gate_runner(
+                [("specs/billing.lean", make_lean_module(GOOD_THEOREM))]
+            )
+        finally:
+            reset_settings()
+        assert report.passed is False
+        assert "formal_verification" in report.blocked_by
+        assert report.formal_verified is False
+
+    async def test_fixer_gate_fail_closed_on_required_path_without_spec(self, monkeypatch):
+        """lean_verifier=true + protected path without spec must BLOCK."""
+        from noema.autonomy.fixer import _default_gate_runner
+        from noema.config.settings import reset_settings
+
+        async def _judge(solution):
+            return SimpleNamespace(passed=True, summary="ok", scores=SimpleNamespace(overall=0.9))
+
+        class _FakeSandbox:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def validate_files(self, files, run_tests: bool = False):
+                return SimpleNamespace(all_valid=True, summary="ok")
+
+        monkeypatch.setenv("NOEMA_AUTONOMY__LEAN_VERIFIER", "true")
+        monkeypatch.setenv("NOEMA_AUTONOMY__LEAN_VERIFIER_REQUIRED_PATHS", '["crypto/"]')
+        monkeypatch.setattr("noema.verifiers.lean.shutil.which", lambda *a, **k: None)
+        monkeypatch.setattr("noema.experiments.gate._default_judge", lambda: _judge)
+        monkeypatch.setattr("noema.experiments.gate.SandboxEngine", _FakeSandbox)
+        reset_settings()
+        try:
+            report = await _default_gate_runner(
+                [("crypto/sign.py", "def sign(data):\n    return data\n")]
+            )
+        finally:
+            reset_settings()
+        assert report.passed is False
+        assert "missing_formal_spec:crypto/sign.py" in report.blocked_by

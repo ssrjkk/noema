@@ -19,6 +19,7 @@ The runner is injectable so tests exercise the full flow without the binary.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import shutil
 import tempfile
 import time
@@ -32,6 +33,7 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 DEFAULT_TIMEOUT = 30.0
+MAX_PARALLEL_COMPILES = 4
 
 LeanRunner = Callable[[str, str, float], Awaitable[tuple[int, str, str]]]
 
@@ -87,6 +89,8 @@ async def _default_runner(binary: str, file_path: str, timeout: float) -> tuple[
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except TimeoutError:
         proc.kill()
+        with contextlib.suppress(Exception):  # noqa: BLE001 - reap the child
+            await proc.communicate()
         return 1, "", "timeout"
     return (
         proc.returncode or 0,
@@ -175,18 +179,23 @@ class LeanVerifier:
         lean_files = [(p, c) for p, c in files if p.endswith(".lean")]
         if not lean_files:
             return VerifierResult(verified=True, files_checked=0)
-        verified = True
-        outputs: list[str] = []
-        errors: list[str] = []
-        for path, content in lean_files:
-            result = await self.verify_lean_source(
-                content, file_name=Path(path).name or "obligation.lean"
-            )
-            verified = verified and result.verified
-            if not result.verified and result.error:
-                errors.append(f"{path}: {result.error}")
-            if result.output:
-                outputs.append(result.output)
+
+        sem = asyncio.Semaphore(MAX_PARALLEL_COMPILES)
+
+        async def _check(path: str, content: str) -> VerifierResult:
+            async with sem:
+                return await self.verify_lean_source(
+                    content, file_name=Path(path).name or "obligation.lean"
+                )
+
+        results = await asyncio.gather(*(_check(path, content) for path, content in lean_files))
+        verified = all(r.verified for r in results)
+        errors = [
+            f"{path}: {r.error}"
+            for (path, _), r in zip(lean_files, results, strict=True)
+            if not r.verified and r.error
+        ]
+        outputs = [r.output for r in results if r.output]
         return VerifierResult(
             verified=verified,
             files_checked=len(lean_files),

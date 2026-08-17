@@ -54,8 +54,11 @@ async def _default_gate_runner(files: list[tuple[str, str]]) -> Any:
     as a raised error which the fixer treats as *blocked* (fail-closed).
 
     When ``autonomy.lean_verifier`` is enabled the gate additionally compiles
-    every ``.lean`` proof obligation with the Lean 4 theorem prover (if the
-    binary is present) and blocks on a failed proof.
+    every ``.lean`` proof obligation with the Lean 4 theorem prover and blocks
+    on a failed proof. Fail-closed: a missing ``lean`` binary blocks the gate
+    instead of silently skipping the formal stage. Files under
+    ``autonomy.lean_verifier_required_paths`` must ship a matching ``.lean``
+    spec (``missing_formal_spec``) or the gate blocks.
     """
     from noema.experiments.gate import GateConfig, run_merge_gate
 
@@ -72,9 +75,8 @@ async def _default_gate_runner(files: list[tuple[str, str]]) -> Any:
         try:
             from noema.verifiers.lean import LeanVerifier
 
-            verifier = LeanVerifier()
-            if verifier.available():
-                cfg.verifier = verifier
+            cfg.verifier = LeanVerifier()
+            cfg.require_spec_patterns = tuple(get_settings().autonomy.lean_verifier_required_paths)
         except Exception as e:  # noqa: BLE001 - never break the gate over the prover
             logger.warning("lean_verifier_unavailable", error=str(e))
     return await run_merge_gate(cfg)

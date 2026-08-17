@@ -143,3 +143,25 @@ async def test_cli_writes_report_and_blocks(tmp_path, monkeypatch):
     report = json.loads(out.read_text(encoding="utf-8"))
     assert report["passed"] is False
     assert report["blocked_by"] == ["sandbox"]
+
+
+@pytest.mark.asyncio
+async def test_cli_verifier_flags_plumb_into_config(tmp_path, monkeypatch):
+    app = tmp_path / "app.py"
+    app.write_text("x = 1\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    captured: dict[str, object] = {}
+
+    async def _capture(cfg):
+        captured["cfg"] = cfg
+        return GateReport(passed=True, changed_files=1)
+
+    monkeypatch.setattr("noema.experiments.gate.run_merge_gate", _capture)
+
+    out = tmp_path / "gate.json"
+    code = await run_gate_cli(["--verifier", "--require-spec", "crypto/", "--out", str(out)])
+    assert code == 0
+    cfg = captured["cfg"]
+    assert cfg.verifier is not None
+    assert cfg.require_spec_patterns == ("crypto/",)
