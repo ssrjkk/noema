@@ -51,8 +51,8 @@ except ImportError:
         def info(self, *args: Any, **kwargs: Any) -> None:
             return None
 
-    Counter = Histogram = Gauge = _NoopMetric  # type: ignore[misc, assignment]
-    Info = _NoopMetric  # type: ignore[misc, assignment]
+    Counter = Histogram = Gauge = _NoopMetric
+    Info = _NoopMetric
     generate_latest = _fallback_generate_latest
 
     CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"

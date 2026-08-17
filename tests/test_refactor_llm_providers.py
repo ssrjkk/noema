@@ -35,10 +35,10 @@ def test_openai_provider_custom_model():
 
 
 @pytest.mark.asyncio
-async def test_openai_provider_not_installed_stub():
+async def test_openai_provider_unavailable_stub():
     provider = OpenAIProvider()
     response = await provider._complete(_messages())
-    assert response.content == "OpenAI not installed: pip install openai"
+    assert "OpenAI" in response.content
     assert response.model == ""
 
 

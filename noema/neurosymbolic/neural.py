@@ -139,8 +139,12 @@ class NeuralInterface:
             from openai import AsyncOpenAI
 
             self._client = AsyncOpenAI()
-        except ImportError:
-            logger.warning("openai not installed; neural interface in fallback mode")
+        except Exception as e:  # noqa: BLE001 - any client failure degrades to fallback
+            logger.warning(
+                "openai_unavailable",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             self._client = None
 
     async def generate_hypothesis(self, task_graph: dict[str, Any]) -> dict[str, Any]:

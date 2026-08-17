@@ -46,9 +46,8 @@ def init(
     ok(f"Created {settings_path}")
 
     console.print(f"  Running database migrations{ELLIPSIS}")
+    import alembic.command as alembic_cmd
     from alembic.config import Config as AlembicConfig
-
-    from alembic import command as alembic_cmd
 
     alembic_cfg = AlembicConfig(project_root / "alembic.ini")
     alembic_cfg.set_main_option("sqlalchemy.url", db_url)

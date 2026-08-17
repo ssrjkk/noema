@@ -104,9 +104,11 @@ def test_scan_keychain_with_security(monkeypatch):
     assert keys[0].source == "keychain"
     assert keys[0].value == "super-se..."
 
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Result() if False else type(
-        "R", (), {"returncode": 1, "stdout": ""}
-    )())
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: _Result() if False else type("R", (), {"returncode": 1, "stdout": ""})(),
+    )
     assert KeyDiscovery()._scan_keychain() == []
 
 

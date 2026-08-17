@@ -102,9 +102,7 @@ async def test_architect_classifies_domain_and_scale():
 async def test_architect_expertise_and_contribute():
     architect = ArchitectAgent()
     assert architect.expertise == ["system-design", "patterns", "scalability", "trade-offs"]
-    contribution = await architect.contribute(
-        _task(), _solution(), {"components": ["a", "b"]}
-    )
+    contribution = await architect.contribute(_task(), _solution(), {"components": ["a", "b"]})
     assert contribution["layer"] == "architecture"
     assert contribution["component_count"] == 2
 
@@ -119,9 +117,7 @@ async def test_developer_analyze_and_contribute():
     assert "repository" in analysis["recommended_patterns"]
 
     solution = _solution()
-    solution.code_blocks.append(
-        CodeBlock(filename="a.py", language="python", content="x = 1")
-    )
+    solution.code_blocks.append(CodeBlock(filename="a.py", language="python", content="x = 1"))
     contribution = await developer.contribute(task, solution, {})
     assert contribution["layer"] == "implementation"
     assert contribution["files_generated"] == 1

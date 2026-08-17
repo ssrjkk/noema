@@ -287,9 +287,7 @@ class _CountingCoT(ChainOfThought):
 async def test_reflexion_single_attempt_without_feedback():
     """No judge feedback → exactly one reason() call and no reflexion state."""
     cot = _CountingCoT(_MockLLM())
-    context, state = await cot.reason_with_reflexion(
-        "t", ["api"], [], judge_feedback=""
-    )
+    context, state = await cot.reason_with_reflexion("t", ["api"], [], judge_feedback="")
     assert isinstance(context, dict)
     assert state is None
     assert cot.reason_calls == 1
@@ -299,9 +297,7 @@ async def test_reflexion_single_attempt_without_feedback():
 async def test_reflexion_retries_bounded_by_max_attempts():
     """Judge feedback → reason() is retried until ReflexionState.max_attempts."""
     cot = _CountingCoT(_MockLLM())
-    _, state = await cot.reason_with_reflexion(
-        "t", ["api"], [], judge_feedback="needs improvement"
-    )
+    _, state = await cot.reason_with_reflexion("t", ["api"], [], judge_feedback="needs improvement")
     assert isinstance(state, ReflexionState)
     assert cot.reason_calls == ReflexionState.max_attempts
     assert len(state.last_errors) == ReflexionState.max_attempts - 1
@@ -313,9 +309,7 @@ async def test_reflexion_retry_replans_with_repair():
     """On retry the planner injects the repair step and receives past errors."""
     llm = _MockLLM()
     cot = ChainOfThought(llm)
-    _, state = await cot.reason_with_reflexion(
-        "t", ["api"], [], judge_feedback="redo the design"
-    )
+    _, state = await cot.reason_with_reflexion("t", ["api"], [], judge_feedback="redo the design")
     assert state is not None
     # the final attempt carries the reflexion errors into the planner
     assert cot._context.get("_reflexion_errors")

@@ -164,15 +164,20 @@ async def test_solver_pool_exhausted():
 @pytest.mark.skipif(not has_z3, reason="z3 not installed")
 @pytest.mark.asyncio
 async def test_verify_solution_timeout():
+    from z3 import And, Int
+
     engine = SymbolicEngine(verification_timeout=0.05)
     await engine.initialize()
+    var = Int("x")
+    req = Constraint(name="x", expression=And(var >= 0, var <= 10), description="x range")
+    tg = TaskGraph(requirements=[req], variables={"x": var})
 
     async def slow_check(solver, solution, tg):
         await asyncio.sleep(10)
         return True
 
     with patch.object(engine, "_check_solution", slow_check):
-        valid, violations = await engine.verify_solution({}, TaskGraph())
+        valid, violations = await engine.verify_solution({"x": 5}, tg)
         assert valid is False
         assert "verification_timeout" in violations
 

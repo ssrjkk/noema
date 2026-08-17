@@ -41,7 +41,10 @@ async def test_record_tracks_tenant_and_task_cost():
     rec = await tracker.record("t1", "task1", "openai", "gpt-4o-mini", 1_000_000, 1_000_000)
     assert isinstance(rec, CostRecord)
     assert rec.cost_usd == pytest.approx(0.75)
-    assert tracker.get_tenant_cost("t1") == {"daily_usd": pytest.approx(0.75), "monthly_usd": pytest.approx(0.75)}
+    assert tracker.get_tenant_cost("t1") == {
+        "daily_usd": pytest.approx(0.75),
+        "monthly_usd": pytest.approx(0.75),
+    }
     assert tracker.get_task_cost("task1") == pytest.approx(0.75)
     assert tracker.get_task_cost("other") == 0.0
 

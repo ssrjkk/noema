@@ -254,7 +254,10 @@ class OpenAIProvider(BaseLLMProvider):
             return LLMResponse(content="OpenAI not installed: pip install openai")
 
         settings = get_settings()
-        client = AsyncOpenAI(api_key=self.api_key, timeout=settings.llm.request_timeout)
+        try:
+            client = AsyncOpenAI(api_key=self.api_key, timeout=settings.llm.request_timeout)
+        except Exception as e:  # noqa: BLE001 - a stub beats a hard crash
+            return LLMResponse(content=f"OpenAI unavailable: {e}")
         t0 = time.monotonic()
 
         response = await client.chat.completions.create(

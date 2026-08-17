@@ -418,7 +418,7 @@ async def _feedback(action: str) -> None:
 def serve(
     host: str | None = typer.Option(None, "--host", "-h"),
     port: int | None = typer.Option(None, "--port", "-p"),
-    reload: bool | None = typer.Option(None, "--reload", is_flag=True),
+    reload: bool | None = typer.Option(None, "--reload"),
 ) -> None:
     """Launch API server."""
     import uvicorn

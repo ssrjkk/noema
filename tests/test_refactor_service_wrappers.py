@@ -226,9 +226,7 @@ def _make_plugin(tmp_path) -> str:
     plugin_dir = tmp_path / "demo_plugin"
     plugin_dir.mkdir()
     (plugin_dir / "plugin.py").write_text(PLUGIN_PY, encoding="utf-8")
-    (plugin_dir / "plugin_meta.json").write_text(
-        json.dumps(PLUGIN_META), encoding="utf-8"
-    )
+    (plugin_dir / "plugin_meta.json").write_text(json.dumps(PLUGIN_META), encoding="utf-8")
     return str(plugin_dir)
 
 
@@ -335,9 +333,7 @@ async def test_worker_service_execute_hierarchical():
 
     await svc.start()
     try:
-        result = await svc.execute_hierarchical(
-            "root task", decomposer=decompose, executor=execute
-        )
+        result = await svc.execute_hierarchical("root task", decomposer=decompose, executor=execute)
         assert result["state"] == "completed"
         assert result["subtasks"] == 3
         assert result["depth"] == 0
