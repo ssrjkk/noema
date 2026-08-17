@@ -69,7 +69,7 @@ full = [
     "z3-solver>=4.13",
 ]
 sentry = [
-    "sentry-sdk>=2.0",
+    "sentry-sdk>=2.68.0",
 ]
 grpc = [
     "grpcio>=1.60",
