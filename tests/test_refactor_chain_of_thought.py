@@ -315,3 +315,47 @@ async def test_reflexion_retry_replans_with_repair():
     assert cot._context.get("_reflexion_errors")
     assert "repair" in [step.name for step in cot._steps]
     assert "redo the design" in cot._context["_reflexion_errors"][-1]
+
+
+# ── Ontological axioms injection ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_ontology_axioms_injected_into_analysis_prompt():
+    """Ontology context lands in the first (analysis) user prompt."""
+    llm = _MockLLM()
+    cot = ChainOfThought(llm)
+    await cot.reason(
+        task_description="Build a payment gateway",
+        task_tags=["payments"],
+        requirements=[],
+        ontology_context="[AXIOM w=1.0] Payment MUST be linked to IdempotencyKey via requires",
+        complexity="moderate",
+    )
+    analysis_prompt = cot.chain[0].prompt
+    assert "[ONTOLOGICAL AXIOMS - DO NOT VIOLATE]" in analysis_prompt
+    assert "Payment MUST be linked to IdempotencyKey via requires" in analysis_prompt
+
+
+@pytest.mark.asyncio
+async def test_ontology_axioms_absent_when_empty():
+    """No ontology context → the axiom section is not rendered."""
+    llm = _MockLLM()
+    cot = ChainOfThought(llm)
+    await cot.reason(task_description="t", task_tags=[], requirements=[], complexity="moderate")
+    assert "[ONTOLOGICAL AXIOMS" not in cot.chain[0].prompt
+
+
+@pytest.mark.asyncio
+async def test_reflexion_forwards_ontology_context():
+    """reason_with_reflexion forwards ontology context on every attempt."""
+    llm = _MockLLM()
+    cot = ChainOfThought(llm)
+    await cot.reason_with_reflexion(
+        "t",
+        ["api"],
+        [],
+        ontology_context="[AXIOM] User MUST be linked to AuthMethod via requires",
+        judge_feedback="redo",
+    )
+    assert cot._context.get("ontology", "").startswith("[AXIOM]")

@@ -373,6 +373,7 @@ class NoemaSettings(BaseSettings):
     # Knowledge
     knowledge_persist_path: Path = Field(default=_PROJECT_ROOT / "data" / "knowledge.json")
     feedback_persist_path: Path = Field(default=_PROJECT_ROOT / "data" / "feedback.json")
+    ontology_persist_path: Path = Field(default=_PROJECT_ROOT / "data" / "ontology.json")
 
     @classmethod
     def from_yaml(cls, path: str | Path | None = None) -> NoemaSettings:

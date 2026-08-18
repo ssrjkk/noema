@@ -241,3 +241,49 @@ def test_safe_parse_extracts_fenced_json(key: str, value: str) -> None:
     result = noema._safe_parse(f"```json\n{payload}\n```")
     assert isinstance(result, dict)
     assert result.get(key) == value
+
+
+# ── Ontological RAG (symbolic context for think) ──────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_gather_ontology_context_injects_matching_axioms() -> None:
+    from noema.core.types import Task
+    from noema.ontology import Entity, OntologyGraph, Relation
+
+    noema = NoemaEngine(worker_count=1)
+    graph = OntologyGraph()
+    for name in ("Payment", "User", "IdempotencyKey"):
+        graph.add_entity(Entity(name=name, type="domain"))
+    graph.add_relation(Relation("Payment", "requires", "IdempotencyKey", weight=1.0))
+    noema.ontology = graph
+
+    task = Task(title="Build a payment gateway", description="accept payments", tags=["payments"])
+    ctx = noema._gather_ontology_context(task)
+    assert "Payment MUST be linked to IdempotencyKey via requires" in ctx
+    assert ctx.startswith("[AXIOM")
+
+
+@pytest.mark.asyncio
+async def test_gather_ontology_context_empty_for_unrelated_task() -> None:
+    from noema.core.types import Task
+    from noema.ontology import Entity, OntologyGraph, Relation
+
+    noema = NoemaEngine(worker_count=1)
+    graph = OntologyGraph()
+    graph.add_entity(Entity(name="Payment", type="domain"))
+    graph.add_entity(Entity(name="IdempotencyKey", type="domain"))
+    graph.add_relation(Relation("Payment", "requires", "IdempotencyKey"))
+    noema.ontology = graph
+
+    task = Task(title="Write a haiku", description="poetry", tags=["poetry"])
+    assert noema._gather_ontology_context(task) == ""
+
+
+@pytest.mark.asyncio
+async def test_gather_ontology_context_empty_without_graph() -> None:
+    from noema.core.types import Task
+
+    noema = NoemaEngine(worker_count=1)
+    task = Task(title="Build a payment gateway", description="payments", tags=["payments"])
+    assert noema._gather_ontology_context(task) == ""

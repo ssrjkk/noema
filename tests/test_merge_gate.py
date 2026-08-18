@@ -252,3 +252,100 @@ async def test_cli_writes_blocked_artifact_on_gate_crash(tmp_path, monkeypatch):
     report = json.loads(out.read_text(encoding="utf-8"))
     assert report["passed"] is False
     assert any("gate_error" in b for b in report["blocked_by"])
+
+
+# -- Ontological semantics (requires / forbids axioms) -----------------------
+
+
+@pytest.mark.asyncio
+async def test_gate_blocks_on_ontology_requires_violation(tmp_path, monkeypatch):
+    """A file referencing User without AuthMethod violates the requires axiom."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text("class User:\n    pass\n", encoding="utf-8")
+
+    from noema.ontology import Entity, OntologyGraph, Relation
+
+    graph = OntologyGraph()
+    graph.add_entity(Entity(name="User", type="domain"))
+    graph.add_entity(Entity(name="AuthMethod", type="domain"))
+    graph.add_relation(Relation("User", "requires", "AuthMethod"))
+
+    cfg = GateConfig(
+        diff_target="origin/main",
+        git=_fake_git(["app.py"]),
+        judge=await _judge_factory(0.9),
+        sandbox=_FakeSandbox(all_valid=True),
+        ontology=graph,
+    )
+    report = await run_merge_gate(cfg)
+    assert report.passed is False
+    assert "ontology:app.py:User requires AuthMethod" in report.blocked_by
+    assert report.blocked_by == report.ontology_violations
+
+
+@pytest.mark.asyncio
+async def test_gate_passes_when_requires_satisfied(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text(
+        "class User:\n    pass\n\nclass AuthMethod:\n    pass\n", encoding="utf-8"
+    )
+
+    from noema.ontology import Entity, OntologyGraph, Relation
+
+    graph = OntologyGraph()
+    graph.add_entity(Entity(name="User", type="domain"))
+    graph.add_entity(Entity(name="AuthMethod", type="domain"))
+    graph.add_relation(Relation("User", "requires", "AuthMethod"))
+
+    cfg = GateConfig(
+        diff_target="origin/main",
+        git=_fake_git(["app.py"]),
+        judge=await _judge_factory(0.9),
+        sandbox=_FakeSandbox(all_valid=True),
+        ontology=graph,
+    )
+    report = await run_merge_gate(cfg)
+    assert report.passed is True
+    assert report.ontology_violations == []
+
+
+@pytest.mark.asyncio
+async def test_gate_blocks_on_ontology_forbids_violation(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text(
+        "class PlaintextStorage:\n    pass\n\nclass Passwords:\n    pass\n", encoding="utf-8"
+    )
+
+    from noema.ontology import Entity, OntologyGraph, Relation
+
+    graph = OntologyGraph()
+    graph.add_entity(Entity(name="PlaintextStorage", type="anti"))
+    graph.add_entity(Entity(name="Passwords", type="domain"))
+    graph.add_relation(Relation("PlaintextStorage", "forbids", "Passwords"))
+
+    cfg = GateConfig(
+        diff_target="origin/main",
+        git=_fake_git(["app.py"]),
+        judge=await _judge_factory(0.9),
+        sandbox=_FakeSandbox(all_valid=True),
+        ontology=graph,
+    )
+    report = await run_merge_gate(cfg)
+    assert report.passed is False
+    assert "ontology:app.py:PlaintextStorage forbids Passwords" in report.blocked_by
+
+
+@pytest.mark.asyncio
+async def test_gate_without_ontology_never_blocks_on_semantics(tmp_path, monkeypatch):
+    """No ontology configured > no semantic stage, behavior unchanged."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text("class User:\n    pass\n", encoding="utf-8")
+    cfg = GateConfig(
+        diff_target="origin/main",
+        git=_fake_git(["app.py"]),
+        judge=await _judge_factory(0.9),
+        sandbox=_FakeSandbox(all_valid=True),
+    )
+    report = await run_merge_gate(cfg)
+    assert report.passed is True
+    assert report.ontology_violations == []

@@ -203,6 +203,7 @@ class ChainOfThought:
         requirements: list[dict[str, Any]],
         knowledge_context: str = "",
         graph_context: str = "",
+        ontology_context: str = "",
         complexity: str = "moderate",
         reflexion_errors: list[str] | None = None,
         reflexion_attempt: int = 1,
@@ -213,6 +214,9 @@ class ChainOfThought:
         When ``resume_context`` maps step name → previous result, matching steps
         are restored from the checkpoint instead of calling the LLM again
         (resumable execution for crashed/interrupted tasks).
+
+        ``ontology_context`` carries the ontological axioms for this task; it
+        is injected into the first (analysis) prompt as hard guidance.
 
         Complexity: ``O(V · L)`` LLM calls in the worst case, where ``V`` is the
         number of selected steps and ``L`` the DAG depth; per-level scheduling is
@@ -225,6 +229,7 @@ class ChainOfThought:
             "requirements": requirements,
             "knowledge": knowledge_context,
             "graph": graph_context,
+            "ontology": ontology_context,
         }
 
         if reflexion_errors:
@@ -252,6 +257,7 @@ class ChainOfThought:
             requirements,
             knowledge_context,
             graph_context,
+            ontology_context,
         )
 
         resume_context = resume_context or {}
@@ -332,6 +338,7 @@ class ChainOfThought:
         requirements: list[dict[str, Any]],
         knowledge_context: str = "",
         graph_context: str = "",
+        ontology_context: str = "",
         complexity: str = "moderate",
         judge_feedback: str = "",
     ) -> tuple[dict[str, Any], ReflexionState | None]:
@@ -351,6 +358,7 @@ class ChainOfThought:
                 requirements=requirements,
                 knowledge_context=knowledge_context,
                 graph_context=graph_context,
+                ontology_context=ontology_context,
                 complexity=complexity,
                 reflexion_errors=errors if state.attempt > 1 else None,
                 reflexion_attempt=state.attempt,
@@ -373,6 +381,7 @@ class ChainOfThought:
         requirements: list[dict[str, Any]],
         knowledge_context: str,
         graph_context: str,
+        ontology_context: str = "",
     ) -> None:
         self._steps = []
         step_defs = {
@@ -382,7 +391,7 @@ class ChainOfThought:
                 depends_on=[],
                 system_prompt=self._analyst_system(),
                 user_prompt=self._analyst_prompt(
-                    task_description, task_tags, requirements, knowledge_context
+                    task_description, task_tags, requirements, knowledge_context, ontology_context
                 ),
             ),
             "architecture": CoTStep(
@@ -886,7 +895,12 @@ Return structured JSON:
 Return ONLY valid JSON."""
 
     def _analyst_prompt(
-        self, task: str, tags: list[str], reqs: list[dict[str, Any]], knowledge: str
+        self,
+        task: str,
+        tags: list[str],
+        reqs: list[dict[str, Any]],
+        knowledge: str,
+        ontology: str = "",
     ) -> str:
         parts = [f"Task: {task}", f"Tags: {', '.join(tags)}"]
         if reqs:
@@ -895,6 +909,8 @@ Return ONLY valid JSON."""
                 parts.append(
                     f"  - [{r.get('category', 'general')}] {r.get('description', '')} (priority: {r.get('priority', 5)})"
                 )
+        if ontology:
+            parts.append(f"\n[ONTOLOGICAL AXIOMS - DO NOT VIOLATE]\n{ontology[:2000]}")
         if knowledge:
             parts.append(f"\nRelevant knowledge:\n{knowledge[:2000]}")
         return "\n".join(parts)

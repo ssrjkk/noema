@@ -237,6 +237,46 @@ class OntologyGraph:
                         stack.append((nxt, False))
         return False
 
+    def get_subgraph(self, roots: list[str], depth: int = 2, max_depth: int = 3) -> OntologyGraph:
+        """Extract the directed subgraph reachable from *roots* within *depth* hops.
+
+        Entity and relation caps are inherited from this graph, so the
+        subgraph can never exceed the source's size. ``depth`` is clamped to
+        ``max_depth``. Returns an empty graph when no root entity exists.
+
+        Complexity: ``O(V + E)`` for the BFS.
+        """
+        sub = OntologyGraph(max_entities=self.max_entities, max_relations=self.max_relations)
+        reached: set[str] = set()
+        for name in roots:
+            entity = self.get_entity(name)
+            if entity is None:
+                continue
+            sub._entities[entity.name] = entity
+            reached.add(entity.name)
+        if not reached:
+            return sub
+
+        depth = max(1, min(depth, max_depth))
+        for _ in range(depth):
+            next_hop: set[str] = set()
+            for node in list(reached):
+                for idx in self._by_subject.get(node, ()):
+                    target = self._entities.get(self._relations[idx].object)
+                    if target is not None and target.name not in reached:
+                        sub._entities[target.name] = target
+                    next_hop.add(self._relations[idx].object)
+                for idx in self._by_object.get(node, ()):
+                    target = self._entities.get(self._relations[idx].subject)
+                    if target is not None and target.name not in reached:
+                        sub._entities[target.name] = target
+                    next_hop.add(self._relations[idx].subject)
+            for node in list(reached):
+                for idx in [*self._by_subject.get(node, ()), *self._by_object.get(node, ())]:
+                    sub.add_relation(self._relations[idx])
+            reached.update(next_hop)
+        return sub
+
     # ── Rendering for prompt context ─────────────────────────────────────
 
     def to_context(self, limit: int = 50) -> str:
@@ -245,6 +285,26 @@ class OntologyGraph:
         return "\n".join(
             f"{r.subject} --{r.predicate}--> {r.object} (w={r.weight:.1f})" for r in ordered
         )
+
+    def to_rules(self, limit: int = 50) -> str:
+        """Render the graph as imperative axioms for LLM context.
+
+        Each relation becomes a MUST / MUST-NOT rule (``forbids`` predicates
+        are negated). Axioms are only as strong as the authored data — this is
+        prompt-level guidance, not a mathematical guarantee.
+        """
+        ordered = sorted(self._relations, key=lambda r: r.weight, reverse=True)[:limit]
+        lines = []
+        for r in ordered:
+            if r.predicate == "forbids":
+                lines.append(
+                    f"[AXIOM w={r.weight:.1f}] {r.subject} MUST NOT {r.object} ({r.predicate})"
+                )
+            else:
+                lines.append(
+                    f"[AXIOM w={r.weight:.1f}] {r.subject} MUST be linked to {r.object} via {r.predicate}"
+                )
+        return "\n".join(lines)
 
     def stats(self) -> dict[str, Any]:
         return {

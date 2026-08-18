@@ -178,3 +178,63 @@ def test_stats() -> None:
         "relations": 3,
         "has_cycle": False,
     }
+
+
+# ── Subgraph extraction & axiom rendering ────────────────────────────────────
+
+
+def test_get_subgraph_bounded_depth() -> None:
+    g = _sample()
+    one_hop = g.get_subgraph(["alice"], depth=1)
+    assert one_hop.stats()["entities"] == 2  # alice + account-1
+    assert one_hop.stats()["relations"] == 1
+    two_hop = g.get_subgraph(["alice"], depth=2)
+    assert two_hop.stats()["entities"] == 4  # alice, account-1, server-eu, money-usd
+    assert two_hop.stats()["relations"] == 3
+
+
+def test_get_subgraph_from_multiple_roots() -> None:
+    g = _sample()
+    sub = g.get_subgraph(["alice", "server-eu"], depth=1)
+    assert sub.stats()["entities"] == 3  # alice, server-eu, account-1
+    assert sub.stats()["relations"] == 2
+
+
+def test_get_subgraph_unknown_root_is_empty() -> None:
+    sub = _sample().get_subgraph(["ghost"])
+    assert sub.stats()["entities"] == 0
+    assert sub.stats()["relations"] == 0
+
+
+def test_get_subgraph_respects_inherited_caps() -> None:
+    g = OntologyGraph(max_entities=3)
+    for name in ("a", "b", "c"):
+        g.add_entity(Entity(name, "node"))
+    g.add_relation(Relation("a", "links", "b"))
+    g.add_relation(Relation("b", "links", "c"))
+    sub = g.get_subgraph(["a"], depth=2)
+    assert sub.max_entities == 3
+    assert sub.stats()["entities"] == 3
+    assert sub.stats()["relations"] == 2
+
+
+def test_to_rules_renders_must_and_forbids() -> None:
+    g = OntologyGraph()
+    for name in ("User", "AuthMethod", "Plaintext"):
+        g.add_entity(Entity(name, "domain"))
+    g.add_relation(Relation("User", "requires", "AuthMethod", weight=1.0))
+    g.add_relation(Relation("User", "forbids", "Plaintext", weight=0.9))
+    rules = g.to_rules()
+    assert "User MUST be linked to AuthMethod via requires" in rules
+    assert "User MUST NOT Plaintext (forbids)" in rules
+
+
+def test_to_rules_orders_by_weight_and_limits() -> None:
+    g = OntologyGraph()
+    for name in ("a", "b", "c", "d"):
+        g.add_entity(Entity(name, "node"))
+    for i, (s, o) in enumerate((("a", "b"), ("b", "c"), ("c", "d"))):
+        g.add_relation(Relation(s, "requires", o, weight=float(10 - i)))
+    rules = g.to_rules(limit=2)
+    assert len(rules.splitlines()) == 2
+    assert rules.splitlines()[0].startswith("[AXIOM w=10.0] a")

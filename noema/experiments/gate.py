@@ -14,18 +14,22 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import ast
 import asyncio
 import json
 import subprocess
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from noema.core.types import CodeBlock, Solution
 from noema.judge import JudgeVerdict, evaluate_solution
 from noema.logging import get_logger
 from noema.sandbox.engine import SandboxConfig, SandboxEngine, SandboxResult
+
+if TYPE_CHECKING:
+    from noema.ontology import OntologyGraph
 
 log = get_logger(__name__)
 
@@ -71,6 +75,7 @@ class GateConfig:
     sandbox: SandboxEngine | None = None
     verifier: Any | None = None
     require_spec_patterns: tuple[str, ...] = ()
+    ontology: OntologyGraph | None = None
 
 
 @dataclass
@@ -87,6 +92,7 @@ class GateReport:
     formal_verified: bool | None = None
     formal_error: str = ""
     blocked_by: list[str] = field(default_factory=list)
+    ontology_violations: list[str] = field(default_factory=list)
     note: str = ""
 
     def as_dict(self) -> dict[str, Any]:
@@ -130,6 +136,53 @@ def _collect_files(cfg: GateConfig) -> list[dict[str, str]]:
     return [f for f in _raw_changed_files(cfg) if f["path"].endswith(cfg.include_suffixes)]
 
 
+def _referenced_identifiers(content: str) -> set[str]:
+    """Every identifier mentioned in a Python source file (best-effort)."""
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return set()
+    ids: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            ids.add(node.id)
+        elif isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+            ids.add(node.name)
+    return ids
+
+
+def _ontology_violations(files: list[dict[str, str]], ontology: OntologyGraph) -> list[str]:
+    """Check changed files against the ontology's requires/forbids axioms.
+
+    A ``requires`` relation means: if the subject entity is referenced in a
+    file, the object entity must be referenced too. A ``forbids`` relation
+    means both must never co-occur. Violations are reported per file; the
+    gate never raises (unparseable files are skipped).
+    """
+    requires: dict[str, str] = {}
+    forbids: set[tuple[str, str]] = set()
+    for r in ontology.relations():
+        if r.predicate == "requires":
+            requires.setdefault(r.subject, r.object)
+        elif r.predicate == "forbids":
+            forbids.add((r.subject, r.object))
+    if not requires and not forbids:
+        return []
+
+    violations: list[str] = []
+    for f in files:
+        if not f["path"].endswith(".py"):
+            continue
+        ids = _referenced_identifiers(f["content"])
+        for subject, object_ in requires.items():
+            if subject in ids and object_ not in ids:
+                violations.append(f"ontology:{f['path']}:{subject} requires {object_}")
+        for subject, object_ in forbids:
+            if subject in ids and object_ in ids:
+                violations.append(f"ontology:{f['path']}:{subject} forbids {object_}")
+    return violations
+
+
 def _missing_formal_specs(
     files: list[dict[str, str]],
     lean_paths: list[str],
@@ -163,6 +216,8 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
     - a configured formal verifier rejects a ``.lean`` proof obligation, or
     - a changed file under ``require_spec_patterns`` has no matching ``.lean``
       spec (``missing_formal_spec``), or
+    - a configured ontology finds ``requires``/``forbids`` axiom violations in
+      the changed files (``ontology:...`` blocks), or
     - the judge's overall score is below ``judge_threshold``.
 
     The formal stage runs over *every* changed file (including PRs that touch
@@ -176,6 +231,10 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
     files = [f for f in raw_files if f["path"].endswith(cfg.include_suffixes)]
 
     blocked_by: list[str] = []
+    ontology_violations: list[str] = []
+    if cfg.ontology is not None:
+        ontology_violations = _ontology_violations(files, cfg.ontology)
+        blocked_by.extend(ontology_violations)
     formal_verified: bool | None = None
     formal_error = ""
     if cfg.verifier is not None:
@@ -203,6 +262,7 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
             formal_verified=formal_verified,
             formal_error=formal_error,
             blocked_by=blocked_by,
+            ontology_violations=ontology_violations,
             note="no_changed_files",
         )
 
@@ -262,6 +322,7 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
         formal_verified=formal_verified,
         formal_error=formal_error,
         blocked_by=blocked_by,
+        ontology_violations=ontology_violations,
     )
 
 

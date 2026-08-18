@@ -62,6 +62,7 @@ from noema.neurosymbolic import (
     MaxRefinementsExceededError,
     NeuroSymbolicEngine,
 )
+from noema.ontology import OntologyGraph
 from noema.plugins.manager import PluginManager
 from noema.routing.model_router import ModelRouter
 from noema.sandbox.engine import SandboxConfig, SandboxEngine, SandboxResult
@@ -143,6 +144,7 @@ class NoemaEngine:
         self.orchestrator = AgentOrchestrator()
         self.knowledge = KnowledgeStore(persist_path=knowledge_path)
         self.knowledge_graph = KnowledgeGraph()
+        self.ontology = OntologyGraph()
         self.llm: BaseLLMProvider = create_llm_provider(llm_provider, llm_model)
         self.cot: ChainOfThought | None = None
         self.feedback = FeedbackStore()
@@ -190,6 +192,19 @@ class NoemaEngine:
         log.info("Инициализация NoemaEngine (LLM-first)...")
         await self.knowledge.load()
         await self.feedback.load()
+        ontology_path = self._settings.ontology_persist_path
+        try:
+            loaded = OntologyGraph.load(ontology_path)
+            if loaded.stats()["entities"]:
+                self.ontology = loaded
+                log.info(
+                    "ontology_loaded",
+                    path=str(ontology_path),
+                    entities=loaded.stats()["entities"],
+                    relations=loaded.stats()["relations"],
+                )
+        except Exception as e:  # noqa: BLE001 - a corrupt ontology must not block startup
+            log.warning("ontology_load_failed", path=str(ontology_path), error=str(e))
         await self.worker_pool.start()
         await self.orchestrator.initialize()
         self._register_default_kernels()
@@ -376,6 +391,7 @@ class NoemaEngine:
 
         knowledge_context = await self._gather_knowledge_context(task)
         graph_context = self._gather_graph_context(task)
+        ontology_context = self._gather_ontology_context(task)
 
         if past_episodes:
             memory_context = "\n".join(
@@ -402,6 +418,7 @@ class NoemaEngine:
                     requirements=[r.model_dump() for r in task.requirements],
                     knowledge_context=knowledge_context,
                     graph_context=graph_context,
+                    ontology_context=ontology_context,
                     complexity=task.complexity.value,
                     reflexion_errors=(
                         [f"Judge: {reflexion_state.error_summary}"] if reflexion_state else None
@@ -732,6 +749,43 @@ class NoemaEngine:
         for comp in recs.get("components", [])[:15]:
             parts.append(f"{comp['from']} -> {comp['to']} ({comp['relationship']})")
         return "\n".join(parts) if parts else ""
+
+    def _gather_ontology_context(self, task: Task) -> str:
+        """Gather ontological axioms relevant to the task (symbolic RAG).
+
+        Entities are matched deterministically: normalized task tokens
+        (title + description + tags) are matched against entity names, then the
+        directed subgraph around matched roots is rendered as imperative rules.
+
+        This is prompt-level guidance, not a mathematical guarantee: the axioms
+        are only as strong as the authored graph.
+
+        Complexity: ``O(T + V + E)`` for T task tokens and the subgraph BFS.
+        """
+        if not self.ontology.stats()["entities"]:
+            return ""
+        text = f"{task.title} {task.description} {' '.join(task.tags)}"
+        tokens = set(re.findall(r"[A-Za-z0-9_-]{2,}", text.lower()))
+        roots: list[str] = []
+        for entity in self.ontology.entities():
+            name = entity.name.lower()
+            if name in tokens or any(name in t for t in tokens if len(t) > 3):
+                roots.append(entity.name)
+                if len(roots) >= 10:
+                    break
+        if not roots:
+            return ""
+        subgraph = self.ontology.get_subgraph(roots, depth=2)
+        if not subgraph.relations():
+            return ""
+        rules = subgraph.to_rules(limit=30)
+        log.info(
+            "ontology_axioms_injected",
+            roots=roots,
+            rules=len(rules.splitlines()),
+            task_id=task.id,
+        )
+        return rules
 
     async def _kernel_based_reasoning(self, task: Task, thought: ThoughtProcess) -> dict[str, Any]:
         """Degraded-mode reasoning through kernels when the LLM is unavailable.
