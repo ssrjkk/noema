@@ -391,11 +391,15 @@ class NoemaSettings(BaseSettings):
         return cls(**merged)
 
     def dump_yaml(self, path: str | Path) -> None:
-        """Write current settings to YAML (secrets masked)."""
-        from pydantic import Secret
+        """Write current settings to YAML (secrets masked, roundtrip-safe).
+
+        ``model_dump(mode="json")`` converts Path/Enum/Secret fields to plain
+        JSON primitives, so the emitted file is reloadable by ``from_yaml``.
+        """
+        from pydantic import SecretBytes, SecretStr
 
         def _mask(obj: Any) -> Any:
-            if isinstance(obj, Secret):
+            if isinstance(obj, (SecretStr, SecretBytes)):
                 return "***"
             if isinstance(obj, dict):
                 return {k: _mask(v) for k, v in obj.items()}
@@ -403,7 +407,7 @@ class NoemaSettings(BaseSettings):
                 return [_mask(v) for v in obj]
             return obj
 
-        dumped = self.model_dump()
+        dumped = self.model_dump(mode="json")
         masked = _mask(dumped)
         with open(path, "w", encoding="utf-8") as f:
             yaml.dump(masked, f, default_flow_style=False, allow_unicode=True)
