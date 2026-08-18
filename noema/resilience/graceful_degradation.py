@@ -55,7 +55,7 @@ class GracefulDegradation:
     async def cache_get(self, key: str) -> Any | None:
         if self._redis_healthy and self.redis:
             try:
-                return await self.redis.get(key)
+                return await asyncio.wait_for(self.redis.get(key), timeout=3.0)
             except Exception:
                 self._redis_healthy = False
                 log.warning("redis_cache_get_failed")
@@ -66,9 +66,9 @@ class GracefulDegradation:
         if self._redis_healthy and self.redis:
             try:
                 if ttl:
-                    await self.redis.setex(key, ttl, value)
+                    await asyncio.wait_for(self.redis.setex(key, ttl, value), timeout=3.0)
                 else:
-                    await self.redis.set(key, value)
+                    await asyncio.wait_for(self.redis.set(key, value), timeout=3.0)
             except Exception:
                 self._redis_healthy = False
                 log.warning("redis_cache_set_failed")
@@ -77,7 +77,7 @@ class GracefulDegradation:
         self._memory_cache.pop(key, None)
         if self._redis_healthy and self.redis:
             try:
-                await self.redis.delete(key)
+                await asyncio.wait_for(self.redis.delete(key), timeout=3.0)
             except Exception:
                 self._redis_healthy = False
 
@@ -106,7 +106,14 @@ class GracefulDegradation:
     async def _write_fallback(self, query: str, args: tuple[Any, ...]) -> None:
         ts = datetime.now(UTC).isoformat()
         filename = self._fallback_dir / f"query_{ts.replace(':', '-')}.json"
-        data = {"query": query, "args": [str(a) for a in args], "timestamp": ts}
+        # Query arguments are deliberately NOT persisted: they may contain
+        # secrets/PII. Only the query template and arg metadata are kept.
+        data = {
+            "query": query,
+            "arg_count": len(args),
+            "arg_types": [type(a).__name__ for a in args],
+            "timestamp": ts,
+        }
         try:
             filename.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
             log.info("fallback_query_written", path=str(filename))

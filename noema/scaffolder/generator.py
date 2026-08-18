@@ -34,11 +34,15 @@ class ProjectScaffolder:
         dirs = self._create_directories(project_dir, solution)
 
         # Кодовые блоки
+        project_root = project_dir.resolve()
         for block in solution.code_blocks:
             file_path = project_dir / self._map_filename(block, dirs)
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(block.content, encoding="utf-8")
-            self._files_created.append(str(file_path.relative_to(project_dir)))
+            target = file_path.resolve()
+            if not target.is_relative_to(project_root):
+                raise ValueError(f"Unsafe filename escapes project directory: {block.filename!r}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(block.content, encoding="utf-8")
+            self._files_created.append(str(target.relative_to(project_root)))
 
         # Конфиги
         self._create_configs(project_dir, solution, task)
@@ -83,9 +87,28 @@ class ProjectScaffolder:
 
         return dirs
 
+    @staticmethod
+    def _sanitize_filename(raw: str) -> str:
+        """Strip traversal/absolute components from an untrusted filename.
+
+        The filename comes from LLM/NS output (``block.filename``) and must
+        never escape ``project_dir``: backslashes are normalized, and the
+        path is re-parsed as a pure POSIX path so root markers (``/``,
+        ``\\``) and drive prefixes (``C:``) are dropped on every platform.
+        """
+        from pathlib import PurePosixPath
+
+        fn = raw.replace("\\", "/").strip()
+        parts = [
+            p for p in PurePosixPath(fn).parts if p not in ("", ".", "..", "/") and ":" not in p
+        ]
+        if not parts:
+            parts = ["generated.py"]
+        return "/".join(parts)
+
     def _map_filename(self, block: CodeBlock, dirs: dict[str, str]) -> str:
         """Маппинг имён файлов в структуру проекта."""
-        fn = block.filename
+        fn = self._sanitize_filename(block.filename)
 
         test_indicators = ("test_", "_test", "spec_")
         if any(fn.startswith(ind) or ind in fn for ind in test_indicators):

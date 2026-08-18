@@ -68,6 +68,7 @@ class HealingStrategy(BaseModel):
     max_retries: int = 3
     backoff_base: float = 1.0
     backoff_max: float = 30.0
+    timeout: float = 120.0
     fallback_value: Any = None
     actions: list[HealingAction] = Field(
         default_factory=lambda: [
@@ -109,8 +110,13 @@ class SelfHealer:
                     call_kwargs["_healing_context"] = healing_context
                 try:
                     start = time.time()
-                    result = _maybe_await(func(*args, **call_kwargs))
-                    result = await result
+                    candidate = _maybe_await(func(*args, **call_kwargs))
+                    if inspect.isawaitable(candidate):
+                        # A hung coroutine must not block the healing cycle
+                        # (or its caller) forever.
+                        result = await asyncio.wait_for(candidate, timeout=self.strategy.timeout)
+                    else:
+                        result = candidate
                     elapsed = (time.time() - start) * 1000
 
                     self._success_count += 1

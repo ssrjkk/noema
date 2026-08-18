@@ -212,6 +212,9 @@ class AlertEngine:
                     ),
                 )
                 self.alerts.append(alert)
+                # Bounded history: fired alerts must never grow without limit.
+                if len(self.alerts) > 1000:
+                    self.alerts = self.alerts[-1000:]
                 fired.append(alert)
                 rule.last_fired = now
                 for handler in self._handlers:

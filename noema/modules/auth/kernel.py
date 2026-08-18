@@ -107,8 +107,13 @@ class TokenManager:
     """JWT-like token management."""
 
     def __init__(
-        self, secret: str = "noema-secret", access_ttl: int = 3600, refresh_ttl: int = 86400
+        self, secret: str | None = None, access_ttl: int = 3600, refresh_ttl: int = 86400
     ) -> None:
+        # Fail closed: an unset secret must never fall back to a well-known
+        # value, or tokens would be forgeable. Generate a random one instead;
+        # pass an explicit secret to share tokens across instances.
+        if not secret:
+            secret = secrets.token_urlsafe(32)
         self.secret = secret
         self.access_ttl = access_ttl
         self.refresh_ttl = refresh_ttl
@@ -123,7 +128,7 @@ class TokenManager:
             payload["iat"] = time.time()
             payload["jti"] = uuid.uuid4().hex[:8]
             body = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
-            sig = hmac.new(self.secret.encode(), body.encode(), hashlib.sha256).hexdigest()[:16]
+            sig = hmac.new(self.secret.encode(), body.encode(), hashlib.sha256).hexdigest()
             return f"{body}.{sig}"
 
         access = _make_token(
@@ -140,9 +145,7 @@ class TokenManager:
             return None
         try:
             body, sig = token.rsplit(".", 1)
-            expected = hmac.new(self.secret.encode(), body.encode(), hashlib.sha256).hexdigest()[
-                :16
-            ]
+            expected = hmac.new(self.secret.encode(), body.encode(), hashlib.sha256).hexdigest()
             if not hmac.compare_digest(sig, expected):
                 return None
             payload = json.loads(base64.urlsafe_b64decode(body + "=="))

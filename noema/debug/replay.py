@@ -46,6 +46,19 @@ class ReplayEngine:
             return ReplayResult(trace_id=trace_id, error="No trace data available")
 
         llm_spans = [s for s in trace if s.get("kind") == "llm"]
+        if trace_id:
+            # Honest trace filtering: replay only the requested trace. Spans
+            # may carry the id as a top-level key or an attribute.
+            llm_spans = [
+                s
+                for s in llm_spans
+                if s.get("trace_id") == trace_id
+                or s.get("attributes", {}).get("trace_id") == trace_id
+            ]
+            if not llm_spans:
+                return ReplayResult(
+                    trace_id=trace_id, error=f"No LLM spans found for trace {trace_id}"
+                )
         diffs: list[ReplayStepDiff] = []
         result = ReplayResult(trace_id=trace_id, original_steps=len(llm_spans))
 

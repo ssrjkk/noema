@@ -42,7 +42,7 @@ def test_hard_cap_at_blocks_tokens():
     tb = TokenBudget(max_tokens=1000, hard_cap_at=0.8)
     tb.record(900)
     action = tb.check(estimated_cost=100)
-    assert action == BudgetAction.SKIP
+    assert action == BudgetAction.REJECT
 
 
 def test_hard_cap_skipped_step_is_recorded():
@@ -79,7 +79,7 @@ def test_edge_case_zero_max_tokens():
     assert tb.fraction_used == 0.0
     tb.record(0)
     assert tb.used == 0
-    assert tb.check() in (BudgetAction.SKIP, BudgetAction.DEGRADE)
+    assert tb.check() in (BudgetAction.SKIP, BudgetAction.DEGRADE, BudgetAction.REJECT)
 
 
 def test_edge_case_negative_tokens():
@@ -105,7 +105,7 @@ def test_stats_output():
     assert stats["max_tokens"] == 10000
     assert stats["used"] == 8500
     assert stats["remaining"] == 1500
-    # Hard cap hit first → SKIP, _degraded never set
+    # Hard cap hit first → REJECT, _degraded never set
     assert stats["degraded"] is False
     assert stats["skipped_steps"] == 1
 

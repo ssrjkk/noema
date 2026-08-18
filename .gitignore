@@ -37,6 +37,7 @@ coverage.xml
 # Env files (compose.env template stays committed)
 .env
 .env.*
+compose.env
 !.env.example
 
 # Logs & reports

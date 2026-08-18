@@ -45,7 +45,7 @@ class TokenBudget:
 
         if frac >= self.hard_cap_at:
             self._skipped_steps.append(step_name)
-            return BudgetAction.SKIP
+            return BudgetAction.REJECT
         if frac >= self.warn_at:
             if not self._degraded:
                 self._degraded = True
@@ -56,7 +56,7 @@ class TokenBudget:
         if self._degraded:
             return True
         result = self.check(step_name="")
-        return result in (BudgetAction.DEGRADE, BudgetAction.SKIP)
+        return result in (BudgetAction.DEGRADE, BudgetAction.SKIP, BudgetAction.REJECT)
 
     def skipped_steps(self) -> list[str]:
         return list(self._skipped_steps)

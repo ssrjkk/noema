@@ -84,6 +84,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     log.info("api_starting", host=settings.api.host, port=settings.api.port)
 
+    if not settings.api.api_key.get_secret_value():
+        log.warning(
+            "api_auth_disabled",
+            hint=(
+                "No NOEMA_API__API_KEY configured: API authentication is OFF. "
+                "Do not expose this instance outside localhost."
+            ),
+        )
+    if settings.api.webhook_secret.get_secret_value():
+        log.info("webhook_hmac_enabled")
+    else:
+        log.warning(
+            "webhook_hmac_disabled",
+            hint="No NOEMA_API__WEBHOOK_SECRET configured: webhook signatures are not verified.",
+        )
+
     if settings.obs.sentry_dsn:
         init_sentry(
             dsn=settings.obs.sentry_dsn,

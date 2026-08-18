@@ -148,6 +148,10 @@ class RoomManager:
 class ConnectionManager:
     """Manage WebSocket connections."""
 
+    # Hard cap per client: a stalled consumer must not accumulate memory
+    # indefinitely; oldest undelivered messages are dropped.
+    MAX_OUTBOX = 500
+
     def __init__(self) -> None:
         self.clients: dict[str, WSClient] = {}
         self._hooks: dict[str, list[Callable]] = {
@@ -170,13 +174,18 @@ class ConnectionManager:
     def get_client(self, client_id: str) -> WSClient | None:
         return self.clients.get(client_id)
 
+    def _enqueue(self, client: WSClient, msg: WSMessage) -> None:
+        client.outbox.append(msg)
+        if len(client.outbox) > self.MAX_OUTBOX:
+            client.outbox = client.outbox[-self.MAX_OUTBOX :]
+
     def broadcast(self, message: str, exclude: str | None = None) -> int:
         count = 0
         msg = WSMessage(event=WSEventType.BROADCAST.value, data=message, target="*")
         for cid, client in self.clients.items():
             if cid == exclude:
                 continue
-            client.outbox.append(msg)
+            self._enqueue(client, msg)
             count += 1
         return count
 
@@ -184,8 +193,9 @@ class ConnectionManager:
         client = self.clients.get(client_id)
         if not client:
             return False
-        client.outbox.append(
-            WSMessage(event=WSEventType.MESSAGE.value, data=message, target=client_id)
+        self._enqueue(
+            client,
+            WSMessage(event=WSEventType.MESSAGE.value, data=message, target=client_id),
         )
         return True
 

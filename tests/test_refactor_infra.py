@@ -232,6 +232,7 @@ async def test_replay_llm_span(monkeypatch):
     span = {
         "kind": "llm",
         "name": "cot.step",
+        "trace_id": "trace-1",
         "attributes": {
             "llm.provider": "fallback",
             "llm.model": "fallback",
@@ -257,6 +258,7 @@ async def test_replay_non_json_prompt(monkeypatch):
     span = {
         "kind": "llm",
         "name": "cot.step",
+        "trace_id": "trace-1",
         "attributes": {
             "llm.provider": "fallback",
             "llm.model": "fallback",

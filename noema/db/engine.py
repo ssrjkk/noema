@@ -1,4 +1,4 @@
-"""Async PostgreSQL engine with connection pooling and retry."""
+"""Async PostgreSQL engine with connection pooling and pre-ping health checks."""
 
 from __future__ import annotations
 

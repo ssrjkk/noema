@@ -51,8 +51,10 @@ except ImportError:
         def info(self, *args: Any, **kwargs: Any) -> None:
             return None
 
-    Counter = Histogram = Gauge = _NoopMetric
-    Info = _NoopMetric
+    Counter: Any = _NoopMetric  # type: ignore
+    Histogram: Any = _NoopMetric  # type: ignore
+    Gauge: Any = _NoopMetric  # type: ignore
+    Info: Any = _NoopMetric  # type: ignore
     generate_latest = _fallback_generate_latest
 
     CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
@@ -168,11 +170,14 @@ def build_metrics_app() -> Any:
     return Starlette(routes=[Route("/metrics", metrics), Route("/health", health)])
 
 
-def spawn_metrics_server(port: int, host: str = "0.0.0.0") -> Any | None:
+def spawn_metrics_server(port: int, host: str = "127.0.0.1") -> Any | None:
     """Start the Prometheus exporter on its own port in a daemon thread.
 
     Best-effort: returns ``None`` when ``prometheus_client`` is unavailable;
     the caller must never crash because metrics could not start.
+
+    Defaults to loopback so metrics are not exposed to the network without
+    an explicit decision; pass ``host="0.0.0.0"`` to publish them.
     """
     if not _HAS_PROMETHEUS:
         return None

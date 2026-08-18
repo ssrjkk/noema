@@ -203,7 +203,9 @@ class CausalGraph:
             if edge_t_m and edge_m_o:
                 mediator_effect += edge_t_m.get("strength", 0.5) * edge_m_o.get("strength", 0.5)
         total_effect = direct_paths * delta + mediator_effect * delta
-        total_effect = max(total_effect, total_effect - confounder_bias * 0.1)
+        # Confounders observed along backdoor paths bias the naive estimate:
+        # subtract their contribution (the previous ``max()`` made this a no-op).
+        total_effect = max(0.0, total_effect - confounder_bias * 0.1)
         estimated = current_val + total_effect
         confidence = 1.0 / (1.0 + len(backdoor_set) * 0.1 + len(frontdoor_set) * 0.05)
         confidence = max(0.1, min(1.0, confidence))

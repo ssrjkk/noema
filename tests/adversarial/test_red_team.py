@@ -251,7 +251,7 @@ async def test_cost_tracker_basic():
         step_name="analyze",
     )
 
-    tenant_cost = tracker.get_tenant_cost("t1")
+    tenant_cost = await tracker.get_tenant_cost("t1")
     assert tenant_cost["daily_usd"] > 0
 
     breakdown = tracker.get_breakdown("t1")
@@ -268,8 +268,8 @@ async def test_cost_tracker_multiple_tenants():
     await tracker.record("t2", "b", "anthropic", "claude-sonnet-4-20250514", 1000, 500)
     await tracker.record("t1", "c", "openai", "gpt-4o", 2000, 1000)
 
-    t1_cost = tracker.get_tenant_cost("t1")
-    t2_cost = tracker.get_tenant_cost("t2")
+    t1_cost = await tracker.get_tenant_cost("t1")
+    t2_cost = await tracker.get_tenant_cost("t2")
     assert t1_cost["daily_usd"] > t2_cost["daily_usd"]
 
 

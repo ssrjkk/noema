@@ -121,12 +121,44 @@ class KnowledgeLoader:
         return result
 
     async def ingest_url(self, url: str, tags: list[str] | None = None) -> IngestionResult:
-        """Ingest content from a URL."""
+        """Ingest content from a URL.
+
+        SSRF-guarded: only ``http``/``https`` targets resolving to public
+        addresses are fetched; private/loopback/link-local ranges are refused.
+        The fetch is async (never blocks the event loop) with a hard timeout.
+        """
         result = IngestionResult(source=url, source_type="url")
 
         try:
-            import urllib.request
+            import asyncio
+            import ipaddress
             from html.parser import HTMLParser
+
+            import aiohttp
+
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                result.errors.append(f"Unsupported URL: {url!r}")
+                return result
+
+            host = parsed.hostname or ""
+            try:
+                loop = asyncio.get_running_loop()
+                infos = await loop.getaddrinfo(host, None)
+            except OSError as e:
+                result.errors.append(f"DNS resolution failed: {e}")
+                return result
+            for info in infos:
+                ip = ipaddress.ip_address(info[4][0])
+                if (
+                    ip.is_private
+                    or ip.is_loopback
+                    or ip.is_link_local
+                    or ip.is_reserved
+                    or ip.is_multicast
+                ):
+                    result.errors.append(f"Refusing non-public address: {ip}")
+                    return result
 
             class TextExtractor(HTMLParser):
                 def __init__(self) -> None:
@@ -146,17 +178,18 @@ class KnowledgeLoader:
                     if not self._skip:
                         self.text_parts.append(data.strip())
 
-            req = urllib.request.Request(url, headers={"User-Agent": "Noema/1.0"})
-            resp = urllib.request.urlopen(req, timeout=15)
-            html = resp.read().decode("utf-8", errors="ignore")
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.get(url, headers={"User-Agent": "Noema/1.0"}) as resp,
+            ):
+                html = await resp.text(encoding="utf-8", errors="ignore")
 
             extractor = TextExtractor()
             extractor.feed(html)
             text = " ".join(extractor.text_parts)
 
             if text:
-                parsed = urlparse(url)
-                parsed.netloc.replace("www.", "")
                 text_result = await self.ingest_text(text, source_name=url, tags=tags or [])
                 text_result.source = url
                 text_result.source_type = "url"

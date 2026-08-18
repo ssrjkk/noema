@@ -3,20 +3,29 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from functools import wraps
 from typing import TYPE_CHECKING, Any
+
+from noema.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
 
+log = get_logger(__name__)
+
 
 def timer(func: Callable[..., Coroutine]) -> Callable[..., Coroutine]:
-    """Декоратор для измерения времени выполнения."""
+    """Декоратор для измерения времени выполнения (async)."""
 
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        result = await func(*args, **kwargs)
-        return result
+        start = time.perf_counter()
+        try:
+            return await func(*args, **kwargs)
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            log.debug("timer", func=func.__qualname__, duration_ms=round(elapsed_ms, 2))
 
     return wrapper
 

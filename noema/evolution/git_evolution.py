@@ -56,15 +56,24 @@ class GitEvolution:
         self.test_before_apply = test_before_apply or settings.evolution_test_before_apply
         self._proposals: list[EvolutionProposal] = []
 
-    async def _run_git(self, *args: str) -> tuple[int, str, str]:
-        """Run a git command and return (returncode, stdout, stderr)."""
+    async def _run_git(self, *args: str, timeout: float = 60.0) -> tuple[int, str, str]:
+        """Run a git command and return (returncode, stdout, stderr).
+
+        Bounded by *timeout*: a hung git (lock, credential prompt) must not
+        stall the evolution loop forever.
+        """
         cmd = ["git", "-C", str(self.project_root), *args]
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise
         return (
             proc.returncode or 0,
             stdout.decode(errors="replace"),
@@ -135,6 +144,22 @@ class GitEvolution:
         # Stage
         await self._run_git("add", file_path)
 
+        # Run tests BEFORE committing: a broken change must never end up in
+        # the branch history (previously the commit was created first and
+        # only the working tree was reverted).
+        if self.test_before_apply:
+            proposal.status = "testing"
+            tests_ok, output = await self._run_tests()
+            proposal.tests_output = output
+            if not tests_ok:
+                proposal.status = "failed"
+                proposal.tests_passed = False
+                log.warning("evolution_tests_failed", proposal_id=proposal.id, file=file_path)
+                # Revert on test failure
+                await self._run_git("checkout", "--", file_path)
+                self._proposals.append(proposal)
+                return proposal
+
         # Commit
         code, _, err = await self._run_git(
             "commit", "-m", f"[noema-evolution] {message}\n\nProposal ID: {proposal.id}"
@@ -145,21 +170,10 @@ class GitEvolution:
             self._proposals.append(proposal)
             return proposal
 
-        # Run tests if configured
         if self.test_before_apply:
-            proposal.status = "testing"
-            tests_ok, output = await self._run_tests()
-            proposal.tests_output = output
-            if tests_ok:
-                proposal.status = "passed"
-                proposal.tests_passed = True
-                log.info("evolution_tests_passed", proposal_id=proposal.id, file=file_path)
-            else:
-                proposal.status = "failed"
-                proposal.tests_passed = False
-                log.warning("evolution_tests_failed", proposal_id=proposal.id, file=file_path)
-                # Revert on test failure
-                await self._run_git("checkout", "--", file_path)
+            proposal.status = "passed"
+            proposal.tests_passed = True
+            log.info("evolution_tests_passed", proposal_id=proposal.id, file=file_path)
         else:
             proposal.status = "passed"
 

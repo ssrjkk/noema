@@ -62,7 +62,12 @@ class SemanticCache:
             best_key = None
             query_text = self._prompt_text(messages)
             qvec = self._compute_embedding(query_text)
+            tenant_suffix = f":t={effective_tenant}"
             for key, entry in self._entries.items():
+                # Exact hits are tenant-scoped by key; semantic matches must
+                # never serve a response cached for a different tenant.
+                if not key.endswith(tenant_suffix):
+                    continue
                 if entry.embedding and entry.model == model:
                     sim = self._cosine_similarity(qvec, entry.embedding)
                     if sim > best_sim:

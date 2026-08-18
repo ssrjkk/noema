@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -54,6 +55,7 @@ class QuotaManager:
         self._defaults_cache: dict[str, TenantQuota] = {}
         self._active_tasks: dict[str, set[str]] = {}
         self._active_lock = asyncio.Lock()
+        self._task_starts: dict[str, list[float]] = {}
 
     async def initialize(self) -> None:
         if self.pg:
@@ -129,6 +131,12 @@ class QuotaManager:
         return True
 
     async def track_active_task(self, tenant_id: str, task_id: str) -> None:
+        now = time.time()
+        async with self._active_lock:
+            self._task_starts.setdefault(tenant_id, []).append(now)
+            self._task_starts[tenant_id] = [
+                t for t in self._task_starts[tenant_id] if t >= now - 7200
+            ]
         if self.redis:
             try:
                 await self.redis.sadd(f"tenant:{tenant_id}:active_tasks", task_id)
@@ -155,13 +163,23 @@ class QuotaManager:
         if self.pg:
             try:
                 result = await self.pg.fetchval(
-                    "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE tenant_id = $1 AND timestamp >= $2",
+                    "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_records WHERE tenant_id = $1 AND recorded_at >= $2",
                     tenant_id,
                     start,
                 )
                 return float(result)
             except Exception as e:
                 log.warning("quota_monthly_cost_failed", error=str(e))
+        # Fallback: Redis month counters written by CostTracker
+        # (``cost:m:<tenant>:<YYYYMM>`` in 1/10000 USD units).
+        if self.redis:
+            try:
+                month_key = f"cost:m:{tenant_id}:{datetime.now(UTC).strftime('%Y%m')}"
+                value = await self.redis.get(month_key)
+                if value:
+                    return int(value) / 10000
+            except Exception as e:
+                log.warning("quota_monthly_redis_failed", error=str(e))
         return 0.0
 
     async def _get_hourly_task_count(self, tenant_id: str) -> int:
@@ -169,14 +187,16 @@ class QuotaManager:
         if self.pg:
             try:
                 result = await self.pg.fetchval(
-                    "SELECT COUNT(DISTINCT task_id) FROM cost_records WHERE tenant_id = $1 AND timestamp >= $2",
+                    "SELECT COUNT(DISTINCT task_id) FROM cost_records WHERE tenant_id = $1 AND recorded_at >= $2",
                     tenant_id,
                     one_hour_ago,
                 )
                 return result or 0
             except Exception as e:
                 log.warning("quota_hourly_count_failed", error=str(e))
-        return 0
+        # Single-process fallback: timestamps tracked by track_active_task.
+        cutoff = time.time() - 3600
+        return sum(1 for t in self._task_starts.get(tenant_id, []) if t >= cutoff)
 
     async def _get_active_task_count(self, tenant_id: str) -> int:
         if self.redis:

@@ -41,7 +41,7 @@ async def test_record_tracks_tenant_and_task_cost():
     rec = await tracker.record("t1", "task1", "openai", "gpt-4o-mini", 1_000_000, 1_000_000)
     assert isinstance(rec, CostRecord)
     assert rec.cost_usd == pytest.approx(0.75)
-    assert tracker.get_tenant_cost("t1") == {
+    assert await tracker.get_tenant_cost("t1") == {
         "daily_usd": pytest.approx(0.75),
         "monthly_usd": pytest.approx(0.75),
     }
@@ -112,11 +112,13 @@ async def test_redis_backend_gets_cost_increments():
     fake = _FakeIncrRedis()
     tracker._redis = fake
     await tracker.record("t1", "taskA", "openai", "gpt-4o-mini", 1_000_000, 1_000_000)
-    assert fake.calls["cost:d:t1"] == 7500
-    assert fake.calls["cost:m:t1"] == 7500
-    assert fake.calls["expire:cost:d:t1"] == 86400 * 2
-    assert fake.calls["expire:cost:m:t1"] == 86400 * 32
-    assert tracker.get_tenant_cost("t1")["daily_usd"] == pytest.approx(0.75)
+    day_key = CostTracker._day_key("t1")
+    month_key = CostTracker._month_key("t1")
+    assert fake.calls[day_key] == 7500
+    assert fake.calls[month_key] == 7500
+    assert fake.calls[f"expire:{day_key}"] == 86400 * 2
+    assert fake.calls[f"expire:{month_key}"] == 86400 * 32
+    assert (await tracker.get_tenant_cost("t1"))["daily_usd"] == pytest.approx(0.75)
 
 
 @pytest.mark.asyncio
@@ -132,4 +134,4 @@ async def test_redis_failure_does_not_break_record():
     tracker._redis = _BrokenRedis()
     rec = await tracker.record("t1", "taskA", "openai", "gpt-4o-mini", 1_000_000, 1_000_000)
     assert rec.cost_usd == pytest.approx(0.75)
-    assert tracker.get_tenant_cost("t1")["daily_usd"] == pytest.approx(0.75)
+    assert (await tracker.get_tenant_cost("t1"))["daily_usd"] == pytest.approx(0.75)

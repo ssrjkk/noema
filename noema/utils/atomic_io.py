@@ -32,11 +32,21 @@ def atomic_write_json(path: Path, data: Any, backup: bool = True, backup_count: 
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+            f.flush()
+            os.fsync(f.fileno())
         # On Windows, dst must not exist for os.replace
         if path.is_file():
             os.replace(tmp_path, path)
         else:
             os.rename(tmp_path, path)
+        # Durability: fsync the directory so the rename survives a power loss
+        # (best-effort; not supported on all platforms/filesystems).
+        with contextlib.suppress(OSError):
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
         log.debug("atomic_write_done", path=str(path), bytes=path.stat().st_size)
     except BaseException:
         # Clean up temp file on failure

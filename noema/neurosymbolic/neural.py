@@ -266,7 +266,8 @@ class NeuralInterface:
             logger.error("llm_request_timeout", timeout=request.timeout)
             from openai import APITimeoutError as _APITimeoutError
 
-            raise _APITimeoutError(request=None) from None
+            _fake_request = cast("Any", None)
+            raise _APITimeoutError(_fake_request) from None
 
     async def _batch_processor(self) -> None:
         while True:

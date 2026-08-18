@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-import contextlib
 import importlib
 from typing import Any, cast
+
+from noema.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class NoemaModule:
@@ -72,11 +75,15 @@ class ModuleRegistry:
         ]
 
         for name, module_path, class_name in builtin_specs:
-            with contextlib.suppress(ImportError):
+            try:
                 mod = importlib.import_module(module_path)
                 cls = getattr(mod, class_name, None)
                 if cls:
                     self.register(name, cls, description=getattr(cls, "DESCRIPTION", name))
+            except ImportError as e:
+                # A broken optional dependency must not be invisible: log it
+                # so the module's absence is diagnosable.
+                logger.warning("module_import_failed", name=name, path=module_path, error=str(e))
 
     def register(
         self, name: str, module_or_class: Any, description: str = "", tags: list[str] | None = None
@@ -105,7 +112,11 @@ class ModuleRegistry:
         for name, bm in self.modules.items():
             if filter_tags and not any(t in bm.tags for t in filter_tags):
                 continue
-            results[name] = bm.execute(task)
+            try:
+                results[name] = bm.execute(task)
+            except Exception as e:  # noqa: BLE001 - one failing module must not kill the batch
+                logger.warning("module_execute_failed", name=name, error=str(e))
+                results[name] = {"module": name, "error": str(e)}
         return results
 
     def get_relevant_modules(self, tags: list[str]) -> list[NoemaModule]:

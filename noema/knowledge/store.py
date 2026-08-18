@@ -259,10 +259,21 @@ class KnowledgeStore:
         if self.persist_path.exists():
             try:
                 data = json.loads(self.persist_path.read_text(encoding="utf-8"))
+                # Dedupe by content: the persisted file may contain entries
+                # that were re-created (builtins are re-instantiated on every
+                # start with fresh ids), otherwise restarts would accumulate
+                # duplicates forever.
+                known_entries = {(e.title, e.content) for e in self.entries}
+                known_patterns = {p.name for p in self.patterns}
                 for entry_data in data.get("entries", []):
-                    self.entries.append(KnowledgeEntry(**entry_data))
+                    key = (entry_data.get("title", ""), entry_data.get("content", ""))
+                    if key not in known_entries:
+                        self.entries.append(KnowledgeEntry(**entry_data))
+                        known_entries.add(key)
                 for pattern_data in data.get("patterns", []):
-                    self.patterns.append(Pattern(**pattern_data))
+                    if pattern_data.get("name") not in known_patterns:
+                        self.patterns.append(Pattern(**pattern_data))
+                        known_patterns.add(pattern_data.get("name"))
                 logger.info(
                     f"Загружено {len(data.get('entries', []))} entries, {len(data.get('patterns', []))} patterns"
                 )
@@ -284,10 +295,11 @@ class KnowledgeStore:
             "entries": [e.model_dump(mode="json") for e in self.entries if not e.embeddings],
             "patterns": [p.model_dump(mode="json") for p in self.patterns],
         }
-        self.persist_path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
-        )
+        # Atomic tmp+rename write (with fsync) — a crash mid-write must not
+        # corrupt the knowledge file.
+        from noema.utils.atomic_io import atomic_write_json
+
+        atomic_write_json(self.persist_path, data)
         logger.info(f"Сохранено {len(self.entries)} entries, {len(self.patterns)} patterns")
 
     def _build_index(self) -> None:

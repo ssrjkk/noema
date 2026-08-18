@@ -89,9 +89,13 @@ class PostgresMemoryStore(MemoryStore):
             conn = await asyncpg.connect(self._db_url)
             try:
                 await self._ensure_pg_tables(conn)
-                await self._save_episodic(conn)
-                await self._save_semantic(conn)
-                await self._save_procedural(conn)
+                # All three tables are replaced inside one transaction: a
+                # mid-save failure must not leave the tenant's memory half
+                # written (DELETE without INSERT = empty memory).
+                async with conn.transaction():
+                    await self._save_episodic(conn)
+                    await self._save_semantic(conn)
+                    await self._save_procedural(conn)
             finally:
                 await conn.close()
             self._dirty = False
@@ -130,21 +134,29 @@ class PostgresMemoryStore(MemoryStore):
 
     async def _load_episodic(self, conn: Any) -> list[EpisodicMemory]:
         rows = await conn.fetch("SELECT * FROM noema_episodic WHERE tenant_id = $1", self.tenant_id)
-        return [
-            EpisodicMemory(
-                id=r["id"],
-                timestamp=r["timestamp"],
-                task_description=r["task_description"],
-                solution_summary=r["solution_summary"],
-                tech_stack=r["tech_stack"],
-                outcome=r["outcome"],
-                duration_seconds=r["duration_seconds"],
-                error_message=r["error_message"],
-                tags=list(r["tags"]) if r["tags"] else [],
-                context={},
+        entries: list[EpisodicMemory] = []
+        for r in rows:
+            context: dict[str, Any] = {}
+            if r["context"]:
+                try:
+                    context = json.loads(r["context"])
+                except (TypeError, ValueError):
+                    context = {}
+            entries.append(
+                EpisodicMemory(
+                    id=r["id"],
+                    timestamp=r["timestamp"],
+                    task_description=r["task_description"],
+                    solution_summary=r["solution_summary"],
+                    tech_stack=r["tech_stack"],
+                    outcome=r["outcome"],
+                    duration_seconds=r["duration_seconds"],
+                    error_message=r["error_message"],
+                    tags=list(r["tags"]) if r["tags"] else [],
+                    context=context,
+                )
             )
-            for r in rows
-        ]
+        return entries
 
     async def _load_semantic(self, conn: Any) -> list[SemanticMemory]:
         rows = await conn.fetch("SELECT * FROM noema_semantic WHERE tenant_id = $1", self.tenant_id)

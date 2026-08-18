@@ -114,18 +114,22 @@ secrets:
   redisPassword: ""
 
 # External infrastructure (used when the bundled sub-charts are disabled).
+# Placeholder credentials: replace before deploying — never run with the
+# well-known defaults.
 external:
-  postgresUrl: "postgresql+asyncpg://noema:noema@noema-postgresql:5432/noema"
-  redisUrl: "redis://noema-redis:6379/0"
+  postgresUrl: "postgresql+asyncpg://noema:CHANGE_ME@noema-postgresql:5432/noema"
+  redisUrl: "redis://:CHANGE_ME@noema-redis:6379/0"
 
 # ─── Sub-chart toggles (bundled PostgreSQL/Redis) ────────────────────────
 # Enable after `helm dependency update` (see NOTES.txt).
+# Empty passwords make the sub-charts auto-generate a random secret on
+# first install — never hardcode credentials here.
 
 postgresql:
   enabled: false
   auth:
     username: noema
-    password: noema
+    password: ""
     database: noema
   primary:
     persistence:
@@ -135,7 +139,7 @@ redis:
   enabled: false
   architecture: standalone
   auth:
-    password: noema
+    password: ""
   master:
     persistence:
       size: 2Gi

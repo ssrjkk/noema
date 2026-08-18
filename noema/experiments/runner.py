@@ -484,8 +484,10 @@ def _write_artifacts(out_path: Path, run_id: str, records: list[RunRecord]) -> N
 
 
 def _write_json(path: Path, data: list[dict[str, Any]] | dict[str, Any]) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+    # Atomic tmp+rename: a crash mid-write must not corrupt the run artifacts.
+    from noema.utils.atomic_io import atomic_write_json
+
+    atomic_write_json(path, data)
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:

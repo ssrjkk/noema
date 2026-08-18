@@ -32,6 +32,7 @@ class TraceConfig:
     trace_responses: bool = True
     max_prompt_length: int = 2000
     max_response_length: int = 2000
+    max_spans: int = 10000
     export_endpoint: str = ""
     service_name: str = "noema"
 
@@ -40,6 +41,7 @@ class TraceConfig:
 class TraceSpan:
     span_id: str = ""
     parent_id: str = ""
+    trace_id: str = ""
     name: str = ""
     kind: str = "internal"
     start_time: float = 0.0
@@ -54,6 +56,7 @@ class TraceSpan:
         return {
             "span_id": self.span_id,
             "parent_id": self.parent_id,
+            "trace_id": self.trace_id,
             "name": self.name,
             "kind": self.kind,
             "start_time": round(self.start_time, 3),
@@ -68,9 +71,16 @@ class TraceSpan:
 class Tracer:
     def __init__(self, config: TraceConfig | None = None) -> None:
         self.config = config or TraceConfig()
+        # One trace session per Tracer instance; spans inherit it so replays
+        # can filter by trace_id.
+        self._trace_id = uuid.uuid4().hex[:16]
         self._spans: list[TraceSpan] = []
         self._stack: list[TraceSpan] = []
         self._prompt_registry: dict[str, PromptVersion] = {}
+
+    @property
+    def trace_id(self) -> str:
+        return self._trace_id
 
     # ── Prompt Version Control ────────────────────────────────────
 
@@ -111,6 +121,9 @@ class Tracer:
                     "timestamp": time.time(),
                 }
             )
+            # Bounded shadow history: never-promoted prompts must not grow.
+            if len(pv.shadow_results) > 100:
+                pv.shadow_results = pv.shadow_results[-100:]
 
     def promote_shadow_prompt(self, name: str, min_score: float = 0.05) -> bool:
         """Promote shadow prompt to production if statistically better (p < 0.05 simulation)."""
@@ -147,6 +160,7 @@ class Tracer:
         span = TraceSpan(
             span_id=uuid.uuid4().hex[:16],
             parent_id=parent_id,
+            trace_id=self._trace_id,
             name=name,
             kind=kind,
             start_time=time.monotonic(),
@@ -163,12 +177,24 @@ class Tracer:
     ) -> TraceSpan:
         if not self._stack:
             return TraceSpan()
-        s = span or self._stack.pop()
+        if span is None:
+            s = self._stack.pop()
+        else:
+            s = span
+            # Pop the matching span (top-most occurrence) so the stack never
+            # grows when callers pass explicit spans.
+            for i in range(len(self._stack) - 1, -1, -1):
+                if self._stack[i] is span:
+                    del self._stack[i]
+                    break
         s.end_time = time.monotonic()
         s.duration_ms = (s.end_time - s.start_time) * 1000
         s.status = status
         s.error = error
         self._spans.append(s)
+        # Bounded history: a long-lived tracer must not grow without limit.
+        if len(self._spans) > self.config.max_spans:
+            self._spans = self._spans[-self.config.max_spans :]
         return s
 
     def add_event(self, name: str, attributes: dict[str, Any] | None = None) -> None:
@@ -180,6 +206,10 @@ class Tracer:
                     "attributes": attributes or {},
                 }
             )
+            # Bounded per-span event history.
+            span = self._stack[-1]
+            if len(span.events) > 50:
+                span.events = span.events[-50:]
 
     def trace_llm_call(
         self,

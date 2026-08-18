@@ -62,10 +62,14 @@ class Plugin:
 
     async def emit(self, event: str, data: Any) -> None:
         for cb in self._hooks.get(event, []):
-            if callable(cb):
+            if not callable(cb):
+                continue
+            try:
                 result = cb(data)
                 if hasattr(result, "__await__"):
                     await result
+            except Exception as e:  # noqa: BLE001 - one failing hook must not break the rest
+                logger.warning("plugin_hook_failed", event_name=event, error=str(e))
 
 
 class PluginManager:

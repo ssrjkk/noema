@@ -72,15 +72,14 @@ class FeedbackStore:
                 logger.warning(f"Ошибка загрузки feedback: {e}")
 
     async def persist(self) -> None:
-        """Сохранение данных."""
+        """Сохранение данных (атомарно: tmp + rename, перезапись не рвёт файл)."""
         data = {
             "entries": [asdict(e) for e in self.entries],
             "metrics": [asdict(m) for m in self._metrics],
         }
-        self.persist_path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        from noema.utils.atomic_io import atomic_write_json
+
+        atomic_write_json(self.persist_path, data)
 
     async def record_feedback(
         self,

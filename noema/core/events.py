@@ -89,6 +89,10 @@ class EventBus:
         except asyncio.QueueFull:
             log.warning("event_bus_queue_full", event_type=event.type)
             self._dead_letters.append((event, RuntimeError("Queue full")))
+            # Bound the dead-letter backlog: an overloaded bus must not
+            # leak memory indefinitely.
+            if len(self._dead_letters) > 1000:
+                self._dead_letters.pop(0)
             self._failed += 1
 
     async def emit(

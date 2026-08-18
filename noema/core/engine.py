@@ -479,7 +479,11 @@ class NoemaEngine:
                         )
                         continue
                 except Exception as e:
+                    # Fail closed: a crashed judge must not silently return
+                    # an unverified solution.
                     log.warning(f"Judge evaluation failed: {e}")
+                    solution.metadata["judge_passed"] = False
+                    solution.metadata["judge_error"] = str(e)
                     break
 
         else:

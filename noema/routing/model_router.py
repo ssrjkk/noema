@@ -74,12 +74,19 @@ class ModelRouter:
             except Exception as e:
                 log.warning("provider_init_failed", provider=name, error=str(e))
 
-    def _get_provider(self, name: str) -> BaseLLMProvider:
-        if name not in self._providers:
-            self._providers[name] = create_llm_provider(name)
-            if name not in self._breakers:
+    def _get_provider(self, name: str, model: str | None = None) -> BaseLLMProvider:
+        key = f"{name}@{model}" if model else name
+        if key not in self._providers:
+            try:
+                self._providers[key] = create_llm_provider(name, model=model)
+            except Exception as e:
+                log.warning("provider_init_failed", provider=name, model=model, error=str(e))
+                if key != name:
+                    return self._get_provider(name)
+                raise
+            if key != name and name not in self._breakers:
                 self._breakers[name] = CircuitBreaker(name=f"provider.{name}")
-        return self._providers[name]
+        return self._providers[key]
 
     def select(
         self,
@@ -97,9 +104,12 @@ class ModelRouter:
             else complexity.lower()
         )
 
+        # Honor the tier's model, not just the provider: otherwise an
+        # "extreme" task would silently run on the same default model as a
+        # "trivial" one. Providers are cached per (provider, model).
         for tier in reversed(self._tiers):
             if tier_name in tier.suitable_for:
-                return self._get_provider(tier.provider)
+                return self._get_provider(tier.provider, model=tier.model)
         return self._get_provider("openai")
 
     async def complete(

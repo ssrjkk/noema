@@ -332,9 +332,14 @@ class TestCancellation:
 
 class TestHeadersAndCORS:
     def test_cors_headers(self, client, mock_noema):
+        # Default CORS allowlist is localhost-only; a foreign origin gets no
+        # ACAO header instead of a wildcard.
         resp = client.get("/health", headers={"Origin": "http://example.com"})
         assert resp.status_code == 200
-        assert resp.headers.get("access-control-allow-origin") == "*"
+        assert resp.headers.get("access-control-allow-origin") is None
+
+        allowed = client.get("/health", headers={"Origin": "http://localhost:5173"})
+        assert allowed.headers.get("access-control-allow-origin") == "http://localhost:5173"
 
 
 # ─── Error Handling ─────────────────────────────────────────────────────────

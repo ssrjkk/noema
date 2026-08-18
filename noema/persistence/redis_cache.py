@@ -117,7 +117,10 @@ class RedisBackedCache(SemanticCache):
                 "tokens_used": entry.tokens_used,
                 "timestamp": entry.timestamp,
                 "hit_count": entry.hit_count,
-                "embedding": entry.embedding[:20],
+                # Full embedding vector — truncating it silently broke
+                # semantic similarity on redis hits (cosine ~0 vs local
+                # full-dimension vectors).
+                "embedding": list(entry.embedding or []),
             }
         )
 
@@ -130,5 +133,5 @@ class RedisBackedCache(SemanticCache):
             tokens_used=d.get("tokens_used", 0),
             timestamp=d.get("timestamp", 0.0),
             hit_count=d.get("hit_count", 1),
-            embedding=d.get("embedding", []),
+            embedding=d.get("embedding") or [],
         )

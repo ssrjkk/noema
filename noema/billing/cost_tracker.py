@@ -22,6 +22,22 @@ PRICING: dict[str, dict[str, float]] = {
 
 DEFAULT_PRICING = {"input": 2.50, "output": 10.00}
 
+# Schema consumed by QuotaManager (``cost_records`` lookups in billing/quotas.py).
+CREATE_COST_RECORDS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS cost_records (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    task_id TEXT NOT NULL DEFAULT '',
+    provider TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    input_tokens BIGINT NOT NULL DEFAULT 0,
+    output_tokens BIGINT NOT NULL DEFAULT 0,
+    cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+    step_name TEXT NOT NULL DEFAULT '',
+    recorded_at TIMESTAMPTZ NOT NULL
+)
+"""
+
 
 def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     pricing = PRICING.get(model, DEFAULT_PRICING)
@@ -73,14 +89,20 @@ def calculate_line_costs(total_cost: float, lines_by_file: dict[str, int]) -> di
 
 
 class CostTracker:
-    """Tracks LLM costs per tenant/task/step with Redis + in-memory backends."""
+    """Tracks LLM costs per tenant/task/step with Redis + in-memory backends.
 
-    def __init__(self, redis_url: str = "") -> None:
+    ``pg`` (an asyncpg-style pool/connection factory) enables best-effort
+    write-through to the ``cost_records`` table that ``QuotaManager`` reads
+    for monthly/hourly enforcement.
+    """
+
+    def __init__(self, redis_url: str = "", pg: Any = None) -> None:
         self._records: list[CostRecord] = []
         self._daily: dict[str, float] = {}
         self._monthly: dict[str, float] = {}
         self._file_costs: list[FileCost] = []
         self._redis = None
+        self._pg = pg
         if redis_url:
             try:
                 import redis.asyncio as aioredis
@@ -88,6 +110,14 @@ class CostTracker:
                 self._redis = aioredis.from_url(redis_url, decode_responses=True)
             except Exception as e:
                 log.warning("redis_connect_failed", error=str(e))
+
+    @staticmethod
+    def _day_key(tenant_id: str) -> str:
+        return f"cost:d:{tenant_id}:{time.strftime('%Y%m%d')}"
+
+    @staticmethod
+    def _month_key(tenant_id: str) -> str:
+        return f"cost:m:{tenant_id}:{time.strftime('%Y%m')}"
 
     async def record(
         self,
@@ -117,8 +147,8 @@ class CostTracker:
         )
         self._records.append(record)
 
-        day_key = f"cost:d:{tenant_id}"
-        month_key = f"cost:m:{tenant_id}"
+        day_key = self._day_key(tenant_id)
+        month_key = self._month_key(tenant_id)
         cost_int = int(cost * 10000)
 
         if self._redis:
@@ -130,16 +160,54 @@ class CostTracker:
             except Exception as e:
                 log.warning("redis_cost_write_failed", error=str(e))
 
+        if self._pg is not None:
+            await self._write_cost_record(record)
+
         self._daily[day_key] = self._daily.get(day_key, 0) + cost
         self._monthly[month_key] = self._monthly.get(month_key, 0) + cost
         return record
 
-    def get_tenant_cost(self, tenant_id: str) -> dict[str, float]:
-        day_key = f"cost:d:{tenant_id}"
-        month_key = f"cost:m:{tenant_id}"
+    async def _write_cost_record(self, record: CostRecord) -> None:
+        if self._pg is None:
+            return
+        try:
+            await self._pg.execute(CREATE_COST_RECORDS_TABLE_SQL)
+            await self._pg.execute(
+                """INSERT INTO cost_records
+                   (tenant_id, task_id, provider, model, input_tokens, output_tokens,
+                    cost_usd, step_name, recorded_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,to_timestamp($9))""",
+                record.tenant_id,
+                record.task_id,
+                record.provider,
+                record.model,
+                record.input_tokens,
+                record.output_tokens,
+                record.cost_usd,
+                record.step_name,
+                record.timestamp,
+            )
+        except Exception as e:  # noqa: BLE001 - billing must never break inference
+            log.warning("cost_record_pg_write_failed", error=str(e))
+
+    async def get_tenant_cost(self, tenant_id: str) -> dict[str, float]:
+        day_key = self._day_key(tenant_id)
+        month_key = self._month_key(tenant_id)
+        daily_usd = self._daily.get(day_key, 0.0)
+        monthly_usd = self._monthly.get(month_key, 0.0)
+        if self._redis:
+            try:
+                daily_cents = int(await self._redis.get(day_key) or 0)
+                month_cents = int(await self._redis.get(month_key) or 0)
+                # Redis wins (authoritative across pods); local dict is the
+                # fallback when Redis is down.
+                daily_usd = max(daily_usd, daily_cents / 10000)
+                monthly_usd = max(monthly_usd, month_cents / 10000)
+            except Exception as e:
+                log.warning("redis_cost_read_failed", error=str(e))
         return {
-            "daily_usd": round(self._daily.get(day_key, 0), 6),
-            "monthly_usd": round(self._monthly.get(month_key, 0), 6),
+            "daily_usd": round(daily_usd, 6),
+            "monthly_usd": round(monthly_usd, 6),
         }
 
     def get_task_cost(self, task_id: str) -> float:

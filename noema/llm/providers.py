@@ -5,10 +5,13 @@ from __future__ import annotations
 import abc
 import json
 import time
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
 
 from noema.cache import get_cache
 from noema.config.settings import get_settings
@@ -260,9 +263,12 @@ class OpenAIProvider(BaseLLMProvider):
             return LLMResponse(content=f"OpenAI unavailable: {e}")
         t0 = time.monotonic()
 
+        chat_messages: list[dict[str, str]] = [
+            {"role": m.role, "content": m.content} for m in messages
+        ]
         response = await client.chat.completions.create(
             model=self._model,
-            messages=[{"role": m.role, "content": m.content} for m in messages],
+            messages=cast("list[ChatCompletionMessageParam]", chat_messages),
             temperature=temperature,
             max_tokens=max_tokens,
         )

@@ -120,10 +120,30 @@ class EvolutionEngine:
         from pathlib import Path
 
         root = Path(self.project_root)
+        excluded = {
+            ".venv",
+            "venv",
+            "env",
+            ".git",
+            "__pycache__",
+            "node_modules",
+            "build",
+            "dist",
+            ".mypy_cache",
+            ".pytest_cache",
+            ".ruff_cache",
+            ".hypothesis",
+            ".benchmarks",
+            ".noema",
+            ".idea",
+            ".vscode",
+        }
         issues: list[dict[str, str]] = []
         improvements: list[dict[str, str]] = []
 
         for py_file in root.rglob("*.py"):
+            if excluded & set(py_file.parts):
+                continue
             try:
                 content = py_file.read_text(encoding="utf-8")
             except Exception:
@@ -233,7 +253,8 @@ Respond in JSON:
                 rationale=result.get("rationale", ""),
                 confidence=result.get("confidence", 0.5),
             )
-        except Exception:
+        except Exception as e:  # noqa: BLE001 - a failed generation is a soft miss
+            log.warning("patch_generation_failed", target=target_file, error=str(e))
             return None
 
     async def apply_patch(self, patch: EvolutionPatch, dry_run: bool = False) -> bool:

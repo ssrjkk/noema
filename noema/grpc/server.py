@@ -201,10 +201,15 @@ class NoemaEngineServicer(NoemaEngineServiceServicer):
 
 
 async def serve_grpc(
-    noema: NoemaEngine, host: str = "[::]", port: int = 50051, cancellation_mgr: Any = None
+    noema: NoemaEngine,
+    host: str = "127.0.0.1",
+    port: int = 50051,
+    cancellation_mgr: Any = None,
 ) -> grpc.aio.Server:
     """Start a gRPC server bound to ``host:port`` (returns the running server).
 
+    The channel is plaintext and unauthenticated: it must never be exposed
+    beyond the loopback host unless a TLS/authenticating proxy is in front.
     Call :func:`stop_grpc` for a graceful drain on shutdown.
     """
     server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))

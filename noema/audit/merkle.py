@@ -230,6 +230,11 @@ class MerkleChainAudit:
             )
             instance._blocks.append(block)
         instance._tree_levels = None
+        # Fail closed: a tampered export (broken prev_hash linkage, forged
+        # block hashes or an inconsistent merkle root) must not be accepted
+        # as a valid chain.
+        if not instance.verify_chain():
+            raise ValueError("imported blocks failed chain verification")
         return instance
 
     @staticmethod
