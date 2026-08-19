@@ -106,6 +106,7 @@ class SelfHealer:
         self.llm = llm
         self.ontology = ontology
         self.ontology_persist_path = ontology_persist_path
+        self._orl_lock = asyncio.Lock()
 
     async def _propose_ontological_axiom(
         self,
@@ -117,25 +118,27 @@ class SelfHealer:
         """Run the ORL pipeline on a failed→fixed code pair.
 
         The LLM proposes an axiom, the epistemic validator decides, and only
-        accepted axioms mutate the ontology (with provenance). Never raises:
-        any failure degrades to ``False``.
+        accepted axioms mutate the ontology (with provenance). Serialized by
+        an asyncio lock so concurrent tasks cannot race the shared graph.
+        Never raises: any failure degrades to ``False``.
         """
         if self.llm is None or self.ontology is None:
             return False
         from noema.ontology import crystallize_axiom
 
-        try:
-            result = await crystallize_axiom(
-                llm=self.llm,
-                ontology=self.ontology,
-                failed_code=failed_code,
-                fixed_code=fixed_code,
-                error_summary=error_summary,
-                task_id=task_id,
-                persist_path=self.ontology_persist_path,
-            )
-        except Exception:  # noqa: BLE001 - ORL must never crash the healing path
-            return False
+        async with self._orl_lock:
+            try:
+                result = await crystallize_axiom(
+                    llm=self.llm,
+                    ontology=self.ontology,
+                    failed_code=failed_code,
+                    fixed_code=fixed_code,
+                    error_summary=error_summary,
+                    task_id=task_id,
+                    persist_path=self.ontology_persist_path,
+                )
+            except Exception:  # noqa: BLE001 - ORL must never crash the healing path
+                return False
         return result.accepted
 
     async def execute_with_healing(

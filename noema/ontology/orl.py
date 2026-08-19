@@ -118,27 +118,35 @@ async def crystallize_axiom(
         log.warning("orl_invalid_hypothesis", task=task_id, error=str(e)[:200])
         return CrystallizationResult(False, f"invalid_hypothesis:{e}")
 
-    check = (validator or EpistemicValidator()).validate(hypothesis, ontology)
+    try:
+        check = (validator or EpistemicValidator()).validate(hypothesis, ontology)
+    except Exception as e:  # noqa: BLE001 - validation must never crash the pipeline
+        log.warning("orl_validator_failed", task=task_id, error=str(e)[:200])
+        return CrystallizationResult(False, f"validator_error:{e}", hypothesis)
     if not check.valid:
         log.info("orl_rejected", task=task_id, reason=check.reason)
         return CrystallizationResult(False, check.reason, hypothesis)
 
-    ontology.add_relation(
-        Relation(
-            subject=hypothesis.subject,
-            predicate=hypothesis.predicate,
-            object=hypothesis.object,
-            weight=hypothesis.confidence,
-            metadata={
-                "source": hypothesis.source,
-                "trigger": hypothesis.trigger,
-                "rationale": hypothesis.rationale[:500],
-                "confidence": f"{hypothesis.confidence:.2f}",
-            },
+    try:
+        ontology.add_relation(
+            Relation(
+                subject=hypothesis.subject,
+                predicate=hypothesis.predicate,
+                object=hypothesis.object,
+                weight=hypothesis.confidence,
+                metadata={
+                    "source": hypothesis.source,
+                    "trigger": hypothesis.trigger,
+                    "rationale": hypothesis.rationale[:500],
+                    "confidence": f"{hypothesis.confidence:.2f}",
+                },
+            )
         )
-    )
-    if persist_path is not None:
-        ontology.save(Path(persist_path))
+        if persist_path is not None:
+            ontology.save(Path(persist_path))
+    except Exception as e:  # noqa: BLE001 - a full graph must not crash the pipeline
+        log.warning("orl_mutation_failed", task=task_id, error=str(e)[:200])
+        return CrystallizationResult(False, f"ontology_error:{e}", hypothesis)
 
     log.info(
         "orl_axiom_crystallized",

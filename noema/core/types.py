@@ -19,6 +19,15 @@ class SandboxValidationError(Exception):
     """
 
 
+class JudgeError(Exception):
+    """A solution failed the judge gate (fail-closed).
+
+    Raised when ``NOEMA_JUDGE__ENFORCE`` is set and the judge verdict is
+    negative (score below threshold, unparseable feedback, or a crashed
+    judge), so an unverified artifact never reaches the caller.
+    """
+
+
 # ── Enums ──────────────────────────────────────────────────────────────────
 
 

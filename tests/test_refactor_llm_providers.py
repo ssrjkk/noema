@@ -9,6 +9,7 @@ from noema.llm.providers import (
     BaseLLMProvider,
     FallbackProvider,
     LLMMessage,
+    LLMProviderError,
     OllamaProvider,
     OpenAIProvider,
     create_llm_provider,
@@ -35,11 +36,11 @@ def test_openai_provider_custom_model():
 
 
 @pytest.mark.asyncio
-async def test_openai_provider_unavailable_stub():
+async def test_openai_provider_unavailable_fails_closed(monkeypatch):
+    monkeypatch.setitem(sys.modules, "openai", None)
     provider = OpenAIProvider()
-    response = await provider._complete(_messages())
-    assert "OpenAI" in response.content
-    assert response.model == ""
+    with pytest.raises(LLMProviderError):
+        await provider._complete(_messages())
 
 
 # ── Anthropic ───────────────────────────────────────────────────────────
@@ -58,12 +59,11 @@ def test_anthropic_provider_custom_model():
 
 
 @pytest.mark.asyncio
-async def test_anthropic_provider_not_installed_stub(monkeypatch):
+async def test_anthropic_provider_not_installed_fails_closed(monkeypatch):
     monkeypatch.setitem(sys.modules, "anthropic", None)
     provider = AnthropicProvider()
-    response = await provider._complete(_messages())
-    assert response.content == "Anthropic not installed: pip install anthropic"
-    assert response.model == ""
+    with pytest.raises(LLMProviderError):
+        await provider._complete(_messages())
 
 
 # ── Ollama ──────────────────────────────────────────────────────────────

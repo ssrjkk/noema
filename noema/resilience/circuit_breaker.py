@@ -149,6 +149,7 @@ class RetryPolicy:
         max_delay: float = 30.0,
         jitter: float = 0.5,
         retryable_exceptions: tuple[type[Exception], ...] = (Exception,),
+        non_retryable_exceptions: tuple[type[Exception], ...] = (),
         name: str = "default",
     ) -> None:
         self.name = name
@@ -157,6 +158,7 @@ class RetryPolicy:
         self.max_delay = max_delay
         self.jitter = jitter
         self.retryable_exceptions = retryable_exceptions
+        self.non_retryable_exceptions = non_retryable_exceptions
 
     def _calc_delay(self, attempt: int) -> float:
         delay = self.base_delay * (2**attempt)
@@ -177,6 +179,8 @@ class RetryPolicy:
             try:
                 return await func(*args, **kwargs)
             except self.retryable_exceptions as exc:
+                if isinstance(exc, self.non_retryable_exceptions):
+                    raise
                 last_exc = exc
 
                 if attempt < self.max_retries:

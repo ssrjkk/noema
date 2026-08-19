@@ -202,7 +202,9 @@ async def test_crystallize_rejects_unparsable_llm_response():
     graph = _graph()
     llm = _ScriptedLLM(responses=["certainly! here is some prose, no json"])
 
-    result = await crystallize_axiom(llm, graph, "a", "b", task_id="t1")
+    result = await crystallize_axiom(
+        llm, graph, "def broken(): pass", "def fixed(): return 1", task_id="t-unparsable"
+    )
 
     assert not result.accepted
     assert "unparsable" in result.reason
@@ -218,7 +220,9 @@ async def test_crystallize_rejects_violating_hypothesis(tmp_path):
     persist = tmp_path / "ontology.json"
     llm = _ScriptedLLM(responses=[VALID_LLM_JSON])
 
-    result = await crystallize_axiom(llm, graph, "a", "b", task_id="t1", persist_path=persist)
+    result = await crystallize_axiom(
+        llm, graph, "def a(): pass", "def b(): pass", task_id="t-violating", persist_path=persist
+    )
 
     assert not result.accepted
     assert "contradicts_existing_axiom" in result.reason
@@ -245,10 +249,29 @@ async def test_crystallize_skips_empty_ontology():
 async def test_crystallize_never_raises_on_llm_failure():
     graph = _graph()
     llm = _ScriptedLLM(raise_error=True)
-    result = await crystallize_axiom(llm, graph, "a", "b", task_id="t1")
+    result = await crystallize_axiom(
+        llm, graph, "def crash(): raise", "def ok(): pass", task_id="t-crash"
+    )
     assert not result.accepted
     assert "llm_error" in result.reason
     assert len(list(graph.relations())) == 0
+
+
+@pytest.mark.asyncio
+async def test_crystallize_rejects_when_graph_is_full():
+    graph = OntologyGraph(max_entities=10, max_relations=1)
+    for name in SERVICES:
+        graph.add_entity(Entity(name=name, type="x"))
+    graph.add_relation(Relation(subject="AuthService", predicate="requires", object="UserDB"))
+    llm = _ScriptedLLM(responses=[VALID_LLM_JSON])
+
+    result = await crystallize_axiom(
+        llm, graph, "def full(): pass", "def fixed(): pass", task_id="t-full"
+    )
+
+    assert not result.accepted
+    assert "validator_error" in result.reason
+    assert len(list(graph.relations())) == 1
 
 
 # ── SelfHealer integration ────────────────────────────────────────────
@@ -288,5 +311,10 @@ async def test_healer_never_raises():
     graph = _graph()
     llm = _ScriptedLLM(raise_error=True)
     healer = SelfHealer(llm=llm, ontology=graph)
-    assert await healer._propose_ontological_axiom("a", "b", task_id="t1") is False
+    assert (
+        await healer._propose_ontological_axiom(
+            "def crash(): raise", "def ok(): pass", task_id="t-healer-crash"
+        )
+        is False
+    )
     assert len(list(graph.relations())) == 0

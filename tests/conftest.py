@@ -36,6 +36,19 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
+@pytest.fixture(autouse=True)
+def _clear_global_cache() -> Iterator[None]:
+    """Drop the global semantic cache before each test.
+
+    The cache is a process-wide singleton keyed on exact prompt hashes; an
+    earlier test can otherwise poison a later one with a stale response.
+    """
+    from noema.cache import get_cache
+
+    get_cache().clear()
+    yield
+
+
 @pytest.fixture
 def chaotic_env(request: pytest.FixtureRequest) -> Iterator[None]:
     """Wipe NOEMA_*/proxy vars and poison one override; restore afterwards."""

@@ -33,12 +33,13 @@ from typing import TYPE_CHECKING, Any
 from noema.agents.orchestrator import AgentOrchestrator
 from noema.budget.token_budget import TokenBudget
 from noema.config.settings import SandboxSettings, get_settings
-from noema.context import get_tenant_id, set_tenant_id
+from noema.context import get_tenant_id, reset_tenant_id, set_tenant_id
 from noema.core.chain_of_thought import ChainOfThought, ReflexionState
 from noema.core.checkpoint import CheckpointStore, DAGCheckpoint
 from noema.core.types import (
     ArchitecturePattern,
     CodeBlock,
+    JudgeError,
     SandboxValidationError,
     Solution,
     SolutionQuality,
@@ -134,10 +135,9 @@ class NoemaEngine:
     ) -> None:
         self.config = config or {}
         self.project_root = project_root
-        # tenant_id from context var by default; explicit param overrides
-        if tenant_id:
-            set_tenant_id(tenant_id)
-        self._tenant_id = get_tenant_id()
+        # tenant_id from context var by default; explicit param wins. The
+        # context var itself is NOT mutated here: think() scopes it per call.
+        self._tenant_id = tenant_id or get_tenant_id()
         self.kernels: dict[str, BaseKernel] = {}
         self.worker_pool = WorkerPool(max_workers=worker_count)
         self.worker_hierarchy = WorkerHierarchy(max_depth=10, max_concurrent=50)
@@ -316,7 +316,23 @@ class NoemaEngine:
 
         Complexity: ``O(S · L)`` LLM calls (S steps across L DAG levels) plus
         ``O(P)`` memory searches per attempt, bounded by 3 Reflexion attempts.
+
+        The engine's tenant is scoped to this call and restored afterwards,
+        so concurrent think() calls can never clobber each other's tenant.
         """
+        token = set_tenant_id(self._tenant_id)
+        try:
+            return await self._think_impl(task, on_step_start, on_step_end)
+        finally:
+            reset_tenant_id(token)
+
+    async def _think_impl(
+        self,
+        task: Task,
+        on_step_start: StreamCallback | None = None,
+        on_step_end: StreamCallback | None = None,
+    ) -> tuple[Solution, ThoughtProcess]:
+        """Implementation of :meth:`think` (tenant already scoped by the caller)."""
         if task.description and len(task.description) > 100_000:
             raise ValueError(f"Task description too large: {len(task.description)} chars")
         if len(task.tags) > 100:
@@ -324,8 +340,6 @@ class NoemaEngine:
 
         if not self._initialized:
             await self.initialize()
-
-        set_tenant_id(self._tenant_id)
 
         # Check for existing checkpoint (resumable execution). The checkpoint
         # file is kept until the run completes: if the process crashes mid-run
@@ -622,6 +636,16 @@ class NoemaEngine:
             solution.metadata["sandbox"] = sandbox_verdict
             if not sandbox_verdict["passed"] and self._settings.sandbox.verify_think_enforce:
                 raise SandboxValidationError(sandbox_verdict["summary"])
+
+        # Judge gate (fail-closed when enforced). Only solutions that went
+        # through the judge loop carry the verdict; the neurosymbolic fast
+        # path is unaffected by design.
+        judge_passed = solution.metadata.get("judge_passed")
+        if judge_passed is False and self._settings.judge.enforce:
+            raise JudgeError(
+                "Solution failed the judge gate (enforce=true); refusing to "
+                "return an unverified artifact"
+            )
 
         self.memory.record_episode(
             task_description=f"{task.title}: {task.description}",

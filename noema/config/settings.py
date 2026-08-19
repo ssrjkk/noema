@@ -240,7 +240,7 @@ class SandboxSettings(BaseSettings):
     network_disabled: bool = Field(default=True)
     read_only_root: bool = Field(default=True)
     verify_think: bool = Field(
-        default=False,
+        default=True,
         description="Validate every generated Python block with the static pass "
         "before returning a solution from think()",
     )
@@ -248,6 +248,16 @@ class SandboxSettings(BaseSettings):
         default=False,
         description="Raise SandboxValidationError when the think() static gate "
         "rejects generated code (fail-closed)",
+    )
+
+
+class JudgeSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="NOEMA_JUDGE_")
+
+    enforce: bool = Field(
+        default=False,
+        description="Fail-closed: raise JudgeError when a solution fails the "
+        "judge gate (score below threshold or judge crashed)",
     )
 
 
@@ -356,6 +366,7 @@ class NoemaSettings(BaseSettings):
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
     sandbox: SandboxSettings = Field(default_factory=SandboxSettings)
+    judge: JudgeSettings = Field(default_factory=JudgeSettings)
     obs: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     neurosymbolic: NeurosymbolicSettings = Field(default_factory=NeurosymbolicSettings)
     audit: AuditSettings = Field(default_factory=AuditSettings)

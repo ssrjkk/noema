@@ -24,6 +24,15 @@ from noema.utils.json_utils import strip_fences
 log = get_logger(__name__)
 
 
+class LLMProviderError(Exception):
+    """A provider failure that must never be masked as model content.
+
+    Raised when the provider SDK is missing or the client cannot be
+    constructed, so callers fail closed instead of consuming a stub
+    string as if it were a real model response.
+    """
+
+
 class LLMMessage(BaseModel):
     role: str  # system, user, assistant
     content: str
@@ -35,6 +44,7 @@ class LLMResponse(BaseModel):
     tokens_used: int = 0
     tokens_input: int = 0
     tokens_output: int = 0
+    error: str = ""  # non-empty ⇒ the response is a failure, never content
     latency_ms: float = 0.0
     finish_reason: str = ""
 
@@ -54,6 +64,7 @@ class BaseLLMProvider(abc.ABC):
                 max_retries=settings.llm.retry_max,
                 base_delay=settings.llm.retry_base_delay,
                 max_delay=settings.llm.retry_max_delay,
+                non_retryable_exceptions=(LLMProviderError,),
                 name=f"llm-{self.name}",
             ),
         )
@@ -88,18 +99,17 @@ class BaseLLMProvider(abc.ABC):
 
         msg_dicts = [m.model_dump() for m in messages]
 
-        if temperature <= 0.1:
-            cached = cache.get(msg_dicts, self.model_name, tenant_id=effective_tenant)
-            if cached is not None:
-                tracer.trace_llm_call(
-                    provider=self.name,
-                    model=self.model_name,
-                    messages=msg_dicts,
-                    response=cached,
-                    tokens_used=0,
-                    latency_ms=0.5,
-                )
-                return LLMResponse(content=cached, model=self.model_name)
+        cached = cache.get(msg_dicts, self.model_name, tenant_id=effective_tenant)
+        if cached is not None:
+            tracer.trace_llm_call(
+                provider=self.name,
+                model=self.model_name,
+                messages=msg_dicts,
+                response=cached,
+                tokens_used=0,
+                latency_ms=0.5,
+            )
+            return LLMResponse(content=cached, model=self.model_name)
 
         t0 = time.monotonic()
         try:
@@ -108,7 +118,10 @@ class BaseLLMProvider(abc.ABC):
             )
             latency = (time.monotonic() - t0) * 1000
 
-            if temperature <= 0.1 and response.tokens_used > 0:
+            if response.error:
+                raise LLMProviderError(response.error)
+
+            if response.tokens_used > 0:
                 cache.set(
                     msg_dicts,
                     response.content,
@@ -254,13 +267,13 @@ class OpenAIProvider(BaseLLMProvider):
         try:
             from openai import AsyncOpenAI
         except ImportError:
-            return LLMResponse(content="OpenAI not installed: pip install openai")
+            raise LLMProviderError("OpenAI not installed: pip install openai") from None
 
         settings = get_settings()
         try:
             client = AsyncOpenAI(api_key=self.api_key, timeout=settings.llm.request_timeout)
-        except Exception as e:  # noqa: BLE001 - a stub beats a hard crash
-            return LLMResponse(content=f"OpenAI unavailable: {e}")
+        except Exception as e:  # noqa: BLE001 - fail closed: never return a stub as content
+            raise LLMProviderError(f"OpenAI unavailable: {e}") from e
         t0 = time.monotonic()
 
         chat_messages: list[dict[str, str]] = [
@@ -314,7 +327,7 @@ class AnthropicProvider(BaseLLMProvider):
         try:
             import anthropic
         except ImportError:
-            return LLMResponse(content="Anthropic not installed: pip install anthropic")
+            raise LLMProviderError("Anthropic not installed: pip install anthropic") from None
 
         settings = get_settings()
         client = anthropic.AsyncAnthropic(

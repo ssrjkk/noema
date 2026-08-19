@@ -88,7 +88,11 @@ class EpistemicValidator:
                     f"(type {object_entity.type!r}) not allowed for {hypothesis.predicate}"
                 )
 
-        if self._would_create_cycle(hypothesis, ontology):
+        try:
+            creates_cycle = self._would_create_cycle(hypothesis, ontology)
+        except Exception:  # noqa: BLE001 - never raise; a full/corrupt graph rejects
+            return ValidationResult.reject("validator_error:cycle_check_unavailable")
+        if creates_cycle:
             return ValidationResult.reject(
                 f"creates_cycle:{hypothesis.subject} {hypothesis.predicate} {hypothesis.object}"
             )
