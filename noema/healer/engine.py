@@ -11,6 +11,10 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
+
+    from noema.llm.providers import BaseLLMProvider
+    from noema.ontology import OntologyGraph
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -80,14 +84,59 @@ class HealingStrategy(BaseModel):
 
 
 class SelfHealer:
-    """Self-healing system: detects failures, retries, recovers."""
+    """Self-healing system: detects failures, retries, recovers.
 
-    def __init__(self, strategy: HealingStrategy | None = None) -> None:
+    ``llm`` / ``ontology`` / ``ontology_persist_path`` are optional ORL
+    dependencies: when present, :meth:`_propose_ontological_axiom` can
+    crystallize a lesson from a failed→fixed code pair into the ontology.
+    """
+
+    def __init__(
+        self,
+        strategy: HealingStrategy | None = None,
+        llm: BaseLLMProvider | None = None,
+        ontology: OntologyGraph | None = None,
+        ontology_persist_path: Path | str | None = None,
+    ) -> None:
         self.strategy = strategy or HealingStrategy()
         self.history: list[HealingResult] = []
         self._success_count = 0
         self._failure_count = 0
         self._strategies_applied: dict[str, int] = {}
+        self.llm = llm
+        self.ontology = ontology
+        self.ontology_persist_path = ontology_persist_path
+
+    async def _propose_ontological_axiom(
+        self,
+        failed_code: str,
+        fixed_code: str,
+        error_summary: str = "",
+        task_id: str = "",
+    ) -> bool:
+        """Run the ORL pipeline on a failed→fixed code pair.
+
+        The LLM proposes an axiom, the epistemic validator decides, and only
+        accepted axioms mutate the ontology (with provenance). Never raises:
+        any failure degrades to ``False``.
+        """
+        if self.llm is None or self.ontology is None:
+            return False
+        from noema.ontology import crystallize_axiom
+
+        try:
+            result = await crystallize_axiom(
+                llm=self.llm,
+                ontology=self.ontology,
+                failed_code=failed_code,
+                fixed_code=fixed_code,
+                error_summary=error_summary,
+                task_id=task_id,
+                persist_path=self.ontology_persist_path,
+            )
+        except Exception:  # noqa: BLE001 - ORL must never crash the healing path
+            return False
+        return result.accepted
 
     async def execute_with_healing(
         self,

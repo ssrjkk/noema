@@ -160,6 +160,9 @@ class NoemaEngine:
         self.modules = get_registry()
         self._settings = get_settings()
         self.sandbox = SandboxEngine(_sandbox_config_from_settings(self._settings.sandbox))
+        self.healer.llm = self.llm
+        self.healer.ontology = self.ontology
+        self.healer.ontology_persist_path = self._settings.ontology_persist_path
         self.tracer: Tracer = get_tracer()
         self.checkpointer = CheckpointStore(persist_dir=f"{project_root}/.noema/checkpoints")
         ns_cfg = self._settings.neurosymbolic
@@ -197,6 +200,7 @@ class NoemaEngine:
             loaded = OntologyGraph.load(ontology_path)
             if loaded.stats()["entities"]:
                 self.ontology = loaded
+                self.healer.ontology = loaded
                 log.info(
                     "ontology_loaded",
                     path=str(ontology_path),
@@ -408,6 +412,8 @@ class NoemaEngine:
         )
 
         reflexion_state: ReflexionState | None = None
+        judge_passed_flag = False
+        first_failed_code = ""
 
         if self.llm.name != "fallback":
             for reflexion_attempt in range(1, 4):
@@ -435,6 +441,10 @@ class NoemaEngine:
 
                 solution = await self._assemble_solution_from_reasoning(task, reasoning_result)
                 solution = self._evaluate_quality(solution, thought)
+                if reflexion_attempt == 1:
+                    first_failed_code = "\n\n".join(
+                        b.content for b in solution.code_blocks if b.language.lower() == "python"
+                    )
 
                 try:
                     judge_span = self.tracer.start_span(
@@ -458,6 +468,7 @@ class NoemaEngine:
                             attempt=reflexion_attempt,
                             overall=verdict.scores.overall,
                         )
+                        judge_passed_flag = True
                         break
 
                     reflexion_state = ReflexionState(
@@ -502,6 +513,21 @@ class NoemaEngine:
                     solution.metadata["judge_passed"] = False
                     solution.metadata["judge_error"] = str(e)
                     break
+
+            if reflexion_attempt > 1 and judge_passed_flag and first_failed_code:
+                fixed_code = "\n\n".join(
+                    b.content for b in solution.code_blocks if b.language.lower() == "python"
+                )
+                await self.healer._propose_ontological_axiom(
+                    failed_code=first_failed_code,
+                    fixed_code=fixed_code,
+                    error_summary=(
+                        reflexion_state.error_summary
+                        if reflexion_state and reflexion_state.attempt > 1
+                        else ""
+                    ),
+                    task_id=task.id,
+                )
 
         else:
             reasoning_result = await self._kernel_based_reasoning(task, thought)
