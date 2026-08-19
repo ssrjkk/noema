@@ -261,7 +261,7 @@ async def test_task_guard_header_tenant():
 @pytest.mark.asyncio
 async def test_task_guard_quota_exceeded_raises_429():
     class _OverQuota:
-        async def check_quota(self, tenant_id):
+        async def check_quota(self, tenant_id, estimated_input_tokens=0):
             raise QuotaExceededError("quota exhausted")
 
     req = _request()
@@ -282,7 +282,7 @@ async def test_task_guard_tracks_and_untracks():
             self.tracked: list[tuple[str, str]] = []
             self.untracked: list[tuple[str, str]] = []
 
-        async def check_quota(self, tenant_id):
+        async def check_quota(self, tenant_id, estimated_input_tokens=0):
             pass
 
         async def track_active_task(self, tenant_id, task_id):

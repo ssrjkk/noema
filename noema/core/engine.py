@@ -45,6 +45,7 @@ from noema.core.types import (
     SolutionQuality,
     Task,
     TechStack,
+    ThinkTimeoutError,
     ThoughtProcess,
 )
 from noema.discovery.keys import KeyDiscovery
@@ -317,12 +318,26 @@ class NoemaEngine:
         Complexity: ``O(S · L)`` LLM calls (S steps across L DAG levels) plus
         ``O(P)`` memory searches per attempt, bounded by 3 Reflexion attempts.
 
-        The engine's tenant is scoped to this call and restored afterwards,
-        so concurrent think() calls can never clobber each other's tenant.
+        Tenant semantics: an explicitly set caller tenant (e.g. the API
+        request's ``x-tenant-id``) wins inside the call; the engine's own
+        tenant is only a fallback for callers on the default context. The
+        effective tenant is restored afterwards, so concurrent calls can
+        never clobber each other's context. The call is also bounded by
+        ``think_timeout_seconds`` (fail-closed, checkpoints survive).
         """
-        token = set_tenant_id(self._tenant_id)
+        caller_tenant = get_tenant_id()
+        effective_tenant = caller_tenant if caller_tenant != "default" else self._tenant_id
+        token = set_tenant_id(effective_tenant)
         try:
-            return await self._think_impl(task, on_step_start, on_step_end)
+            timeout = self._settings.think_timeout_seconds
+            try:
+                return await asyncio.wait_for(
+                    self._think_impl(task, on_step_start, on_step_end), timeout=timeout
+                )
+            except TimeoutError:
+                raise ThinkTimeoutError(
+                    f"think() exceeded {timeout}s (fail-closed; checkpoints remain for resume)"
+                ) from None
         finally:
             reset_tenant_id(token)
 
@@ -344,7 +359,7 @@ class NoemaEngine:
         # Check for existing checkpoint (resumable execution). The checkpoint
         # file is kept until the run completes: if the process crashes mid-run
         # the recorded progress survives, so it can be resumed on retry.
-        ckpt = await self.checkpointer.load(task.id, self._tenant_id)
+        ckpt = await self.checkpointer.load(task.id, get_tenant_id())
         resume_context: dict[str, str] | None = None
         if ckpt:
             log.info("resuming_from_checkpoint", task=task.id, steps=len(ckpt.completed_steps))
@@ -457,7 +472,9 @@ class NoemaEngine:
                 solution = self._evaluate_quality(solution, thought)
                 if reflexion_attempt == 1:
                     first_failed_code = "\n\n".join(
-                        b.content for b in solution.code_blocks if b.language.lower() == "python"
+                        b.content
+                        for b in solution.code_blocks
+                        if b.language.lower() in ("python", "py")
                     )
 
                 try:
@@ -501,7 +518,7 @@ class NoemaEngine:
                         await self.checkpointer.save(
                             DAGCheckpoint(
                                 task_id=task.id,
-                                tenant_id=self._tenant_id,
+                                tenant_id=get_tenant_id(),
                                 session_id=self.tracer.current_span_id,
                                 attempt=reflexion_attempt + 1,
                                 completed_steps=[n.name for n in self.cot.chain if n.name],
@@ -530,7 +547,9 @@ class NoemaEngine:
 
             if reflexion_attempt > 1 and judge_passed_flag and first_failed_code:
                 fixed_code = "\n\n".join(
-                    b.content for b in solution.code_blocks if b.language.lower() == "python"
+                    b.content
+                    for b in solution.code_blocks
+                    if b.language.lower() in ("python", "py")
                 )
                 await self.healer._propose_ontological_axiom(
                     failed_code=first_failed_code,
@@ -578,7 +597,7 @@ class NoemaEngine:
         if not verdict["enabled"]:
             return verdict
 
-        python_blocks = [b for b in solution.code_blocks if b.language == "python"]
+        python_blocks = [b for b in solution.code_blocks if b.language.lower() in ("python", "py")]
         if not python_blocks:
             verdict["summary"] = "no python code blocks to verify"
             return verdict
@@ -663,7 +682,7 @@ class NoemaEngine:
         )
 
         # Clear checkpoint on success
-        await self.checkpointer.delete(task.id, self._tenant_id)
+        await self.checkpointer.delete(task.id, get_tenant_id())
 
         if solution.quality in (SolutionQuality.MASTERPIECE, SolutionQuality.EXCELLENT):
             self.memory.store_procedure(

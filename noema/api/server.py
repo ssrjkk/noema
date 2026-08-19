@@ -326,8 +326,16 @@ async def global_exception_handler(request: Request, exc: Exception) -> ProblemR
     )
 
 
+def _estimate_input_tokens(task: Task) -> int:
+    """Rough input-token estimate (chars / 4) for quota enforcement."""
+    text = f"{task.title} {task.description}"
+    return len(text) // 4
+
+
 @asynccontextmanager
-async def _task_guard(request: Request, task_id: str) -> AsyncIterator[str]:
+async def _task_guard(
+    request: Request, task_id: str, estimated_input_tokens: int = 0
+) -> AsyncIterator[str]:
     """Per-request quota enforcement + tenant context for a reasoning task.
 
     Enforces the tenant's quotas before work starts (fail-closed 429), tracks
@@ -340,7 +348,7 @@ async def _task_guard(request: Request, task_id: str) -> AsyncIterator[str]:
     tracked = False
     try:
         if quota is not None:
-            await quota.check_quota(tenant_id)
+            await quota.check_quota(tenant_id, estimated_input_tokens=estimated_input_tokens)
             await quota.track_active_task(tenant_id, task_id)
             tracked = True
         yield tenant_id
@@ -469,7 +477,9 @@ async def think(request: TaskRequest, http_request: Request) -> SolutionResponse
 
     task = _build_task(request)
     task_id = request.task_id or task.id
-    async with _task_guard(http_request, task_id) as tenant_id:
+    async with _task_guard(
+        http_request, task_id, estimated_input_tokens=_estimate_input_tokens(task)
+    ) as tenant_id:
         t0 = time.monotonic()
         try:
             solution, thought = await _cancellation_mgr.execute_with_cancellation(
@@ -518,7 +528,9 @@ async def think_detail(request: TaskRequest, http_request: Request) -> SolutionD
 
     task = _build_task(request)
     task_id = request.task_id or task.id
-    async with _task_guard(http_request, task_id) as tenant_id:
+    async with _task_guard(
+        http_request, task_id, estimated_input_tokens=_estimate_input_tokens(task)
+    ) as tenant_id:
         try:
             solution, thought = await _cancellation_mgr.execute_with_cancellation(
                 task_id, noema.think(task)
@@ -603,7 +615,11 @@ async def think_stream(request: TaskRequest, http_request: Request) -> Streaming
 
         async def run_think() -> None:
             try:
-                async with _task_guard(http_request, request.task_id or task.id) as tenant_id:
+                async with _task_guard(
+                    http_request,
+                    request.task_id or task.id,
+                    estimated_input_tokens=_estimate_input_tokens(task),
+                ) as tenant_id:
                     solution, thought = await _cancellation_mgr.execute_with_cancellation(
                         request.task_id or task.id,
                         noema.think(task, on_step_start=on_step_start, on_step_end=on_step_end),

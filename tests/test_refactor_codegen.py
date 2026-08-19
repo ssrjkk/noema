@@ -35,9 +35,12 @@ def test_sanitize_identifier_invariants(raw: str, max_len: int) -> None:
 def test_sanitize_identifier_preserves_safe_chars(raw: str) -> None:
     ident = CodegenKernel._sanitize_identifier(raw)
     # A clean lowercase alnum input must round-trip up to the length cap.
+    # Truncation can cut a run of separators mid-way, leaving an underscore at
+    # the boundary; the implementation strips it AFTER truncation, so the
+    # expectation must do the same.
     clean = re.sub(r"[^a-z0-9_]+", "_", raw.lower().strip()).strip("_")
     if clean:
-        assert ident == clean[:20]
+        assert ident == clean[:20].strip("_")
 
 
 @settings(max_examples=100)

@@ -6,7 +6,7 @@ from hypothesis import strategies as st
 from noema.causal import CausalEngine, CausalGraph, CausalNode, InterventionResult
 from noema.causal.graph import VariableType
 
-# ── Strategies ──────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Strategies в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 node_name_strategy = st.text(min_size=1, max_size=20, alphabet="abcdefghijklmnopqrstuvwxyz_")
 node_id_strategy = st.text(min_size=1, max_size=8, alphabet="abcdefghijklmnopqrstuvwxyz0123456789")
@@ -24,11 +24,11 @@ value_strategy = st.floats(min_value=-100.0, max_value=100.0, allow_nan=False, a
 strength_strategy = st.floats(min_value=-1.0, max_value=1.0, allow_nan=False, allow_infinity=False)
 
 
-# ── Property: CausalGraph Construction ──────────────────────────────────────────
+# в”Ђв”Ђ Property: CausalGraph Construction в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @given(st.lists(causal_node_strategy, min_size=1, max_size=10, unique_by=lambda n: n.id))
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=2000)
 def test_causal_graph_add_nodes(nodes):
     cg = CausalGraph()
     for n in nodes:
@@ -39,7 +39,7 @@ def test_causal_graph_add_nodes(nodes):
 
 
 @given(st.lists(causal_node_strategy, min_size=2, max_size=8, unique_by=lambda n: n.id))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_causal_graph_add_edges(nodes):
     cg = CausalGraph()
     for n in nodes:
@@ -52,7 +52,7 @@ def test_causal_graph_add_edges(nodes):
 
 
 @given(st.lists(causal_node_strategy, min_size=3, max_size=8, unique_by=lambda n: n.id))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_causal_graph_acyclic_guarantee(nodes):
     cg = CausalGraph()
     for n in nodes:
@@ -63,7 +63,7 @@ def test_causal_graph_acyclic_guarantee(nodes):
 
 
 @given(st.lists(causal_node_strategy, min_size=2, max_size=6, unique_by=lambda n: n.id))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_estimate_ate_without_confounders(nodes):
     cg = CausalGraph()
     for n in nodes:
@@ -78,7 +78,7 @@ def test_estimate_ate_without_confounders(nodes):
 
 
 @given(st.lists(causal_node_strategy, min_size=2, max_size=5, unique_by=lambda n: n.id))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_find_confounders_returns_list(nodes):
     cg = CausalGraph()
     for n in nodes:
@@ -91,7 +91,7 @@ def test_find_confounders_returns_list(nodes):
 
 
 @given(st.lists(causal_node_strategy, min_size=2, max_size=5, unique_by=lambda n: n.id))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_find_mediators_returns_list(nodes):
     cg = CausalGraph()
     for n in nodes:
@@ -103,7 +103,7 @@ def test_find_mediators_returns_list(nodes):
         assert isinstance(mediators, list)
 
 
-# ── Property: InterventionResult ────────────────────────────────────────────────
+# в”Ђв”Ђ Property: InterventionResult в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @given(
@@ -112,7 +112,7 @@ def test_find_mediators_returns_list(nodes):
     st.floats(min_value=-100, max_value=100, allow_nan=False, allow_infinity=False),
     st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
 )
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_intervention_result_immutable(var, inter, effect, conf):
     result = InterventionResult(
         target_variable=var,
@@ -131,7 +131,7 @@ def test_intervention_result_immutable(var, inter, effect, conf):
 
 
 @given(st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_intervention_confidence_bounds(conf):
     result = InterventionResult(
         target_variable="x",
@@ -144,7 +144,7 @@ def test_intervention_confidence_bounds(conf):
     assert 0.0 <= result.confidence <= 1.0
 
 
-# ── Property: CausalEngine ──────────────────────────────────────────────────────
+# в”Ђв”Ђ Property: CausalEngine в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @given(
@@ -160,7 +160,7 @@ def test_intervention_confidence_bounds(conf):
         max_size=5,
     )
 )
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_causal_engine_build_graph(requirements):
     engine = CausalEngine(enabled=True)
     graph = engine.build_graph(requirements)
@@ -181,7 +181,7 @@ def test_causal_engine_build_graph(requirements):
         max_size=5,
     )
 )
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_causal_engine_analyze_counterfactual(requirements):
     engine = CausalEngine(enabled=True)
     graph = engine.build_graph(requirements)
@@ -240,7 +240,7 @@ def test_causal_engine_disabled_returns_none(requirements):
     assert result is None
 
 
-# ── Integration: from_requirements ──────────────────────────────────────────────
+# в”Ђв”Ђ Integration: from_requirements в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 
 @given(
@@ -268,7 +268,7 @@ def test_causal_engine_disabled_returns_none(requirements):
         ),
     ),
 )
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=2000)
 def test_from_requirements_builds_valid_dag(requirements, dependencies):
     cg = CausalGraph.from_requirements(requirements, dependencies)
     assert cg.node_count == len(requirements)

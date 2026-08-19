@@ -111,7 +111,9 @@ class QuotaManager:
                 log.warning("quotas_set_failed", error=str(e))
         self._defaults_cache[tenant_id] = quota
 
-    async def check_quota(self, tenant_id: str, estimated_cost_usd: float = 0.0) -> bool:
+    async def check_quota(
+        self, tenant_id: str, estimated_cost_usd: float = 0.0, estimated_input_tokens: int = 0
+    ) -> bool:
         quota = await self.get_quota(tenant_id)
 
         if estimated_cost_usd > 0:
@@ -120,6 +122,16 @@ class QuotaManager:
                 raise QuotaExceededError(
                     f"Monthly budget ${monthly:.2f} + ${estimated_cost_usd:.2f} exceeds ${quota.monthly_budget_usd:.2f}"
                 )
+
+        if (
+            estimated_input_tokens > 0
+            and quota.max_input_tokens_per_task > 0
+            and estimated_input_tokens > quota.max_input_tokens_per_task
+        ):
+            raise QuotaExceededError(
+                f"Estimated input tokens {estimated_input_tokens} exceed the "
+                f"per-task cap of {quota.max_input_tokens_per_task}"
+            )
 
         hourly = await self._get_hourly_task_count(tenant_id)
         if hourly >= quota.max_tasks_per_hour:

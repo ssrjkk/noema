@@ -376,6 +376,14 @@ class NoemaSettings(BaseSettings):
     cot_max_steps: int = Field(default=12, ge=1)
     cot_temperature: float = Field(default=0.4, ge=0.0, le=2.0)
 
+    # End-to-end think() ceiling: a runaway task (LLM retries × reflexion
+    # attempts × steps) is cancelled fail-closed with checkpoints intact.
+    think_timeout_seconds: float = Field(
+        default=900.0,
+        gt=0,
+        description="Hard ceiling for one think() call; raises ThinkTimeoutError",
+    )
+
     # Evolution
     evolution_enabled: bool = Field(default=True)
     evolution_auto_apply: bool = Field(default=False, description="Never auto-apply without tests")

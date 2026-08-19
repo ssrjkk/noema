@@ -28,6 +28,15 @@ class JudgeError(Exception):
     """
 
 
+class ThinkTimeoutError(Exception):
+    """A think() call exceeded its end-to-end ceiling (fail-closed).
+
+    Raised when the task runs past ``NOEMA_THINK_TIMEOUT_SECONDS``. The
+    pipeline is cancelled; reflexion checkpoints survive so the task can be
+    resumed instead of silently returning a half-baked solution.
+    """
+
+
 # ── Enums ──────────────────────────────────────────────────────────────────
 
 
