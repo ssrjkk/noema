@@ -6,7 +6,7 @@ from hypothesis import strategies as st
 from noema.causal import CausalEngine, CausalGraph, CausalNode, InterventionResult
 from noema.causal.graph import VariableType
 
-# в”Ђв”Ђ Strategies в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ── Strategies ──────────────────────────────────────────────────────────────────
 
 node_name_strategy = st.text(min_size=1, max_size=20, alphabet="abcdefghijklmnopqrstuvwxyz_")
 node_id_strategy = st.text(min_size=1, max_size=8, alphabet="abcdefghijklmnopqrstuvwxyz0123456789")
@@ -24,7 +24,7 @@ value_strategy = st.floats(min_value=-100.0, max_value=100.0, allow_nan=False, a
 strength_strategy = st.floats(min_value=-1.0, max_value=1.0, allow_nan=False, allow_infinity=False)
 
 
-# в”Ђв”Ђ Property: CausalGraph Construction в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ── Property: CausalGraph Construction ──────────────────────────────────────────
 
 
 @given(st.lists(causal_node_strategy, min_size=1, max_size=10, unique_by=lambda n: n.id))
@@ -103,7 +103,7 @@ def test_find_mediators_returns_list(nodes):
         assert isinstance(mediators, list)
 
 
-# в”Ђв”Ђ Property: InterventionResult в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ── Property: InterventionResult ────────────────────────────────────────────────
 
 
 @given(
@@ -144,7 +144,7 @@ def test_intervention_confidence_bounds(conf):
     assert 0.0 <= result.confidence <= 1.0
 
 
-# в”Ђв”Ђ Property: CausalEngine в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ── Property: CausalEngine ──────────────────────────────────────────────────────
 
 
 @given(
@@ -240,7 +240,7 @@ def test_causal_engine_disabled_returns_none(requirements):
     assert result is None
 
 
-# в”Ђв”Ђ Integration: from_requirements в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ── Integration: from_requirements ──────────────────────────────────────────────
 
 
 @given(

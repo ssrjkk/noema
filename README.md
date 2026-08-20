@@ -80,8 +80,8 @@ pip install -e .
 # Полный (верификация Z3, векторный поиск, провайдеры LLM)
 pip install -e ".[full]"
 
-# Всё, включая dev-инструменты, БД, gRPC, vault, arq
-pip install -e ".[dev,full,db,grpc,vault,arq]"
+# Всё, включая dev-инструменты, БД, gRPC, vault
+pip install -e ".[dev,full,db,grpc,vault]"
 ```
 
 Python 3.11+. Провайдеры LLM: `openai`, `anthropic`, `ollama` + встроенный fallback-провайдер (работает без ключей, для демо и CI). Управление через env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
