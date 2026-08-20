@@ -50,7 +50,7 @@ def test_anthropic_provider_metadata():
     provider = AnthropicProvider()
     assert isinstance(provider, BaseLLMProvider)
     assert provider.name == "anthropic"
-    assert provider.model_name == "claude-sonnet-4-20250514"
+    assert provider.model_name == "claude-sonnet-4-5-20250929"
 
 
 def test_anthropic_provider_custom_model():

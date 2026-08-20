@@ -15,6 +15,7 @@ log = get_logger(__name__)
 PRICING: dict[str, dict[str, float]] = {
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
+    "claude-sonnet-4-5-20250929": {"input": 3.00, "output": 15.00},
     "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
     "o3": {"input": 10.00, "output": 40.00},
     "fallback": {"input": 0.0, "output": 0.0},

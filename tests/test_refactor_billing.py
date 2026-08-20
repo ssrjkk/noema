@@ -20,6 +20,7 @@ def test_calculate_cost_known_models():
     assert calculate_cost("gpt-4o-mini", 1_000_000, 0) == pytest.approx(0.15)
     assert calculate_cost("gpt-4o", 1_000_000, 1_000_000) == pytest.approx(12.5)
     assert calculate_cost("o3", 100_000, 50_000) == pytest.approx(1.0 + 2.0)
+    assert calculate_cost("claude-sonnet-4-5-20250929", 0, 1_000_000) == pytest.approx(15.0)
     assert calculate_cost("claude-sonnet-4-20250514", 0, 1_000_000) == pytest.approx(15.0)
 
 

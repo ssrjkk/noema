@@ -304,7 +304,9 @@ class OpenAIProvider(BaseLLMProvider):
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic API provider (Claude)."""
 
-    def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-4-20250514") -> None:
+    def __init__(
+        self, api_key: str | None = None, model: str = "claude-sonnet-4-5-20250929"
+    ) -> None:
         super().__init__()
         settings = get_settings()
         self.api_key = api_key or settings.llm.anthropic_api_key.get_secret_value()
@@ -484,7 +486,7 @@ def create_llm_provider(
     if provider == "openai":
         return OpenAIProvider(api_key=api_key, model=model or "gpt-4o")
     elif provider == "anthropic":
-        return AnthropicProvider(api_key=api_key, model=model or "claude-sonnet-4-20250514")
+        return AnthropicProvider(api_key=api_key, model=model or "claude-sonnet-4-5-20250929")
     elif provider == "ollama":
         return OllamaProvider(model=model, base_url=settings.llm.ollama_url)
     else:

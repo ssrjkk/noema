@@ -43,7 +43,7 @@ TIERS: list[ModelTier] = [
     ),
     ModelTier(
         provider="anthropic",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5-20250929",
         cost_per_1m_input=3.00,
         cost_per_1m_output=15.00,
         suitable_for=["complex"],
