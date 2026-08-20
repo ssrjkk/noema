@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic import BaseModel, Field
 
 from noema.context import get_tenant_id
-from noema.embeddings import DenseEmbedder, HNSWIndex
+from noema.embeddings import HNSWIndex, get_embedder
 from noema.logging import get_logger
 from noema.utils.atomic_io import atomic_read_json, atomic_write_json
 
@@ -71,7 +71,7 @@ class _DenseVectorIndex:
     """Dense vector index using HNSW (FAISS) with numpy fallback."""
 
     def __init__(self, dim: int = 128) -> None:
-        self._embedder = DenseEmbedder(dim=dim)
+        self._embedder = get_embedder(dim)
         self._index: HNSWIndex | None = None
         self._dim = self._embedder.dim
         self._dirty = True

@@ -125,21 +125,43 @@ class SandboxEngine:
         t0 = time.monotonic()
 
         if language == "python":
-            try:
-                ast.parse(code)
-                result.ast_valid = True
-            except SyntaxError as e:
-                result.ast_valid = False
-                result.ast_errors.append(str(e))
+            allowed = allowed_imports if allowed_imports is not None else self._allowed_imports()
 
-            if result.ast_valid and self.config.static_check_enabled:
-                allowed = (
-                    allowed_imports if allowed_imports is not None else self._allowed_imports()
-                )
-                issues = analyze_code(code, allowed_imports=allowed)
-                if issues:
-                    result.static_passed = False
-                    result.static_issues = [issue.render() for issue in issues]
+            def _python_check() -> tuple[bool, list[str], bool, list[str]]:
+                ast_valid = True
+                ast_errors: list[str] = []
+                try:
+                    ast.parse(code)
+                except SyntaxError as e:
+                    ast_valid = False
+                    ast_errors.append(str(e))
+
+                static_passed = True
+                static_issues: list[str] = []
+                if ast_valid and self.config.static_check_enabled:
+                    issues = analyze_code(code, allowed_imports=allowed)
+                    if issues:
+                        static_passed = False
+                        static_issues = [issue.render() for issue in issues]
+                return ast_valid, ast_errors, static_passed, static_issues
+
+            # AST parse + static analysis are CPU-bound: offload large blocks
+            # so they never block the event loop, but keep tiny blocks inline
+            # (a thread hop costs more than parsing a few hundred bytes).
+            if len(code) > 10_000:
+                (
+                    result.ast_valid,
+                    result.ast_errors,
+                    result.static_passed,
+                    result.static_issues,
+                ) = await asyncio.to_thread(_python_check)
+            else:
+                (
+                    result.ast_valid,
+                    result.ast_errors,
+                    result.static_passed,
+                    result.static_issues,
+                ) = _python_check()
 
         result.duration_ms = (time.monotonic() - t0) * 1000
         return result

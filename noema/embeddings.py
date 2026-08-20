@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import cache
 from typing import Any, cast
 
 import numpy as np
@@ -9,6 +10,16 @@ import numpy as np
 from noema.logging import get_logger
 
 log = get_logger(__name__)
+
+
+@cache
+def get_embedder(dim: int = 128) -> DenseEmbedder:
+    """Process-wide shared embedder (one model load / projection matrix).
+
+    Every consumer (memory indexes, semantic cache) reuses the same instance,
+    so a SentenceTransformer model is loaded at most once per dimension.
+    """
+    return DenseEmbedder(dim=dim)
 
 
 class DenseEmbedder:
@@ -100,12 +111,19 @@ class DenseEmbedder:
 
 
 class HNSWIndex:
-    """FAISS HNSW index with numpy fallback for dense vector search."""
+    """FAISS HNSW index with numpy fallback for dense vector search.
+
+    Adds are incremental: new vectors go straight into the FAISS index (HNSW
+    supports online insertion) and are staged as chunks for the numpy fallback
+    path, so per-add cost is O(1) amortized instead of a full O(N) rebuild.
+    """
 
     def __init__(self, dim: int) -> None:
         self._dim = dim
         self._ids: list[str] = []
+        self._chunks: list[np.ndarray] = []
         self._vectors: np.ndarray = np.empty((0, dim), dtype=np.float32)
+        self._concatenated = True
         self._faiss_index: Any = None
         self._try_init_faiss()
 
@@ -122,28 +140,39 @@ class HNSWIndex:
     def size(self) -> int:
         return len(self._ids)
 
+    def _materialize(self) -> np.ndarray:
+        """Lazily concatenate staged chunks (once per mutation batch)."""
+        if self._concatenated:
+            return self._vectors
+        if self._chunks:
+            self._vectors = np.concatenate(self._chunks, axis=0)
+        else:
+            self._vectors = np.empty((0, self._dim), dtype=np.float32)
+        self._concatenated = True
+        return self._vectors
+
     def add(self, ids: list[str], vectors: np.ndarray) -> None:
         if len(ids) == 0:
             return
-        if len(self._vectors) == 0:
-            self._vectors = vectors.astype(np.float32)
-        else:
-            self._vectors = np.vstack([self._vectors, vectors.astype(np.float32)])
+        batch = vectors.astype(np.float32)
         self._ids.extend(ids)
+        self._chunks.append(batch)
+        self._concatenated = False
         if self._faiss_index is not None:
-            norms = np.linalg.norm(self._vectors, axis=1, keepdims=True)
-            normalized = self._vectors / np.maximum(norms, 1e-10)
-            self._faiss_index.reset()
+            norms = np.linalg.norm(batch, axis=1, keepdims=True)
+            normalized = batch / np.maximum(norms, 1e-10)
             self._faiss_index.add(normalized)
 
     def reset(self) -> None:
         self._ids = []
+        self._chunks = []
         self._vectors = np.empty((0, self._dim), dtype=np.float32)
+        self._concatenated = True
         if self._faiss_index is not None:
             self._faiss_index.reset()
 
     def search(self, query_vector: np.ndarray, top_k: int = 10) -> list[tuple[str, float]]:
-        if not self._ids or len(self._vectors) == 0:
+        if not self._ids:
             return []
         q = query_vector.reshape(1, -1).astype(np.float32)
         q = q / np.maximum(np.linalg.norm(q), 1e-10)
@@ -158,6 +187,9 @@ class HNSWIndex:
                     results.append((self._ids[idx], float(similarity)))
             return results
 
-        sims = DenseEmbedder.cosine_similarity(q, self._vectors)[0]
+        vectors = self._materialize()
+        if len(vectors) == 0:
+            return []
+        sims = DenseEmbedder.cosine_similarity(q, vectors)[0]
         top_indices = np.argsort(-sims)[:k]
         return [(self._ids[i], float(sims[i])) for i in top_indices]

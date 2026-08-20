@@ -8,8 +8,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+import numpy as np
+
 from noema.context import get_tenant_id
-from noema.embeddings import DenseEmbedder
+from noema.embeddings import get_embedder
 from noema.logging import get_logger
 
 log = get_logger(__name__)
@@ -32,7 +34,7 @@ class SemanticCache:
         self.similarity_threshold = similarity_threshold
         self._tenant_id = get_tenant_id()
         self._entries: dict[str, CacheEntry] = {}
-        self._embedder = DenseEmbedder()
+        self._embedder = get_embedder()
         self._stats = {"hits": 0, "misses": 0, "evictions": 0}
 
     def _hash_prompt(self, messages: list[dict[str, str]]) -> str:
@@ -58,28 +60,34 @@ class SemanticCache:
             return entry.response
 
         if self._entries and len(self._entries) > 10:
-            best_sim = 0.0
-            best_key = None
             query_text = self._prompt_text(messages)
-            qvec = self._compute_embedding(query_text)
+            qvec = np.asarray(self._compute_embedding(query_text), dtype=np.float32)
             tenant_suffix = f":t={effective_tenant}"
+            keys: list[str] = []
+            vectors: list[list[float]] = []
             for key, entry in self._entries.items():
                 # Exact hits are tenant-scoped by key; semantic matches must
                 # never serve a response cached for a different tenant.
                 if not key.endswith(tenant_suffix):
                     continue
                 if entry.embedding and entry.model == model:
-                    sim = self._cosine_similarity(qvec, entry.embedding)
-                    if sim > best_sim:
-                        best_sim = sim
-                        best_key = key
+                    keys.append(key)
+                    vectors.append(entry.embedding)
 
-            if best_sim >= self.similarity_threshold and best_key:
-                entry = self._entries[best_key]
-                entry.hit_count += 1
-                self._stats["hits"] += 1
-                log.debug("cache_semantic_hit", key=best_key[:8], similarity=round(best_sim, 3))
-                return entry.response
+            if vectors:
+                # Vectorized similarity: embed_one output is L2-normalized, so
+                # a matrix-vector product is exactly cosine similarity.
+                sims = np.asarray(vectors, dtype=np.float32) @ qvec
+                best_idx = int(np.argmax(sims))
+                best_sim = float(sims[best_idx])
+                if best_sim >= self.similarity_threshold:
+                    entry = self._entries[keys[best_idx]]
+                    entry.hit_count += 1
+                    self._stats["hits"] += 1
+                    log.debug(
+                        "cache_semantic_hit", key=keys[best_idx][:8], similarity=round(best_sim, 3)
+                    )
+                    return entry.response
 
         self._stats["misses"] += 1
         return None

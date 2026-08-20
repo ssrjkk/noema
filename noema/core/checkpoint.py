@@ -98,10 +98,9 @@ class CheckpointStore:
     async def load(self, task_id: str, tenant_id: str) -> DAGCheckpoint | None:
         path = self._file_path(task_id, tenant_id)
         try:
-            exists = await asyncio.to_thread(path.exists)
-            if not exists:
+            text = await asyncio.to_thread(_read_text_if_exists, path)
+            if text is None:
                 return None
-            text = await asyncio.to_thread(path.read_text, encoding="utf-8")
             data = json.loads(text)
             return DAGCheckpoint(
                 task_id=data["task_id"],
@@ -121,14 +120,23 @@ class CheckpointStore:
     async def delete(self, task_id: str, tenant_id: str) -> None:
         path = self._file_path(task_id, tenant_id)
         try:
-            exists = await asyncio.to_thread(path.exists)
-            if exists:
-                await asyncio.to_thread(path.unlink)
+            await asyncio.to_thread(_unlink_if_exists, path)
         except OSError as e:
             log.warning("checkpoint_delete_failed", task=task_id, error=str(e))
 
     async def has_checkpoint(self, task_id: str, tenant_id: str) -> bool:
         return await asyncio.to_thread(self._file_path(task_id, tenant_id).exists)
+
+
+def _read_text_if_exists(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return path.read_text(encoding="utf-8")
+
+
+def _unlink_if_exists(path: Path) -> None:
+    if path.exists():
+        path.unlink()
 
 
 def _safe_str(v: Any, max_len: int = 500) -> str:
