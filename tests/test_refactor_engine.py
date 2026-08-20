@@ -76,6 +76,54 @@ async def test_think_rejects_too_many_tags() -> None:
 
 
 @pytest.mark.asyncio
+async def test_think_rejects_too_many_requirements() -> None:
+    from noema.core.types import Requirement
+
+    noema = NoemaEngine(worker_count=1)
+    task = Task(
+        title="ok", requirements=[Requirement(category="c", description="d") for _ in range(51)]
+    )
+    with pytest.raises(ValueError, match="requirements"):
+        await noema.think(task)
+
+
+@pytest.mark.asyncio
+async def test_think_rejects_oversized_requirement_fields() -> None:
+    from noema.core.types import Requirement
+
+    noema = NoemaEngine(worker_count=1)
+    too_long_desc = Task(
+        title="ok",
+        requirements=[Requirement(category="c", description="x" * 2001)],
+    )
+    with pytest.raises(ValueError, match="Requirement 0 description"):
+        await noema.think(too_long_desc)
+
+    too_long_category = Task(
+        title="ok",
+        requirements=[Requirement(category="c" * 51, description="d")],
+    )
+    with pytest.raises(ValueError, match="Requirement 0 category"):
+        await noema.think(too_long_category)
+
+    too_many_constraints = Task(
+        title="ok",
+        requirements=[
+            Requirement(category="c", description="d", constraints=[f"x{i}" for i in range(21)])
+        ],
+    )
+    with pytest.raises(ValueError, match="too many constraints"):
+        await noema.think(too_many_constraints)
+
+    too_long_constraint = Task(
+        title="ok",
+        requirements=[Requirement(category="c", description="d", constraints=["x" * 501])],
+    )
+    with pytest.raises(ValueError, match="constraint 0 too large"):
+        await noema.think(too_long_constraint)
+
+
+@pytest.mark.asyncio
 @settings(max_examples=25)
 @given(
     title=st.text(max_size=10),
@@ -278,6 +326,28 @@ async def test_gather_ontology_context_empty_for_unrelated_task() -> None:
 
     task = Task(title="Write a haiku", description="poetry", tags=["poetry"])
     assert noema._gather_ontology_context(task) == ""
+
+
+@pytest.mark.asyncio
+async def test_gather_ontology_context_requires_word_boundary() -> None:
+    """Entity names must not match inside longer words (auth ⊄ authentication)."""
+    from noema.core.types import Task
+    from noema.ontology import Entity, OntologyGraph, Relation
+
+    noema = NoemaEngine(worker_count=1)
+    graph = OntologyGraph()
+    graph.add_entity(Entity(name="Auth", type="domain"))
+    graph.add_entity(Entity(name="Pay", type="domain"))
+    graph.add_entity(Entity(name="IdempotencyKey", type="domain"))
+    graph.add_relation(Relation("Auth", "requires", "IdempotencyKey"))
+    noema.ontology = graph
+
+    unrelated = Task(title="Build authentication flow", description="payments are idempotent")
+    assert noema._gather_ontology_context(unrelated) == ""
+
+    related = Task(title="Add auth", description="handle pay now")
+    ctx = noema._gather_ontology_context(related)
+    assert "Auth MUST be linked to IdempotencyKey via requires" in ctx
 
 
 @pytest.mark.asyncio

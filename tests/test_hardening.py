@@ -239,3 +239,111 @@ async def test_verify_think_normalizes_python_language(tmp_path):
     assert verdict["enabled"] is True
     assert len(verdict["files"]) == 1
     assert verdict["passed"] is True
+
+
+# ── Peripheral store failures must not void a verified solution ────────
+
+
+def _raise_runtime(msg: str):
+    def _raiser(*args, **kwargs):
+        raise RuntimeError(msg)
+
+    return _raiser
+
+
+@pytest.mark.asyncio
+async def test_think_survives_peripheral_store_failures(tmp_path):
+    """Memory/knowledge/checkpoint failures degrade, never crash think()."""
+    engine = NoemaEngine(project_root=str(tmp_path))
+    llm = _ErrorLLM()
+    engine.llm = llm
+    engine.memory.search_episodes = _raise_runtime("memory search down")
+    engine.memory.record_episode = _raise_runtime("memory record down")
+    engine.memory.store_procedure = _raise_runtime("memory procedure down")
+    engine.knowledge_graph.suggest_architecture = _raise_runtime("graph down")
+
+    async def _raise_search(*args, **kwargs):
+        raise RuntimeError("knowledge down")
+
+    async def _raise_save(*args, **kwargs):
+        raise RuntimeError("checkpoint save down")
+
+    async def _raise_delete(*args, **kwargs):
+        raise RuntimeError("checkpoint delete down")
+
+    engine.knowledge.search = _raise_search
+    engine.checkpointer.save = _raise_save
+    engine.checkpointer.delete = _raise_delete
+
+    await engine.initialize()
+    solution, thought = await engine.think(Task(title="Build an API"))
+
+    assert solution is not None
+    # All three reflexion retries completed despite a failing checkpointer.save,
+    # meaning the reflexion loop survived the broken peripheral stores.
+    assert solution.metadata.get("judge_reflexion_attempt") == 3
+    assert solution.metadata.get("judge_passed") is False
+
+
+@pytest.mark.asyncio
+async def test_finalize_survives_telemetry_failures(tmp_path):
+    """record_episode/store_procedure/checkpoint delete are best-effort."""
+    from noema.core.types import SolutionQuality
+
+    engine = NoemaEngine(project_root=str(tmp_path))
+    await engine.initialize()
+    engine.memory.record_episode = _raise_runtime("memory record down")
+    engine.memory.store_procedure = _raise_runtime("memory procedure down")
+    engine.checkpointer.delete = _raise_runtime("checkpoint delete down")
+
+    solution = _solution()
+    solution.quality = SolutionQuality.EXCELLENT
+    thought = ThoughtProcess(task_id="t")
+    thought.add_step("analysis", "in", "out", 0.9)
+    span = engine.tracer.start_span("test.finalize")
+
+    await engine._finalize_solution(Task(title="t", description="d"), solution, thought, 0.0, span)
+
+    assert solution.quality == SolutionQuality.EXCELLENT
+
+
+# ── Kernel isolation in degraded reasoning ─────────────────────────────
+
+
+async def _boom_kernel(*args, **kwargs):
+    raise RuntimeError("kernel exploded")
+
+
+async def _string_kernel(*args, **kwargs):
+    return "not a dict"
+
+
+async def _good_kernel(*args, **kwargs):
+    return {"pattern": {"name": "Layered"}, "high_level_design": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_think_survives_raising_plugin_kernels():
+    """One broken (plugin) kernel must not take down degraded reasoning."""
+    engine = NoemaEngine(worker_count=1, llm_provider="fallback")
+    await engine.initialize()
+    engine.kernels["analysis"] = SimpleNamespace(
+        name="analysis", description="bad", execute=_boom_kernel
+    )
+    engine.kernels["architecture"] = SimpleNamespace(
+        name="architecture", description="good", execute=_good_kernel
+    )
+    engine.kernels["security"] = SimpleNamespace(
+        name="security", description="bad", execute=_string_kernel
+    )
+
+    solution, thought = await engine.think(Task(title="Build an API"))
+
+    assert solution is not None
+    failed = {s.kernel: s for s in thought.steps if s.confidence == 0.0}
+    assert "analysis" in failed
+    assert "Kernel failed" in failed["analysis"].output_summary
+    assert "security" in failed
+    assert "non-dict" in failed["security"].output_summary
+    good = {s.kernel: s for s in thought.steps}
+    assert good["architecture"].confidence > 0.0

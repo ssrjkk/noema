@@ -58,7 +58,7 @@ from noema.knowledge.graph import KnowledgeGraph
 from noema.knowledge.store import KnowledgeStore
 from noema.llm.providers import BaseLLMProvider, create_llm_provider
 from noema.logging import get_logger
-from noema.memory.store import MemoryStore
+from noema.memory.store import EpisodicMemory, MemoryStore
 from noema.modules.registry import get_registry
 from noema.neurosymbolic import (
     MaxRefinementsExceededError,
@@ -352,6 +352,24 @@ class NoemaEngine:
             raise ValueError(f"Task description too large: {len(task.description)} chars")
         if len(task.tags) > 100:
             raise ValueError(f"Too many tags: {len(task.tags)}")
+        if len(task.requirements) > 50:
+            raise ValueError(f"Too many requirements: {len(task.requirements)}")
+        for i, req in enumerate(task.requirements):
+            if len(req.category) > 50:
+                raise ValueError(f"Requirement {i} category too large: {len(req.category)} chars")
+            if len(req.description) > 2000:
+                raise ValueError(
+                    f"Requirement {i} description too large: {len(req.description)} chars"
+                )
+            if len(req.constraints) > 20:
+                raise ValueError(
+                    f"Requirement {i} has too many constraints: {len(req.constraints)}"
+                )
+            for j, constraint in enumerate(req.constraints):
+                if len(constraint) > 500:
+                    raise ValueError(
+                        f"Requirement {i} constraint {j} too large: {len(constraint)} chars"
+                    )
 
         if not self._initialized:
             await self.initialize()
@@ -420,7 +438,11 @@ class NoemaEngine:
                 if not self._settings.neurosymbolic.fallback_to_cot:
                     raise
 
-        past_episodes = self.memory.search_episodes(f"{task.title} {task.description}", limit=5)
+        past_episodes: list[EpisodicMemory] = []
+        try:
+            past_episodes = self.memory.search_episodes(f"{task.title} {task.description}", limit=5)
+        except Exception as exc:  # noqa: BLE001 - memory is peripheral context
+            log.warning("memory_search_failed", task=task.id, error=str(exc)[:200])
 
         knowledge_context = await self._gather_knowledge_context(task)
         graph_context = self._gather_graph_context(task)
@@ -515,20 +537,27 @@ class NoemaEngine:
                     )
                     if reflexion_attempt < 3:
                         # Save checkpoint before retry
-                        await self.checkpointer.save(
-                            DAGCheckpoint(
-                                task_id=task.id,
-                                tenant_id=get_tenant_id(),
-                                session_id=self.tracer.current_span_id,
-                                attempt=reflexion_attempt + 1,
-                                completed_steps=[n.name for n in self.cot.chain if n.name],
-                                step_results={n.name: n.response for n in self.cot.chain if n.name},
-                                token_budget_used=getattr(self.token_budget, "_used", 0)
-                                if self.token_budget
-                                else 0,
-                                context={"reflexion_state": reflexion_state.error_summary},
+                        try:
+                            await self.checkpointer.save(
+                                DAGCheckpoint(
+                                    task_id=task.id,
+                                    tenant_id=get_tenant_id(),
+                                    session_id=self.tracer.current_span_id,
+                                    attempt=reflexion_attempt + 1,
+                                    completed_steps=[n.name for n in self.cot.chain if n.name],
+                                    step_results={
+                                        n.name: n.response for n in self.cot.chain if n.name
+                                    },
+                                    token_budget_used=getattr(self.token_budget, "_used", 0)
+                                    if self.token_budget
+                                    else 0,
+                                    context={"reflexion_state": reflexion_state.error_summary},
+                                )
                             )
-                        )
+                        except Exception as exc:  # noqa: BLE001 - checkpoint is best-effort resume data
+                            log.warning(
+                                "checkpoint_save_failed", task=task.id, error=str(exc)[:200]
+                            )
                         self.cot = ChainOfThought(
                             self.llm,
                             on_step_start=on_step_start or self._on_step_start,
@@ -666,30 +695,39 @@ class NoemaEngine:
                 "return an unverified artifact"
             )
 
-        self.memory.record_episode(
-            task_description=f"{task.title}: {task.description}",
-            solution_summary=solution.summary[:500],
-            tech_stack=", ".join(solution.stack.languages + solution.stack.frameworks)
-            if solution.stack
-            else "",
-            outcome="success"
-            if solution.quality
-            in (SolutionQuality.MASTERPIECE, SolutionQuality.EXCELLENT, SolutionQuality.GOOD)
-            else "partial",
-            duration_seconds=thought.duration_ms / 1000,
-            tags=task.tags,
-            context={"quality": solution.quality.value, "confidence": solution.confidence},
-        )
+        try:
+            self.memory.record_episode(
+                task_description=f"{task.title}: {task.description}",
+                solution_summary=solution.summary[:500],
+                tech_stack=", ".join(solution.stack.languages + solution.stack.frameworks)
+                if solution.stack
+                else "",
+                outcome="success"
+                if solution.quality
+                in (SolutionQuality.MASTERPIECE, SolutionQuality.EXCELLENT, SolutionQuality.GOOD)
+                else "partial",
+                duration_seconds=thought.duration_ms / 1000,
+                tags=task.tags,
+                context={"quality": solution.quality.value, "confidence": solution.confidence},
+            )
+        except Exception as exc:  # noqa: BLE001 - telemetry must not void a verified solution
+            log.warning("memory_record_failed", task=task.id, error=str(exc)[:200])
 
         # Clear checkpoint on success
-        await self.checkpointer.delete(task.id, get_tenant_id())
+        try:
+            await self.checkpointer.delete(task.id, get_tenant_id())
+        except Exception as exc:  # noqa: BLE001 - a stale checkpoint is harmless
+            log.warning("checkpoint_delete_failed", task=task.id, error=str(exc)[:200])
 
         if solution.quality in (SolutionQuality.MASTERPIECE, SolutionQuality.EXCELLENT):
-            self.memory.store_procedure(
-                procedure_name=f"solution_{task.title[:30].replace(' ', '_')}",
-                steps=[step.kernel for step in thought.steps],
-                tags=task.tags,
-            )
+            try:
+                self.memory.store_procedure(
+                    procedure_name=f"solution_{task.title[:30].replace(' ', '_')}",
+                    steps=[step.kernel for step in thought.steps],
+                    tags=task.tags,
+                )
+            except Exception as exc:  # noqa: BLE001 - procedural memory is best-effort
+                log.warning("procedure_store_failed", task=task.id, error=str(exc)[:200])
 
         log.info(
             f"[Noema] Solution generated in {thought.duration_ms:.0f}ms | "
@@ -800,7 +838,11 @@ class NoemaEngine:
         of the top-K results.
         """
         query = f"{task.title} {task.description} {' '.join(task.tags)}"
-        results = await self.knowledge.search(query, top_k=5)
+        try:
+            results = await self.knowledge.search(query, top_k=5)
+        except Exception as exc:  # noqa: BLE001 - knowledge is peripheral context
+            log.warning("knowledge_context_failed", task=task.id, error=str(exc)[:200])
+            return ""
         parts = []
         for r in results:
             title = r.get("title", r.get("name", ""))
@@ -813,10 +855,19 @@ class NoemaEngine:
 
         Complexity: ``O(R)`` for up to 15 graph recommendations R.
         """
-        recs = self.knowledge_graph.suggest_architecture(task.tags)
+        try:
+            recs = self.knowledge_graph.suggest_architecture(task.tags)
+        except Exception as exc:  # noqa: BLE001 - knowledge graph is peripheral context
+            log.warning("graph_context_failed", task=task.id, error=str(exc)[:200])
+            return ""
         parts = []
-        for comp in recs.get("components", [])[:15]:
-            parts.append(f"{comp['from']} -> {comp['to']} ({comp['relationship']})")
+        if isinstance(recs, dict):
+            for comp in recs.get("components", [])[:15]:
+                if isinstance(comp, dict):
+                    parts.append(
+                        f"{comp.get('from', '?')} -> {comp.get('to', '?')} "
+                        f"({comp.get('relationship', '?')})"
+                    )
         return "\n".join(parts) if parts else ""
 
     def _gather_ontology_context(self, task: Task) -> str:
@@ -834,14 +885,24 @@ class NoemaEngine:
         if not self.ontology.stats()["entities"]:
             return ""
         text = f"{task.title} {task.description} {' '.join(task.tags)}"
-        tokens = set(re.findall(r"[A-Za-z0-9_-]{2,}", text.lower()))
+        names = [e.name for e in self.ontology.entities() if e.name]
+        if not names:
+            return ""
+        pattern = re.compile(
+            r"(?<!\w)(?:" + "|".join(re.escape(n) for n in names) + r")(?!\w)",
+            re.IGNORECASE,
+        )
+        by_key = {n.lower(): n for n in names}
         roots: list[str] = []
-        for entity in self.ontology.entities():
-            name = entity.name.lower()
-            if name in tokens or any(name in t for t in tokens if len(t) > 3):
-                roots.append(entity.name)
-                if len(roots) >= 10:
-                    break
+        seen: set[str] = set()
+        for matched in pattern.findall(text):
+            key = matched.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            roots.append(by_key[key])
+            if len(roots) >= 10:
+                break
         if not roots:
             return ""
         subgraph = self.ontology.get_subgraph(roots, depth=2)
@@ -1040,8 +1101,21 @@ class NoemaEngine:
             thought.add_step(kernel_name, task.title, "Kernel not found", 0.0)
             return {}
         input_summary = f"Task: {task.title} | {kwargs}"
-        result = await kernel.execute(task, **kwargs)
-        confidence = result.get("_confidence", 0.7)
+        try:
+            result = await kernel.execute(task, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - kernel isolation is the point
+            thought.add_step(
+                kernel_name,
+                input_summary,
+                f"Kernel failed: {type(exc).__name__}: {str(exc)[:120]}",
+                0.0,
+            )
+            return {}
+        if not isinstance(result, dict):
+            thought.add_step(kernel_name, input_summary, "Kernel returned non-dict", 0.0)
+            return {}
+        raw_confidence = result.get("_confidence", 0.7)
+        confidence = raw_confidence if isinstance(raw_confidence, (int, float)) else 0.7
         thought.add_step(kernel_name, input_summary, str(result)[:200], confidence)
         return result
 
@@ -1052,7 +1126,11 @@ class NoemaEngine:
         """
         if task.preferred_stack:
             return task.preferred_stack
-        candidates = await self.knowledge.find_relevant_stacks(task)
+        try:
+            candidates = await self.knowledge.find_relevant_stacks(task)
+        except Exception as exc:  # noqa: BLE001 - degraded path must not crash
+            log.warning("stack_selection_failed", error=str(exc)[:200], task_id=task.id)
+            candidates = []
         return (
             candidates[0]
             if candidates
