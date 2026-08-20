@@ -631,7 +631,34 @@ class NoemaEngine:
             verdict["summary"] = "no python code blocks to verify"
             return verdict
 
+        # The gate must stay bounded: an oversized or over-numerous block set is
+        # unverifiable, so it is rejected (fail-closed) instead of consuming
+        # unbounded CPU/memory in ast.parse.
+        max_blocks = 50
+        max_block_chars = 200_000
+        if len(python_blocks) > max_blocks:
+            verdict["passed"] = False
+            verdict["summary"] = (
+                f"{len(python_blocks)} python files exceed the {max_blocks}-file static gate limit"
+            )
+            return verdict
+
         for block in python_blocks:
+            if len(block.content) > max_block_chars:
+                verdict["files"].append(
+                    {
+                        "file": block.filename,
+                        "ast_valid": False,
+                        "static_passed": False,
+                        "ast_errors": [
+                            f"code block too large to verify "
+                            f"({len(block.content)} chars > {max_block_chars})"
+                        ],
+                        "static_issues": [],
+                    }
+                )
+                verdict["passed"] = False
+                continue
             vr = await self.sandbox.validate_code_block(
                 code=block.content,
                 language="python",
@@ -1005,11 +1032,11 @@ class NoemaEngine:
         # Code blocks
         code_data = self._safe_parse(reasoning.get("code", "{}"))
         if isinstance(code_data, dict) and "files" in code_data:
-            for f in code_data["files"]:
+            for f in code_data["files"][:50]:
                 if isinstance(f, dict):
                     path = f.get("path") or f.get("filename") or "main.py"
                     content = f.get("content", "")
-                    if content and len(content) > 10:
+                    if content and 10 < len(content) <= 200_000:
                         ext = path.rsplit(".", 1)[-1] if "." in path else "py"
                         lang_map = {
                             "py": "python",

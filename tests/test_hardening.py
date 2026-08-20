@@ -307,6 +307,56 @@ async def test_finalize_survives_telemetry_failures(tmp_path):
     assert solution.quality == SolutionQuality.EXCELLENT
 
 
+# ── Static gate stays bounded (fail-closed on unverifiable input) ───────
+
+
+@pytest.mark.asyncio
+async def test_verify_think_rejects_oversized_block(tmp_path):
+    engine = NoemaEngine(project_root=str(tmp_path))
+    solution = _solution()
+    solution.code_blocks.append(
+        CodeBlock(filename="huge.py", language="python", content="x = 1\n" + "#" * 200_001)
+    )
+
+    verdict = await engine._verify_think_solution(solution)
+
+    assert verdict["passed"] is False
+    assert "too large" in verdict["files"][0]["ast_errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_verify_think_rejects_too_many_blocks(tmp_path):
+    engine = NoemaEngine(project_root=str(tmp_path))
+    solution = _solution()
+    for i in range(51):
+        solution.code_blocks.append(
+            CodeBlock(filename=f"f{i}.py", language="python", content="x = 1")
+        )
+
+    verdict = await engine._verify_think_solution(solution)
+
+    assert verdict["passed"] is False
+    assert "exceed" in verdict["summary"]
+
+
+@pytest.mark.asyncio
+async def test_assemble_code_blocks_are_bounded():
+    engine = NoemaEngine(worker_count=1)
+    reasoning = {
+        "stack": {},
+        "architecture": {},
+        "code": {
+            "files": [{"path": f"f{i}.py", "content": "x = 1\nreturn x"} for i in range(60)]
+            + [{"path": "big.py", "content": "x = 1\n" + "y" * 200_001}]
+        },
+    }
+
+    solution = await engine._assemble_solution_from_reasoning(Task(title="t"), reasoning)
+
+    assert len(solution.code_blocks) == 50
+    assert not any(b.filename == "big.py" for b in solution.code_blocks)
+
+
 # ── Kernel isolation in degraded reasoning ─────────────────────────────
 
 
