@@ -229,7 +229,10 @@ async def test_webhook_returns_queued_when_redis_available(monkeypatch):
         resp = await client.post(
             "/webhooks/incident",
             content=body,
-            headers={"X-Noema-Signature": _sign(secret, body)},
+            headers={
+                "Content-Type": "application/json",
+                "X-Noema-Signature": _sign(secret, body),
+            },
         )
 
     assert resp.status_code == 200
@@ -241,7 +244,11 @@ async def test_webhook_rejects_missing_signature():
     body = json.dumps(SENTRY_INCIDENT, ensure_ascii=False).encode()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/webhooks/incident", content=body)
+        resp = await client.post(
+            "/webhooks/incident",
+            content=body,
+            headers={"Content-Type": "application/json"},
+        )
     assert resp.status_code == 401
 
 
@@ -253,7 +260,10 @@ async def test_webhook_rejects_wrong_signature():
         resp = await client.post(
             "/webhooks/incident",
             content=body,
-            headers={"X-Noema-Signature": _sign("wrong-secret", body)},
+            headers={
+                "Content-Type": "application/json",
+                "X-Noema-Signature": _sign("wrong-secret", body),
+            },
         )
     assert resp.status_code == 401
 
@@ -272,7 +282,10 @@ async def test_gate_failure_blocks_auto_approve_and_merge(e2e_mocks):
         resp = await client.post(
             "/webhooks/incident",
             content=body,
-            headers={"X-Noema-Signature": _sign(secret, body)},
+            headers={
+                "Content-Type": "application/json",
+                "X-Noema-Signature": _sign(secret, body),
+            },
         )
 
     assert resp.status_code == 200

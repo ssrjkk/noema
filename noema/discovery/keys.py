@@ -223,7 +223,7 @@ class KeyDiscovery:
             if os.name == "nt":
                 import ctypes
 
-                kernel32 = ctypes.windll.kernel32
+                kernel32 = getattr(ctypes, "windll").kernel32  # noqa: B009 (windll exists only on Windows)
                 c_ulonglong = ctypes.c_ulonglong
                 mem = c_ulonglong()
                 kernel32.GetPhysicallyInstalledMemory(ctypes.byref(mem))

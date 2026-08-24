@@ -25,6 +25,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install ruff mypy
+          pip install -e .
 
       - name: Ruff lint
         run: ruff check noema/ --output-format=github
@@ -57,11 +58,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev,db,grpc,arq]"
+          pip install -e ".[dev,db,grpc]"
 
       - name: Run tests
         env:
-          NOEMA_LLM_PROVIDER: fallback
           NOEMA_API_RATE_LIMIT_ENABLED: "false"
         run: |
           python -m pytest tests/ -v --tb=short --timeout=120 \
@@ -126,13 +126,13 @@ jobs:
     needs: lint
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so the gate can diff the PR branch against its base.
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -144,7 +144,6 @@ jobs:
       - name: Run merge gate
         id: gate
         env:
-          NOEMA_LLM_PROVIDER: fallback
           NOEMA_API_RATE_LIMIT_ENABLED: "false"
         run: |
           python -m noema.experiments.gate \

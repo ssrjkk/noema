@@ -14,7 +14,7 @@ authors = [{ name = "Noema" }]
 dependencies = [
     # Core
     "pydantic>=2.13.4",
-    "pydantic-settings>=2.14.2",
+    "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
 
     # Async / HTTP
@@ -25,22 +25,22 @@ dependencies = [
 
     # API
     "fastapi>=0.100",
-    "uvicorn[standard]>=0.52.1",
+    "uvicorn[standard]>=0.52.3",
 
     # Data structures
-    "networkx>=3.0",
+    "networkx>=3.6.1",
     "numpy>=1.24",
     "scikit-learn>=1.9.0",
 
     # CLI
     "rich>=15.0.0",
-    "typer>=0.9",
+    "typer>=0.27.1",
 
     # Structured logging
     "structlog>=23.0",
 
     # Metrics
-    "prometheus-client>=0.19",
+    "prometheus-client>=0.26.0",
 ]
 
 [project.optional-dependencies]
@@ -52,7 +52,7 @@ dev = [
     "pytest-benchmark>=5.2.3",
     "hypothesis>=6.0",
     "httpx>=0.28.1",
-    "fakeredis>=2.20.0",
+    "fakeredis>=2.37.0",
     "ruff>=0.1",
     "mypy>=2.3.0",
     "pre-commit>=4.6.1",
@@ -60,7 +60,7 @@ dev = [
 db = [
     "sqlalchemy[asyncio]>=2.0.51",
     "asyncpg>=0.31.0",
-    "alembic>=1.19.0",
+    "alembic>=1.19.1",
 ]
 full = [
     "chromadb>=1.5.9",
@@ -69,18 +69,15 @@ full = [
     "z3-solver>=4.13",
 ]
 sentry = [
-    "sentry-sdk>=2.0",
+    "sentry-sdk>=2.68.0",
 ]
 grpc = [
     "grpcio>=1.60",
     "grpcio-tools>=1.83.0",
-    "protobuf>=4.25",
+    "protobuf>=7.35.1",
 ]
 vault = [
     "hvac>=2.4.0",
-]
-arq = [
-    "arq>=0.26",
 ]
 
 [project.scripts]
@@ -102,7 +99,7 @@ ignore = ["E501"]
 known-first-party = ["noema"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 check_untyped_defs = false

@@ -44,7 +44,7 @@ def _env_leaf_keys() -> set[str]:
         base = f"noema_{name.lower()}"
         ann = field.annotation
         if isinstance(ann, type) and issubclass(ann, BaseSettings):
-            for sub_name in ann.model_fields:
+            for sub_name in getattr(ann, "model_fields"):  # noqa: B009 (mypy narrows type differently per OS)
                 keys.add(f"{base}_{sub_name.lower()}")
                 keys.add(f"{base}__{sub_name.lower()}")
         else:

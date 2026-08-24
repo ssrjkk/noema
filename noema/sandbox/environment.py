@@ -55,12 +55,19 @@ def _set_resource_limits(cpu_sec: float = 10, mem_mb: int = 256) -> None:
     try:
         import resource
 
-        resource.setrlimit(resource.RLIMIT_CPU, (int(cpu_sec), int(cpu_sec) + 5))  # type: ignore[attr-defined]
+        def rlimit(name: str) -> int:
+            value = getattr(resource, name)
+            if not isinstance(value, int):
+                raise ValueError(f"resource limit {name!r} unavailable")
+            return value
+
+        setrlimit = getattr(resource, "setrlimit")  # noqa: B009 (unavailable on win32 typeshed)
+        setrlimit(rlimit("RLIMIT_CPU"), (int(cpu_sec), int(cpu_sec) + 5))
         mem_bytes = mem_mb * 1024 * 1024
-        resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))  # type: ignore[attr-defined]
-        resource.setrlimit(resource.RLIMIT_NPROC, (10, 10))  # type: ignore[attr-defined]
-        resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))  # type: ignore[attr-defined]
-        resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 10 * 1024 * 1024))  # type: ignore[attr-defined]
+        setrlimit(rlimit("RLIMIT_AS"), (mem_bytes, mem_bytes))
+        setrlimit(rlimit("RLIMIT_NPROC"), (10, 10))
+        setrlimit(rlimit("RLIMIT_NOFILE"), (64, 64))
+        setrlimit(rlimit("RLIMIT_FSIZE"), (10 * 1024 * 1024, 10 * 1024 * 1024))
     except (ImportError, OSError, ResourceWarning, ValueError):
         log.warning("resource_limits_unavailable")
 
