@@ -6,6 +6,7 @@ Only commands that avoid a live LLM/DB/network are exercised; the heavy
 
 import asyncio
 import json
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -19,17 +20,23 @@ from noema.cli.main import app
 
 runner = CliRunner()
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
 
 def test_app_no_args_shows_help():
     result = runner.invoke(app, [])
     assert result.exit_code == 0
-    assert "Usage: noema" in result.output
+    assert "Usage: noema" in _strip_ansi(result.output)
 
 
 def test_app_help():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "Usage: noema" in result.output
+    assert "Usage: noema" in _strip_ansi(result.output)
 
 
 def test_graph_stats():

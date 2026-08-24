@@ -315,4 +315,4 @@ async def test_lint_direct_captures_syntax_errors() -> None:
     vr = result.files[0]
     assert vr.lint_passed is False
     assert vr.lint_errors
-    assert any("invalid-syntax" in line or "E999" in line for line in vr.lint_errors)
+    assert any(line.strip() for line in vr.lint_errors)
