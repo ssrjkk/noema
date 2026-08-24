@@ -72,7 +72,7 @@ sentry = [
     "sentry-sdk>=2.68.0",
 ]
 grpc = [
-    "grpcio>=1.60",
+    "grpcio>=1.83.0",
     "grpcio-tools>=1.83.0",
     "protobuf>=7.35.1",
 ]
