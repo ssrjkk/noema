@@ -233,7 +233,7 @@ class SandboxSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NOEMA_SANDBOX_")
 
     enabled: bool = Field(default=True)
-    docker_image: str = Field(default="python:3.12-slim")
+    docker_image: str = Field(default="noema-sandbox:3.12")
     timeout: float = Field(default=60.0, gt=0)
     max_memory: str = Field(default="256m")
     max_cpus: float = Field(default=0.5, gt=0)

@@ -34,7 +34,7 @@ class SandboxResult:
 class SandboxConfig:
     """Sandbox execution constraints."""
 
-    image: str = "python:3.12-slim"
+    image: str = "noema-sandbox:3.12"
     timeout: float = 60.0
     max_memory: str = "256m"
     max_cpus: float = 0.5

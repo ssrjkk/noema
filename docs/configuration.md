@@ -86,7 +86,7 @@ Settings are organized into namespaced groups. Each group uses a unique environm
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NOEMA_SANDBOX_ENABLED` | `true` | Enable sandboxed code execution |
-| `NOEMA_SANDBOX_DOCKER_IMAGE` | `python:3.12-slim` | Docker image for sandbox |
+| `NOEMA_SANDBOX_DOCKER_IMAGE` | `noema-sandbox:3.12` | Docker image for sandbox (must include `ruff` + `pytest`; see `deploy/docker/sandbox.Dockerfile`) |
 | `NOEMA_SANDBOX_TIMEOUT` | `60.0` | Execution timeout in seconds |
 | `NOEMA_SANDBOX_MAX_MEMORY` | `256m` | Max memory per container |
 | `NOEMA_SANDBOX_MAX_CPUS` | `0.5` | Max CPU cores |

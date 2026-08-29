@@ -10,7 +10,7 @@ from noema.sandbox.docker import PluginSandbox, SandboxConfig, SandboxResult
 
 def test_sandbox_config_defaults():
     cfg = SandboxConfig()
-    assert cfg.image == "python:3.12-slim"
+    assert cfg.image == "noema-sandbox:3.12"
     assert cfg.timeout == 60.0
     assert cfg.max_memory == "256m"
     assert cfg.max_cpus == 0.5

@@ -50,7 +50,7 @@ async def _check_redis() -> dict:
 
         r = aioredis.from_url(settings.redis.url, socket_timeout=5.0)
         await r.ping()
-        await r.close()
+        await r.aclose()
         return {"status": "ok", "message": "Redis reachable"}
     except ImportError:
         return {"status": "skipped", "message": "redis not installed"}

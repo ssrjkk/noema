@@ -63,12 +63,44 @@ def _target_names(target: ast.expr) -> set[str]:
     }
 
 
+def _bind_walrus_targets(stmt: ast.AST, bound: set[str]) -> None:
+    """Bind :class:`ast.NamedExpr` (walrus ``:=``) targets owned by ``stmt``.
+
+    Walrus expressions bind their target into the *enclosing* scope, so they
+    must be recorded here regardless of which statement/expression position
+    they appear in (e.g. an ``if (n := f())`` test). Traversal prunes nested
+    function/class/lambda bodies and comprehensions — targets bound there
+    belong to an inner scope, not the current one.
+    """
+    stack = list(ast.iter_child_nodes(stmt))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, ast.NamedExpr):
+            bound.update(_target_names(node.target))
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        elif isinstance(
+            node,
+            (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp),
+        ):
+            # Comprehension targets live in an inner scope, but walrus inside
+            # the comprehension body still binds the enclosing scope; only the
+            # generator targets are scoped. The body expression is reached via
+            # its `elt`/`key`/`value` fields, which are not generator targets,
+            # so keep traversing — targets are handled by _bind_stmt's
+            # scope-aware branches in the visitor, not here.
+            stack.extend(ast.iter_child_nodes(node))
+        else:
+            stack.extend(ast.iter_child_nodes(node))
+
+
 def _bind_stmt(stmt: ast.stmt, bound: set[str]) -> None:
     """Record names bound by ``stmt`` in the current scope.
 
     Never descends into a nested function/class body (their bindings belong to
     their own scope); the nested definition's *name* is bound here.
     """
+    _bind_walrus_targets(stmt, bound)
     if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         bound.add(stmt.name)
         return
@@ -121,13 +153,9 @@ def _bind_stmt(stmt: ast.stmt, bound: set[str]) -> None:
             for child in handler.body:
                 _bind_stmt(child, bound)
         return
-    # Bare expressions and remaining statements: find walrus targets, but do
-    # not descend into nested functions/classes/lambdas.
-    for node in ast.walk(stmt):
-        if isinstance(node, ast.NamedExpr):
-            bound.update(_target_names(node.target))
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            bound.add(node.name)
+    # Bare expressions and remaining statements: walrus targets are recorded
+    # by _bind_walrus_targets (called at the top of this function).
+    return
 
 
 def _bindings(stmts: list[ast.stmt]) -> set[str]:

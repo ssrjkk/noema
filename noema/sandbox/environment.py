@@ -164,7 +164,7 @@ class SandboxConfig:
     max_cpu_seconds: float = 10.0
     max_cpus: float = 0.5
     network_isolation: bool = True
-    docker_image: str = "python:3.12-slim"
+    docker_image: str = "noema-sandbox:3.12"
     static_check_enabled: bool = True
     static_allow_imports: tuple[str, ...] = ()
     lint_enabled: bool = True
@@ -312,14 +312,12 @@ class LocalEnvironment(Environment):
                         text=True,
                         timeout=self.config.max_cpu_seconds,
                         env=_build_isolated_env(),
-                        preexec_fn=self.resource_limits_preexec(),
                     )
                     if proc.returncode != 0:
                         result.files[i].lint_passed = False
+                        combined = (proc.stdout + proc.stderr).strip()
                         result.files[i].lint_errors = (
-                            proc.stdout.strip().split("\n")
-                            if proc.stdout.strip()
-                            else [proc.stderr.strip()]
+                            combined.split("\n") if combined else ["lint produced no output"]
                         )
 
             with ThreadPoolExecutor(
@@ -509,6 +507,7 @@ class DockerEnvironment(Environment):
                             self.config.docker_image,
                             "ruff",
                             "check",
+                            "--no-cache",
                             "--select=E,F,W",
                             f"/sandbox/{file_path.name}",
                             stdout=asyncio.subprocess.PIPE,

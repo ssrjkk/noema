@@ -71,7 +71,7 @@ async def diagnostics(request: Request) -> dict[str, Any]:
 
             r = aioredis.from_url(settings.redis.url, socket_timeout=3.0)
             await r.ping()
-            await r.close()
+            await r.aclose()
             return {"status": "ok"}
         except Exception:
             return {"status": "error"}
