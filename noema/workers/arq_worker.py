@@ -42,7 +42,8 @@ class NodeHeartbeat:
 
     Absence of a key (TTL expiry) means the node died without draining. A
     ``draining=1`` flag is set before a graceful shutdown so observers can
-    stop routing new work to this node.
+    stop routing new work to this node. The advertised ``metrics_port`` is
+    how the grid dashboard finds this node's ``/metrics`` endpoint.
     """
 
     def __init__(
@@ -50,9 +51,11 @@ class NodeHeartbeat:
         node_id: str,
         redis_url: str = "",
         redis: AsyncRedis | None = None,
+        metrics_port: int = 0,
     ) -> None:
         self.node_id = node_id
         self.redis_url = redis_url
+        self.metrics_port = metrics_port
         self._redis: AsyncRedis | None = redis
         self._task: asyncio.Task | None = None
         self.draining = False
@@ -97,6 +100,7 @@ class NodeHeartbeat:
                 "started_at": str(self.started_at),
                 "last_heartbeat": str(int(time.time())),
                 "draining": "1" if self.draining else "0",
+                "metrics_port": str(self.metrics_port),
             },
         )
         await self._redis.expire(self._key(), HEARTBEAT_TTL)
@@ -112,14 +116,22 @@ class NodeHeartbeat:
 
 
 async def startup(ctx: dict) -> None:
+    from noema.billing.ledger import ContributionLedger
     from noema.config.settings import get_settings
 
+    settings = get_settings()
     ctx["noema"] = NoemaEngine()
     await ctx["noema"].initialize()
     node_id = make_node_id()
     ctx["node_id"] = node_id
-    ctx["heartbeat"] = NodeHeartbeat(node_id, get_settings().redis.url)
+    ctx["heartbeat"] = NodeHeartbeat(
+        node_id,
+        settings.redis.url,
+        metrics_port=settings.obs.metrics_port if settings.obs.metrics_enabled else 0,
+    )
     await ctx["heartbeat"].start()
+    # Per-node contribution ledger (T3.3): durable JSONL when configured.
+    ctx["ledger"] = ContributionLedger(path=settings.worker.ledger_path)
     logger.info("arq_worker_startup_complete", node_id=node_id)
 
 
@@ -146,7 +158,10 @@ async def shutdown(ctx: dict) -> None:
 
 async def think_task(ctx: dict, task_data: dict) -> dict:
     """Run noema.think() as a background job."""
+    from noema.billing.cost_tracker import calculate_cost
+
     noema: NoemaEngine = ctx["noema"]
+    ledger = ctx.get("ledger")
     task = Task(
         title=task_data["title"],
         description=task_data.get("description", ""),
@@ -154,8 +169,26 @@ async def think_task(ctx: dict, task_data: dict) -> dict:
         tags=task_data.get("tags", []),
         requirements=task_data.get("requirements", []),
     )
+    before = noema.tracer.get_stats()
     try:
         solution, thought = await noema.think(task)
+        after = noema.tracer.get_stats()
+        if ledger is not None:
+            model = task_data.get("model", "") or noema.llm.model_name
+            tokens_input = int(after.get("tokens_input", 0) - before.get("tokens_input", 0))
+            tokens_output = int(after.get("tokens_output", 0) - before.get("tokens_output", 0))
+            ledger.record(
+                node_id=ctx.get("node_id", ""),
+                task_id=solution.task_id,
+                kind="solution",
+                provider=task_data.get("provider", ""),
+                model=model,
+                input_tokens=tokens_input,
+                output_tokens=tokens_output,
+                cost_usd=calculate_cost(model, tokens_input, tokens_output) if model else 0.0,
+                artifact_ref=solution.id,
+                meta={"duration_ms": thought.duration_ms, "quality": solution.quality.value},
+            )
         return {
             "status": "completed",
             "solution_id": solution.id,

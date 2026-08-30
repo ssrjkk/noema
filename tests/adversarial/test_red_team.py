@@ -6,6 +6,7 @@ sandbox attacks. Run with: pytest tests/adversarial/ -v
 
 import asyncio
 import contextlib
+import gc
 
 import pytest
 
@@ -91,6 +92,7 @@ async def test_massive_input_truncation():
     solution, thought = await noema.think(task)
     assert solution is not None
     await noema.shutdown()
+    gc.collect()
 
 
 # ── Empty / Edge Inputs ──────────────────────────────────────────────
@@ -104,6 +106,7 @@ async def test_empty_task_description():
     solution, thought = await noema.think(task)
     assert solution is not None
     await noema.shutdown()
+    gc.collect()
 
 
 @pytest.mark.asyncio
@@ -116,6 +119,7 @@ async def test_task_with_no_requirements():
     solution, thought = await noema.think(task)
     assert solution is not None
     await noema.shutdown()
+    gc.collect()
 
 
 # ── Cancellation ─────────────────────────────────────────────────────

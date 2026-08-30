@@ -180,12 +180,14 @@ app = FastAPI(
 
 # Include routers
 from noema.api.experiments import router as experiments_router  # noqa: PLC0415, E402
+from noema.api.grid import router as grid_router  # noqa: PLC0415, E402
 from noema.api.tasks import router as tasks_router  # noqa: PLC0415, E402
 from noema.api.webhooks import router as webhooks_router  # noqa: PLC0415, E402
 
 app.include_router(experiments_router)
 app.include_router(admin_router)
 app.include_router(diagnostics_router)
+app.include_router(grid_router)
 app.include_router(webhooks_router)
 app.include_router(tasks_router)
 

@@ -31,7 +31,7 @@ import time
 import uuid
 from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean, stdev
@@ -74,6 +74,7 @@ RECORD_FIELDS = [
     "sandbox_all_valid",
     "sandbox_summary",
     "cost_estimate",
+    "file_costs",
     "error",
 ]
 
@@ -103,6 +104,7 @@ class RunRecord:
     sandbox_summary: str
     cost_estimate: float
     error: str | None = None
+    file_costs: list[dict[str, Any]] = field(default_factory=list)
 
 
 EngineFactory = Callable[[str, str | None, str], Any]
@@ -185,6 +187,62 @@ def _delta_stats(after: dict[str, Any], before: dict[str, Any]) -> tuple[int, in
         int(after.get("tokens_input", 0) - before.get("tokens_input", 0)),
         int(after.get("tokens_output", 0) - before.get("tokens_output", 0)),
     )
+
+
+def attribute_file_costs(
+    code_blocks: list[Any],
+    tokens_input: int,
+    tokens_output: int,
+    cost_per_token: float,
+) -> list[dict[str, Any]]:
+    """Attribute a run's token/cost totals down to each generated file (T2.5).
+
+    The run's measured ``tokens_input``/``tokens_output`` are distributed
+    across the solution's code blocks weighted by generated line count — the
+    same line-weighted model the PR cost attribution uses. The per-file rows
+    always sum back to the run totals (the last file absorbs rounding drift),
+    so the report answers "what did each architecture line cost".
+
+    Empty when there is nothing to attribute: no code blocks, no generated
+    lines, or a run that produced no tokens at all.
+    """
+    files: list[tuple[str, int]] = []
+    for block in code_blocks:
+        name = getattr(block, "filename", "") or ""
+        content = getattr(block, "content", "") or ""
+        if not name:
+            continue
+        files.append((name, max(len(content.splitlines()), 0)))
+
+    total_lines = sum(lines for _, lines in files)
+    if total_lines <= 0 or (tokens_input <= 0 and tokens_output <= 0):
+        return []
+
+    rows: list[dict[str, Any]] = []
+    sum_input = sum_output = 0
+    for i, (name, lines) in enumerate(files):
+        if i < len(files) - 1:
+            share = lines / total_lines
+            file_input = round(tokens_input * share)
+            file_output = round(tokens_output * share)
+        else:
+            # Last file absorbs the rounding remainder so sums stay exact.
+            file_input = tokens_input - sum_input
+            file_output = tokens_output - sum_output
+        sum_input += file_input
+        sum_output += file_output
+        total = file_input + file_output
+        rows.append(
+            {
+                "file_path": name,
+                "lines": lines,
+                "tokens_input": file_input,
+                "tokens_output": file_output,
+                "total_tokens": total,
+                "cost_estimate": round(cost_per_token * total, 8),
+            }
+        )
+    return rows
 
 
 def _mean(values: list[float]) -> float:
@@ -289,6 +347,12 @@ async def _run_once(
         sandbox_summary=sandbox_summary,
         cost_estimate=round(cost_per_token * total_tokens, 8),
         error=error,
+        file_costs=attribute_file_costs(
+            solution.code_blocks if solution else [],
+            tokens_input,
+            tokens_output,
+            cost_per_token,
+        ),
     )
 
 
@@ -466,11 +530,16 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _csv_rows(records: list[RunRecord]) -> list[dict[str, Any]]:
+    """Flat CSV projection of run records: nested ``file_costs`` stays in JSON."""
+    return [{k: v for k, v in asdict(r).items() if k != "file_costs"} for r in records]
+
+
 def _write_artifacts(out_path: Path, run_id: str, records: list[RunRecord]) -> None:
     (out_path / run_id).mkdir(parents=True, exist_ok=True)
     run_dir = out_path / run_id
     _write_json(run_dir / "results.json", [asdict(r) for r in records])
-    _write_csv(run_dir / "runs.csv", [asdict(r) for r in records])
+    _write_csv(run_dir / "runs.csv", _csv_rows(records))
     _write_csv(run_dir / "summary.csv", _summarize(records))
     _write_json(
         run_dir / "summary.json",

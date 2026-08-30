@@ -218,6 +218,11 @@ class WorkerSettings(BaseSettings):
     hierarchy_max_depth: int = Field(default=10, ge=1)
     hierarchy_max_concurrent: int = Field(default=50, ge=1)
     task_timeout: float = Field(default=300.0, gt=0)
+    ledger_path: str | Path = Field(
+        default="",
+        description="JSONL file for this node's contribution ledger (T3.3); "
+        "empty keeps the ledger in memory only",
+    )
 
 
 class MemorySettings(BaseSettings):
@@ -330,6 +335,22 @@ class AutonomySettings(BaseSettings):
     )
 
 
+class FederationSettings(BaseSettings):
+    """Configuration for the node federation protocol (T3.2)."""
+
+    model_config = SettingsConfigDict(env_prefix="NOEMA_FEDERATION_")
+
+    peers: list[str] = Field(
+        default_factory=list,
+        description="Peer Noema node addresses ('host:port') for sub-task delegation",
+    )
+    max_retries: int = Field(default=2, ge=0, le=10)
+    base_delay: float = Field(default=0.05, ge=0.0, description="Retry backoff base, seconds")
+    failure_threshold: int = Field(default=3, ge=1, description="Circuit breaker trip threshold")
+    recovery_timeout: float = Field(default=30.0, gt=0)
+    request_timeout: float = Field(default=30.0, gt=0, description="Per-attempt gRPC timeout")
+
+
 # ─── Root config ─────────────────────────────────────────────────────────
 class NoemaSettings(BaseSettings):
     """Single source of truth for every tunable knob in Noema."""
@@ -371,6 +392,7 @@ class NoemaSettings(BaseSettings):
     neurosymbolic: NeurosymbolicSettings = Field(default_factory=NeurosymbolicSettings)
     audit: AuditSettings = Field(default_factory=AuditSettings)
     autonomy: AutonomySettings = Field(default_factory=AutonomySettings)
+    federation: FederationSettings = Field(default_factory=FederationSettings)
 
     # Chain-of-thought
     cot_max_steps: int = Field(default=12, ge=1)
