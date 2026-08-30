@@ -37,6 +37,17 @@ worker:
   hierarchy_max_depth: 10
   hierarchy_max_concurrent: 50
   task_timeout: 300.0
+  # Per-node contribution ledger (JSONL); empty keeps it in memory only.
+  ledger_path: ""
+
+# Federation protocol (T3.2): peer nodes for sub-task delegation.
+federation:
+  peers: []  # e.g. ["10.0.0.2:50051", "10.0.0.3:50051"]
+  max_retries: 2
+  base_delay: 0.05
+  failure_threshold: 3
+  recovery_timeout: 30.0
+  request_timeout: 30.0
 
 memory:
   data_dir: "./data"

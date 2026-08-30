@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.2.0 (2026-08-31)
+
+### Features
+
+- **Global Noema Grid (Phase 3 complete)** — the roadmap's final phase is done:
+  - **T3.1 Multi-node worker pool** — worker heartbeats now advertise `metrics_port`; `noema arq workers` lists the live fleet from Redis; stress-tested 100 tasks over 3 nodes with zero double-execution (`tests/test_grid_workers.py`).
+  - **T3.2 Federation protocol** — new `noema/federation/` package: `FederationRouter` splits sub-tasks, delegates them round-robin to the next healthy peer over gRPC Think with per-peer circuit breaker + exponential-backoff retries (open circuits fail fast), falls back to the local executor when no peer is healthy, and re-joins results positionally. Config: `NOEMA_FEDERATION__*`; CLI: `noema grid federate` (`tests/test_federation.py`).
+  - **T3.3 Token/ledger economy** — `noema/billing/ledger.py` `ContributionLedger`: bounded append-only JSONL entries (node, task, kind, model, tokens, cost, peer, artifact) with `per_node()`/`entries_for()`/`audit()`; the arq worker records every completed think job (`NOEMA_WORKER_LEDGER_PATH`), federated delegations are recorded by the router, `noema arq ledger` audits a node's file (`tests/test_ledger.py`).
+  - **T3.4 Grid dashboard** — `noema/observability/grid.py` `GridDashboard` joins Redis heartbeats with each node's Prometheus `/metrics` into a per-node latency/token/error view + cluster totals (graceful degradation without `prometheus_client`; unreachable nodes are reported, never raised). Exposed as `GET /grid` and `noema grid status` (`tests/test_grid_dashboard.py`, `tests/test_grid_api.py`).
+- **Per-file cost attribution (T2.5)** — `noema/experiments/runner.py` `attribute_file_costs` distributes each run's measured tokens across generated files weighted by line count; per-file rows sum back exactly to run totals. `results.json` now includes `file_costs`; `runs.csv` stays flat (`tests/test_file_costs.py`).
+
+### Quality
+
+- 0 mypy errors, 0 ruff issues; full suite: 1197 passed, 1 skipped.
+- Roadmap Phases 1–3 fully closed (`docs/ROADMAP.md`).
+
+## v1.1.0 (2026-08-21)
+
+### Features
+
+- **Ontological Reinforcement Learning (ORL)** with epistemic validator (`noema/ontology/`); ontological axioms are injected into LLM context for deterministic architecture generation.
+- **Pluggable sandbox environments**, ontology graph, chaos test harness.
+- **Foundation hardening**: the merge gate never raises; verifier failures are fail-closed; LLM errors, judge gate, tenant hygiene, ORL mutation guards; tenant precedence in `think()`; bound static gate input; kernel error isolation with fail-degraded peripheral stores.
+
+### Performance
+
+- Incremental HNSW adds, shared embedder, vectorized cache scan, lean checkpoint IO.
+
+### Fixes
+
+- Billing: default Anthropic model bumped to `claude-sonnet-4-5` after the 2026-06 EOL; zero suite warnings.
+- Sandbox: Docker lint/test repairs, rlimit crash fix, walrus static gate.
+
 ## v1.0.1 (2026-08-07)
 
 ### Fixes

@@ -7,8 +7,8 @@ Noema — это не ещё один генератор кода. Это **ин
 <p align="center">
 <img src="https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
 <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
-<img src="https://img.shields.io/badge/tests-493-blue?label=unit%20tests" alt="493 unit tests">
-<img src="https://img.shields.io/badge/version-1.1.0-brightgreen" alt="v1.1.0">
+<img src="https://img.shields.io/badge/tests-1197-blue?label=unit%20tests" alt="1197 unit tests">
+<img src="https://img.shields.io/badge/version-1.2.0-brightgreen" alt="v1.2.0">
 <img src="https://img.shields.io/badge/domains-22-orange" alt="22 domain modules">
 </p>
 
@@ -48,8 +48,10 @@ LLM генерирует гипотезу. Символьный движок (Z3
 | **Ядра и агенты** | Архитектор, кодер, security, devops, DBA, AI-engineer; пайплайны fullstack/quick/security/arch-review |
 | **Память и знания** | Эпизодическая, семантическая и процедурная память + доменная база знаний |
 | **Экономика токенов** | Каждый вызов LLM трассируется, атрибутируется и конвертируется в денежную оценку; бюджеты и circuit breakers |
-| **Воспроизводимые бенчмарки** | Одна матрица задач по провайдерам/моделям → `results.json` + CSV-сводки |
+| **Воспроизводимые бенчмарки** | Одна матрица задач по провайдерам/моделям → `results.json` + CSV-сводки, в т.ч. пофайловое разложение токенов/стоимости каждой сгенерированной строки |
 | **API для продакшена** | FastAPI: rate limiting, API-ключи, квоты по тенантам, RFC 7807, метрики Prometheus, streaming |
+| **Grid-федерация** | `noema grid federate`: подзадачи делегируются пирам по gRPC с circuit breaker и ретраями, при недоступности пиров — локальный фолбэк; вклад каждой ноды пишется в аудируемый ledger |
+| **Дашборд грида** | `GET /grid` и `noema grid status`: живое состояние флота воркеров — латентность, токены, ошибки по каждой ноде + итоги по кластеру |
 
 ## Архитектура в одном взгляде
 

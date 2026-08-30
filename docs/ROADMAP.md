@@ -7,7 +7,7 @@
 
 ---
 
-## Phase 1 — The Architect (current)
+## Phase 1 — The Architect
 
 Noema works as a CLI/API for engineers: `noema think "Real-time Chat App"` produces a full
 solution, benchmarked through the reproducible runner.
@@ -93,9 +93,17 @@ in the sandbox, and only provably-good changes merge.
       Done when: `POST /experiments` returns a run id and the artifacts land in `results/`.
       Verified by `tests/test_experiments_api.py` (real fallback-provider run, artifacts
       on disk, list/get endpoints, config rejection, path-traversal guard).
-- [ ] **T2.5 Exact cost per artifact line.** Trace token attribution down to generated files so
-      the report answers "what did each architecture line cost".
+- [x] **T2.5 Exact cost per artifact line.** `attribute_file_costs`
+      (`noema/experiments/runner.py`) distributes each run's measured
+      `tokens_input`/`tokens_output` across the solution's code blocks
+      weighted by generated line count (the same line-weighted model as PR
+      cost attribution); the last file absorbs rounding drift so per-file
+      rows sum back exactly to the run totals. `RunRecord.file_costs` flows
+      into `results.json` (`runs.jsonl` keeps the incremental copy);
+      `runs.csv` stays a flat projection without the nested rows.
       Done when: `results.json` includes per-file token/cost breakdown.
+      Verified by `tests/test_file_costs.py` (line-weighted split, exact
+      sums, empty inputs, on-disk artifacts) and the schema test.
 
 ---
 
@@ -104,18 +112,54 @@ in the sandbox, and only provably-good changes merge.
 Noema becomes a decentralized network: heavy reasoning is delegated across nodes, coordinated
 by a shared Redis queue and a gRPC mesh.
 
-- [ ] **T3.1 Multi-node worker pool.** Run `noema worker` on N nodes against one Redis queue with
-      heartbeats and graceful drain on shutdown (`noema/workers/arq_worker.py`).
-      Done when: a stress run distributes 100 tasks across 3 nodes with zero double-execution.
-- [ ] **T3.2 Federation protocol.** Sub-task delegation between nodes over gRPC
-      (`noema/grpc/`), with retries and circuit breaking.
-      Done when: a hierarchy of sub-tasks is split across two nodes and re-joined correctly.
-- [ ] **T3.3 Token/ledger economy.** Attribute task costs and contributions via the tracer and
-      record them in `noema/billing/`.
-      Done when: a run produces an auditable ledger of who (which node/task) generated what value.
-- [ ] **T3.4 Grid dashboard.** Aggregate Prometheus metrics per node (`metrics_port` in
-      `noema/observability`) into a per-node latency/token/error view.
-      Done when: a dashboard renders live grid health from the existing metric endpoints.
+- [x] **T3.1 Multi-node worker pool.** `noema arq worker` publishes liveness
+      to Redis (`NodeHeartbeat` in `noema/workers/arq_worker.py`) under an
+      auto-expiring key with `draining` and `metrics_port` fields; graceful
+      drain marks the node draining and removes the key on shutdown, and a
+      dead node disappears when its TTL lapses. `noema arq workers` lists
+      the live fleet from the registry.
+      Done when: a stress run distributes 100 tasks across 3 nodes with zero
+      double-execution. Verified by `tests/test_grid_workers.py` (100 tasks
+      over 3 heterogeneous nodes: no double-claims, no loss, even split,
+      heartbeats drained) and `tests/test_arq_worker.py`.
+- [x] **T3.2 Federation protocol.** New `noema/federation/` package:
+      `FederationRouter.execute` splits sub-tasks, delegates each to the next
+      healthy peer over the existing gRPC Think RPC, and re-joins results
+      positionally. Per-peer `ResilientExecutor` (circuit breaker +
+      exponential-backoff retries; an open circuit fails fast) with a hard
+      request timeout; when no healthy peer remains — or a delegation
+      ultimately fails — the sub-task falls back to the local executor
+      instead of failing the hierarchy. Every delegation lands in the
+      contribution ledger. Config: `NOEMA_FEDERATION__*` (peers, timeouts,
+      thresholds); CLI: `noema grid federate`.
+      Done when: a hierarchy of sub-tasks is split across two nodes and
+      re-joined correctly. Verified by `tests/test_federation.py`
+      (round-robin split, retry-then-success, local fallback, circuit opens
+      at threshold and routes around the dead peer, positional re-join,
+      ledger entries).
+- [x] **T3.3 Token/ledger economy.** `noema/billing/ledger.py`
+      `ContributionLedger`: append-only JSONL entries (node, task, kind,
+      model, in/out tokens, cost, peer, artifact) with bounded memory;
+      `per_node()`/`entries_for()`/`audit()` answer "who generated what
+      value". The arq worker records every completed `think` job into its
+      ledger (`NOEMA_WORKER_LEDGER` path), and federated delegations are
+      recorded by the router; `noema arq ledger` audits a node's file.
+      Done when: a run produces an auditable ledger of who (which
+      node/task) generated what value. Verified by `tests/test_ledger.py`
+      (aggregation, task trails, JSONL round-trip, corrupt-line tolerance,
+      bounded memory, write failures never break the run).
+- [x] **T3.4 Grid dashboard.** `noema/observability/grid.py`
+      `GridDashboard` joins the Redis worker heartbeats with each node's
+      Prometheus `/metrics` endpoint (advertised `metrics_port`) into a
+      per-node latency/token/error view plus cluster totals; exposition
+      parsing degrades gracefully without `prometheus_client`, and an
+      unreachable node is reported, never raised. Exposed as
+      `GET /grid` (`noema/api/grid.py`) and `noema grid status` (CLI);
+      `noema arq workers` renders the live fleet.
+      Done when: a dashboard renders live grid health from the existing
+      metric endpoints. Verified by `tests/test_grid_dashboard.py`
+      (aggregation, unreachable nodes, dead-node expiry, snapshot stream)
+      and `tests/test_grid_api.py` (endpoint shape, never-500 contract).
 
 ---
 

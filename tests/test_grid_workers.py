@@ -22,6 +22,14 @@ from noema.workers.arq_worker import (
 )
 
 
+async def _hgetall(r, key: str) -> dict[str, str]:
+    raw = await r.hgetall(key)
+    return {
+        k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v
+        for k, v in raw.items()
+    }
+
+
 @pytest.fixture
 def redis():
     return fakeredis.aioredis.FakeRedis(decode_responses=True)
