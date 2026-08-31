@@ -5,7 +5,7 @@
 Noema — это не ещё один генератор кода. Это **инженерный разум**: система, которая не просто выдаёт решение, а проверяет его формальной верификацией, выполняет в изолированной песочнице, ведёт аудируемый трейл каждой мысли и сама открывает pull-request'ы на свои же инциденты.
 
 <p align="center">
-<img src="https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
+<img src="https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white" alt="Python 3.12+">
 <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
 <img src="https://img.shields.io/badge/tests-1197-blue?label=unit%20tests" alt="1197 unit tests">
 <img src="https://img.shields.io/badge/version-1.2.0-brightgreen" alt="v1.2.0">
