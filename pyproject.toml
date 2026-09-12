@@ -65,8 +65,8 @@ db = [
 full = [
     "chromadb>=1.5.9",
     "sentence-transformers>=2.0",
-    "openai>=3.8.0,<4.0",
-    "z3-solver>=4.13",
+"openai>=3.8.0,<4.0",
+    "z3-solver>=5.1.0.0",
 ]
 sentry = [
     "sentry-sdk>=2.68.0",
