@@ -7,7 +7,7 @@ Noema — это не ещё один генератор кода. Это **ин
 <p align="center">
 <img src="https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white" alt="Python 3.12+">
 <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
-<img src="https://img.shields.io/badge/tests-1197-blue?label=unit%20tests" alt="1197 unit tests">
+<img src="https://img.shields.io/badge/tests-1201-blue?label=unit%20tests" alt="1201 unit tests">
 <img src="https://img.shields.io/badge/version-1.2.0-brightgreen" alt="v1.2.0">
 <img src="https://img.shields.io/badge/domains-22-orange" alt="22 domain modules">
 </p>
@@ -41,7 +41,7 @@ LLM генерирует гипотезу. Символьный движок (Z3
 | **Формальная верификация (Z3)** | Каждая гипотеза проверяется против извлечённого символического контракта. Solver недоступен → решение не принимается (fail-closed) |
 | **Статический анализ до запуска** | Чистый AST-проход: синтаксис, гигиена импортов, неопределённые имена — вердикт ещё до запуска непроверенного кода |
 | **Изолированная песочница** | Docker-запуск без сети, с лимитами CPU/памяти/времени; статический вердикт короткозамыкает запуск |
-| **Аудит рассуждений** | Каждый шаг мысли, вердикт Z3 и AST фиксируются в reasoning-trace — старый вердикт перепроверяется детерминированно, без LLM |
+| **Аудит рассуждений** | Каждый шаг мысли, вердикт Z3 и AST фиксируются в reasoning-trace — старый вердикт перепроверяется детерминированно, без LLM; трейсы персистентны на диске (`trace_dir`, по умолчанию `.noema/traces`), OTLP-экспорт зарезервирован (`NOEMA_OBS__TRACING_ENDPOINT`)
 | **Автономность** | Инцидент из Sentry/webhook → фикс → ветка → PR с прошедшей валидацией. Merge-гейт по judge-оценке в CI |
 | **Самоэволюция под доказательствами** | Мутации применяются только когда проходят тесты (`evolution_test_before_apply`) |
 | **22 доменных модуля** | auth, database, gateway, graphql, ml_ops, mobile, terraform, websocket и другие — работают автономно и вместе |
@@ -49,7 +49,7 @@ LLM генерирует гипотезу. Символьный движок (Z3
 | **Память и знания** | Эпизодическая, семантическая и процедурная память + доменная база знаний |
 | **Экономика токенов** | Каждый вызов LLM трассируется, атрибутируется и конвертируется в денежную оценку; бюджеты и circuit breakers |
 | **Воспроизводимые бенчмарки** | Одна матрица задач по провайдерам/моделям → `results.json` + CSV-сводки, в т.ч. пофайловое разложение токенов/стоимости каждой сгенерированной строки |
-| **API для продакшена** | FastAPI: rate limiting, API-ключи, квоты по тенантам, RFC 7807, метрики Prometheus, streaming |
+| **API для продакшена** | FastAPI: rate limiting, API-ключи, квоты по тенантам, request-timeout guard (504 + exempt-пути), RFC 7807, метрики Prometheus, streaming |
 | **Grid-федерация** | `noema grid federate`: подзадачи делегируются пирам по gRPC с circuit breaker и ретраями, при недоступности пиров — локальный фолбэк; вклад каждой ноды пишется в аудируемый ledger |
 | **Дашборд грида** | `GET /grid` и `noema grid status`: живое состояние флота воркеров — латентность, токены, ошибки по каждой ноде + итоги по кластеру |
 
@@ -170,7 +170,7 @@ CI-джоба `.github/workflows/experiments.yml` гоняет smoke-бенчм�
 
 ## Как мы проверяем то, что строим
 
-- **493 unit-теста** в 34 файлах (pytest + hypothesis + pytest-benchmark), включая гейты: автономия, reasoning-trace round-trip, статический вердикт, извлечение контрактов из требований, доменные знания.
+- **1201 unit-тест** (pytest + hypothesis + pytest-benchmark), включая гейты: автономия, reasoning-trace round-trip, статический вердикт, извлечение контрактов из требований, доменные знания.
 - **Ruff + mypy** в CI, **pre-commit** хуки.
 - **Проверка кодировки и mojibake-гейт** — сломанные юникод-строки не проходят CI.
 - **Security-сканеры** (bandit, safety, pip-audit) в пайплайне.
@@ -202,6 +202,10 @@ noema/
 
 - **Whitepaper** — видение и дизайн-принципы: почему аудируемая нейросимвольная композиция важна → [docs/WHITEPAPER.md](docs/WHITEPAPER.md)
 - **Roadmap** — три фазы: Architect → Autopoietic Enterprise → Global Noema Grid → [docs/ROADMAP.md](docs/ROADMAP.md)
+- **Configuration** — все env-переменные и YAML → [docs/configuration.md](docs/configuration.md)
+- **Deployment** — Docker/Compose/K8s/Helm/Terraform → [docs/deployment.md](docs/deployment.md)
+- **Getting started / API examples** — [docs/getting-started.md](docs/getting-started.md), [docs/api-examples.md](docs/api-examples.md)
+- **Operations** — production checklist, мониторинг, перформанс, troubleshooting → [docs/production-checklist.md](docs/production-checklist.md), [docs/monitoring-setup.md](docs/monitoring-setup.md), [docs/performance-tuning.md](docs/performance-tuning.md), [docs/troubleshooting.md](docs/troubleshooting.md)
 - MkDocs-сайт с API-справочником — `mkdocs serve`
 
 ## Статус и дорога

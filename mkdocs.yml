@@ -1,7 +1,7 @@
 site_name: Noema
 site_description: Production-grade AI reasoning engine
 site_url: https://noema.ai
-repo_url: https://github.com/anomalyco/noema
+repo_url: https://github.com/ssrjkk/noema
 edit_uri: edit/main/docs/
 
 theme:
@@ -65,13 +65,19 @@ nav:
       - Billing: api/billing.md
   - Configuration: configuration.md
   - Deployment: deployment.md
+  - Operations:
+      - Production Checklist: production-checklist.md
+      - Monitoring: monitoring-setup.md
+      - Performance Tuning: performance-tuning.md
+      - Troubleshooting: troubleshooting.md
+  - API Examples: api-examples.md
   - Contributing: contributing.md
   - Changelog: changelog.md
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/anomalyco/noema
+      link: https://github.com/ssrjkk/noema
   version:
     provider: mike
 

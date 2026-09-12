@@ -58,6 +58,8 @@ Settings are organized into namespaced groups. Each group uses a unique environm
 | `NOEMA_API_CORS_ORIGINS` | `["*"]` | Allowed CORS origins |
 | `NOEMA_API_CORS_METHODS` | `["GET","POST","PUT","DELETE"]` | Allowed CORS methods |
 | `NOEMA_API_MAX_REQUEST_BODY` | `1048576` | Max request body in bytes (1 MB) |
+| `NOEMA_API_REQUEST_TIMEOUT_SECONDS` | `960.0` | Max handler wall time per request; `0` disables the guard |
+| `NOEMA_API_REQUEST_TIMEOUT_EXEMPT` | `[]` | Paths exempt from the request-timeout guard (e.g. `["/think/stream"]`) |
 | `NOEMA_API_MAX_TITLE_LENGTH` | `200` | Max task title length |
 | `NOEMA_API_MAX_DESCRIPTION_LENGTH` | `10000` | Max task description length |
 | `NOEMA_API_MAX_TAGS` | `20` | Max number of tags |
@@ -117,6 +119,7 @@ Settings are organized into namespaced groups. Each group uses a unique environm
 | `NOEMA_NS_VERIFICATION_TIMEOUT` | `5.0` | Z3 verification timeout |
 | `NOEMA_NS_EVOLUTION_ENABLED` | `true` | Enable outcome tracking |
 | `NOEMA_NS_FALLBACK_TO_COT` | `true` | Fallback to CoT on NS failure |
+| `NOEMA_NS_TRACE_DIR` | `.noema/traces` | Directory for persisted reasoning traces (relative to the project root; `""` disables persistence) |
 
 ### Global (`NOEMA_*`)
 

@@ -4,7 +4,7 @@
 
 ```bash
 # Clone
-git clone https://github.com/anomalyco/noema
+git clone https://github.com/ssrjkk/noema
 cd noema
 
 # Basic install

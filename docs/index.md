@@ -8,7 +8,8 @@
 - **NeuroSymbolic Engine** — Z3 formal verification + LLM hypothesis generation with circuit breaker protection
 - **Multi-tenant** — contextvar isolation, per-tenant quotas, feature flags, audit logging
 - **Resilience** — Circuit breakers, graceful degradation (Redis→memory, PostgreSQL→file), rate limiting
-- **Observability** — Prometheus metrics, Sentry errors, structured logging (structlog), OpenTelemetry tracing
+- **API guards** — Request size limits and request timeout protection (`504` + exempt paths)
+- **Observability** — Prometheus metrics, Sentry errors, structured logging (structlog), OpenTelemetry tracing, persisted reasoning traces (`.noema/traces`)
 - **SSE Streaming** — Real-time step progress via Server-Sent Events
 - **Security** — PII redaction, RAG injection sanitizer, sandboxed code execution
 - **Self-Evolution** — Automated prompt optimization via trace analysis and judge feedback
@@ -41,3 +42,11 @@ NoemaEngine
 ├── EvolutionEngine
 └── SandboxEngine
 ```
+
+## Guides
+
+- [Getting Started](getting-started.md) · [API Examples](api-examples.md)
+- [Configuration](configuration.md) · [Deployment](deployment.md)
+- [Production Checklist](production-checklist.md) · [Monitoring](monitoring-setup.md)
+- [Performance Tuning](performance-tuning.md) · [Troubleshooting](troubleshooting.md)
+- [Architecture](architecture.md) · [Contributing](contributing.md) · [Changelog](changelog.md)

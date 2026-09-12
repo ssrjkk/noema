@@ -3,7 +3,7 @@
 ## Development Setup
 
 ```bash
-git clone https://github.com/anomalyco/noema
+git clone https://github.com/ssrjkk/noema
 cd noema
 pip install -e ".[dev,db,full,sentry]"
 ```

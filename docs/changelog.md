@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.2.1 (2026-09-12)
+
+### Features
+
+- **Request timeout guard** — `RequestTimeoutMiddleware` in `noema/api/middleware.py` fails closed with `504 {error: request_timeout}` when a handler exceeds `NOEMA_API_REQUEST_TIMEOUT_SECONDS` (default `960.0`; `0` disables it). Paths in `NOEMA_API_REQUEST_TIMEOUT_EXEMPT` bypass the guard; the response still carries the `X-Request-ID` header.
+- **Trace persistence** — reasoning traces are now persisted to `NOEMA_NS_TRACE_DIR` (default `.noema/traces` under the project root, `""` disables). OpenTelemetry/OTLP export stays a reserved hook (`NOEMA_OBS_TRACING_ENDPOINT`, default `http://localhost:4318`).
+- **`arq` declared as a dependency** (`arq>=0.28.0`) — the async job worker is now formally part of the project; `noema/workers/arq_worker.py` updated for the arq 0.28 `Worker`/`Monitor` signatures (`max_tries` instead of the removed `max_retries`/`retry_delay`).
+- **Docker hygiene** — new `.dockerignore` keeps builds lean.
+
+### Fixes
+
+- **Dependency conflict** — `redis` pin relaxed to `>=5.0.3,<6.0` so the declared `arq` requirement (`redis<6`) resolves in a clean install (pip previously failed with `ResolutionImpossible` in CI).
+- **Grid API test flakiness** — `tests/test_grid_api.py` no longer crosses asyncio event-loop boundaries with `fakeredis`; the fixture seeds on the same loop the ASGI app runs on.
+
+### Docs
+
+- New: `docs/api-examples.md`, `docs/monitoring-setup.md`, `docs/performance-tuning.md`, `docs/production-checklist.md`, `docs/troubleshooting.md`.
+- Updated: `README.md`, `docs/configuration.md`, `docs/index.md`, `docs/getting-started.md`, `docs/contributing.md`, `mkdocs.yml` (new pages + repo URL).
+
+### Quality
+
+- 0 mypy errors, 0 ruff issues; full suite: 1201 passed, 1 skipped.
+
 ## v1.2.0 (2026-08-31)
 
 ### Features
