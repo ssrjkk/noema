@@ -1,4 +1,4 @@
-"""Cost Attribution & Billing — отслеживание затрат по tenant, задаче, шагу."""
+"""Cost Attribution & Billing — tracking costs by tenant, task, and step."""
 
 from __future__ import annotations
 

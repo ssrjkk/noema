@@ -1,4 +1,4 @@
-"""Tracer — OpenTelemetry-совместимая трассировка + Prompt Version Control."""
+"""Tracer — OpenTelemetry-compatible tracing + Prompt Version Control."""
 
 from __future__ import annotations
 

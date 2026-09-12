@@ -1,4 +1,4 @@
-"""PII/Secret Redactor — вычищает ключи, токены и PII из промптов."""
+"""PII/Secret Redactor — strips keys, tokens and PII from prompts."""
 
 from __future__ import annotations
 

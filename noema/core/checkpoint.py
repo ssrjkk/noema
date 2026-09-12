@@ -1,4 +1,4 @@
-"""DAG Checkpointing — сохранение прогресса CoT для resumable execution."""
+"""DAG Checkpointing — persisting CoT progress for resumable execution."""
 
 from __future__ import annotations
 

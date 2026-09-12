@@ -1,4 +1,4 @@
-"""Система пайплайнов — цепочки ядер для обработки."""
+"""Pipeline system — chains of kernels for processing."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class StepStatus(StrEnum):
 
 @dataclass
 class PipelineStep:
-    """Шаг пайплайна."""
+    """A pipeline step."""
 
     name: str
     kernel_name: str | None = None
@@ -46,7 +46,7 @@ class PipelineStep:
 
 @dataclass
 class PipelineResult:
-    """Результат выполнения пайплайна."""
+    """Result of a pipeline run."""
 
     pipeline_name: str
     steps: list[PipelineStep]
@@ -65,9 +65,9 @@ class PipelineResult:
 
 class Pipeline:
     """
-    Пайплайн — цепочка шагов для обработки задач.
+    A pipeline is a chain of steps for processing tasks.
 
-    Каждый шаг может быть ядром, функцией или условием.
+    Each step can be a kernel, a function, or a condition.
     """
 
     def __init__(self, name: str) -> None:
@@ -88,7 +88,7 @@ class Pipeline:
         retry_count: int = 0,
         timeout: float = 30.0,
     ) -> Pipeline:
-        """Добавить шаг в пайплайн (fluent API)."""
+        """Add a step to the pipeline (fluent API)."""
         self.steps.append(
             PipelineStep(
                 name=name,
@@ -117,7 +117,7 @@ class Pipeline:
         noema: Any = None,
         initial_context: dict[str, Any] | None = None,
     ) -> PipelineResult:
-        """Выполнить пайплайн."""
+        """Execute the pipeline."""
         self._context = initial_context or {}
         self._context["task"] = task
 
@@ -131,13 +131,13 @@ class Pipeline:
         for step in self.steps:
             result.steps.append(step)
 
-            # Проверка условия
+            # Condition check
             if step.condition and not step.condition(self._context):
                 step.status = StepStatus.SKIPPED
                 logger.info(f"[Pipeline:{self.name}] Step '{step.name}' skipped (condition)")
                 continue
 
-            # Выполнение с retry
+            # Execution with retry
             step.status = StepStatus.RUNNING
             step_t0 = time.monotonic()
 
@@ -183,7 +183,7 @@ class Pipeline:
 
             step.duration_ms = (time.monotonic() - step_t0) * 1000
 
-            # Хуки
+            # Hooks
             for cb in self._on_step_complete:
                 if callable(cb):
                     await cb(step)
@@ -200,11 +200,11 @@ class Pipeline:
         return result
 
 
-# ── Встроенные пайплайны ────────────────────────────────────────────────────
+# ── Built-in pipelines ───────────────────────────────────────────────────────
 
 
 def create_fullstack_pipeline() -> Pipeline:
-    """Пайплайн полного цикла: анализ → архитектура → код → оптимизация → безопасность."""
+    """Full-cycle pipeline: analysis → architecture → code → optimization → security."""
     return (
         Pipeline("fullstack_generation")
         .add_step("analysis", kernel_name="analysis", phase="full")
@@ -216,7 +216,7 @@ def create_fullstack_pipeline() -> Pipeline:
 
 
 def create_quick_prototype_pipeline() -> Pipeline:
-    """Быстрый пайплайн для прототипа: только анализ + код."""
+    """Quick prototype pipeline: analysis + code only."""
     return (
         Pipeline("quick_prototype")
         .add_step("analysis", kernel_name="analysis", phase="full", timeout=10.0)
@@ -225,7 +225,7 @@ def create_quick_prototype_pipeline() -> Pipeline:
 
 
 def create_security_audit_pipeline() -> Pipeline:
-    """Пайплайн security-аудита."""
+    """Security audit pipeline."""
     return (
         Pipeline("security_audit")
         .add_step("analysis", kernel_name="analysis", phase="full")
@@ -235,7 +235,7 @@ def create_security_audit_pipeline() -> Pipeline:
 
 
 def create_architecture_review_pipeline() -> Pipeline:
-    """Пайплайн ревью архитектуры."""
+    """Architecture review pipeline."""
     return (
         Pipeline("architecture_review")
         .add_step("analysis", kernel_name="analysis", phase="analyze")

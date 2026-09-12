@@ -1,4 +1,4 @@
-"""Субагент — специализированный агент для конкретной области."""
+"""Subagent — a specialized agent for a specific domain."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ logger = get_logger(__name__)
 
 class BaseAgent(abc.ABC):
     """
-    Базовый субагент.
+    Base subagent.
 
-    Каждый агент специализируется на своей области
-    и вносит вклад в итоговое решение.
+    Each agent specializes in its own domain
+    and contributes to the final solution.
     """
 
     def __init__(self, role: AgentRole, name: str | None = None) -> None:
@@ -27,12 +27,12 @@ class BaseAgent(abc.ABC):
     @property
     @abc.abstractmethod
     def expertise(self) -> list[str]:
-        """Области экспертизы агента."""
+        """Domains of agent expertise."""
         ...
 
     @abc.abstractmethod
     async def analyze(self, task: Task) -> dict[str, Any]:
-        """Анализ задачи с точки зрения экспертизы агента."""
+        """Analyze the task from the agent's expertise perspective."""
         ...
 
     @abc.abstractmethod
@@ -42,11 +42,11 @@ class BaseAgent(abc.ABC):
         solution: Solution,
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        """Вклад агента в решение."""
+        """Agent's contribution to the solution."""
         ...
 
     async def review(self, solution: Solution) -> dict[str, Any]:
-        """Ревью решения агентом."""
+        """Review the solution as an agent."""
         return {
             "agent": self.name,
             "role": self.role.value,
@@ -60,7 +60,7 @@ class BaseAgent(abc.ABC):
 
 
 class ArchitectAgent(BaseAgent):
-    """Агент-архитектор."""
+    """Architect agent."""
 
     def __init__(self) -> None:
         super().__init__(AgentRole.ARCHITECT, "lead_architect")
@@ -70,7 +70,7 @@ class ArchitectAgent(BaseAgent):
         return ["system-design", "patterns", "scalability", "trade-offs"]
 
     async def analyze(self, task: Task) -> dict[str, Any]:
-        self._log(f"Анализую архитектурные требования: {task.title}")
+        self._log(f"Analyzing architectural requirements: {task.title}")
         return {
             "domain": self._classify_domain(task),
             "scale": self._estimate_scale(task),
@@ -83,7 +83,7 @@ class ArchitectAgent(BaseAgent):
         solution: Solution,
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        self._log("Проектирую архитектуру решения")
+        self._log("Designing the solution architecture")
         return {
             "layer": "architecture",
             "patterns_recommended": ["modular", "clean-separation"],
@@ -110,7 +110,7 @@ class ArchitectAgent(BaseAgent):
 
 
 class DeveloperAgent(BaseAgent):
-    """Агент-разработчик."""
+    """Developer agent."""
 
     def __init__(self) -> None:
         super().__init__(AgentRole.DEVELOPER, "lead_developer")
@@ -120,7 +120,7 @@ class DeveloperAgent(BaseAgent):
         return ["implementation", "patterns", "testing", "refactoring"]
 
     async def analyze(self, task: Task) -> dict[str, Any]:
-        self._log(f"Анализирую требования к реализации: {task.title}")
+        self._log(f"Analyzing implementation requirements: {task.title}")
         return {
             "modules_needed": len(task.requirements),
             "complexity_assessment": task.complexity.value,
@@ -133,7 +133,7 @@ class DeveloperAgent(BaseAgent):
         solution: Solution,
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        self._log("Генерирую кодовую базу")
+        self._log("Generating the codebase")
         return {
             "layer": "implementation",
             "files_generated": len(solution.code_blocks),
@@ -142,7 +142,7 @@ class DeveloperAgent(BaseAgent):
 
 
 class SecurityAgent(BaseAgent):
-    """Агент безопасности."""
+    """Security agent."""
 
     def __init__(self) -> None:
         super().__init__(AgentRole.SECURITY, "security_specialist")
@@ -152,7 +152,7 @@ class SecurityAgent(BaseAgent):
         return ["security-audit", "hardening", "compliance", "penetration-testing"]
 
     async def analyze(self, task: Task) -> dict[str, Any]:
-        self._log("Провожу security assessment")
+        self._log("Running security assessment")
         tags = {t.lower() for t in task.tags}
         attack_surface = []
         if "web" in tags or "api" in tags:
@@ -170,7 +170,7 @@ class SecurityAgent(BaseAgent):
         solution: Solution,
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        self._log("Добавляю security measures")
+        self._log("Adding security measures")
         return {
             "layer": "security",
             "checks_added": ["input-validation", "rate-limiting", "cors", "csp"],
@@ -191,7 +191,7 @@ class SecurityAgent(BaseAgent):
 
 
 class DevOpsAgent(BaseAgent):
-    """Агент DevOps."""
+    """DevOps agent."""
 
     def __init__(self) -> None:
         super().__init__(AgentRole.DEVOPS, "devops_engineer")
@@ -201,7 +201,7 @@ class DevOpsAgent(BaseAgent):
         return ["ci-cd", "containerization", "orchestration", "monitoring", "iac"]
 
     async def analyze(self, task: Task) -> dict[str, Any]:
-        self._log("Анализирую инфраструктурные требования")
+        self._log("Analyzing infrastructure requirements")
         return {
             "deployment_target": "kubernetes",
             "ci_cd": "github-actions",
@@ -214,7 +214,7 @@ class DevOpsAgent(BaseAgent):
         solution: Solution,
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        self._log("Настраиваю инфраструктуру и CI/CD")
+        self._log("Setting up infrastructure and CI/CD")
         return {
             "layer": "infrastructure",
             "configs_generated": [
@@ -227,7 +227,7 @@ class DevOpsAgent(BaseAgent):
 
 
 class DBAAgent(BaseAgent):
-    """Агент баз данных."""
+    """Database agent."""
 
     def __init__(self) -> None:
         super().__init__(AgentRole.DBA, "database_architect")
@@ -237,7 +237,7 @@ class DBAAgent(BaseAgent):
         return ["database-design", "optimization", "migration", "replication"]
 
     async def analyze(self, task: Task) -> dict[str, Any]:
-        self._log("Анализирую требования к данным")
+        self._log("Analyzing data requirements")
         return {
             "data_volume": "unknown",
             "consistency_requirements": "eventual",
@@ -250,7 +250,7 @@ class DBAAgent(BaseAgent):
         solution: Solution,
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        self._log("Проектирую схему БД")
+        self._log("Designing the database schema")
         return {
             "layer": "database",
             "tables": [],
@@ -260,7 +260,7 @@ class DBAAgent(BaseAgent):
 
 
 class AIEngineerAgent(BaseAgent):
-    """Агент ML/AI."""
+    """ML/AI agent."""
 
     def __init__(self) -> None:
         super().__init__(AgentRole.AI_ENGINEER, "ml_engineer")
@@ -270,7 +270,7 @@ class AIEngineerAgent(BaseAgent):
         return ["model-training", "inference-optimization", "data-pipeline", "mlops"]
 
     async def analyze(self, task: Task) -> dict[str, Any]:
-        self._log("Анализирую ML/AI требования")
+        self._log("Analyzing ML/AI requirements")
         return {
             "model_type": "unknown",
             "inference_requirements": "real-time",
@@ -283,7 +283,7 @@ class AIEngineerAgent(BaseAgent):
         solution: Solution,
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        self._log("Проектирую ML pipeline")
+        self._log("Designing the ML pipeline")
         return {
             "layer": "ml",
             "pipeline_steps": ["ingestion", "preprocessing", "training", "evaluation", "serving"],

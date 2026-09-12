@@ -1,4 +1,4 @@
-"""Ядро опимизации — производительность, кэширование, профилирование."""
+"""Optimization kernel — performance, caching, profiling."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class OptimizationKernel(BaseKernel):
-    """Ядро оптимизации производительности."""
+    """Performance optimization kernel."""
 
     @property
     def name(self) -> str:
@@ -22,7 +22,7 @@ class OptimizationKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "Оптимизация производительности, кэширование, профилирование"
+        return "Performance optimization, caching, profiling"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         tags = {t.lower() for t in task.tags}
@@ -52,7 +52,7 @@ class OptimizationKernel(BaseKernel):
             {
                 "category": "caching",
                 "strategy": "Redis L1 Cache",
-                "description": "Многоуровневое кэширование: in-memory L1 + Redis L2",
+                "description": "Multi-level caching: in-memory L1 + Redis L2",
                 "implementation": """
 @dataclass
 class TwoLevelCache:
@@ -77,7 +77,7 @@ class TwoLevelCache:
             {
                 "category": "caching",
                 "strategy": "Cache-Aside Pattern",
-                "description": "Паттерн cache-aside с автоматической инвалидацией",
+                "description": "Cache-aside pattern with automatic invalidation",
                 "priority": "medium",
                 "impact": "30-50% latency reduction",
             },
@@ -88,7 +88,7 @@ class TwoLevelCache:
             {
                 "category": "database",
                 "strategy": "Connection Pooling",
-                "description": "Пул соединений с настройкой min/max/idle timeout",
+                "description": "Connection pool with min/max/idle timeout configuration",
                 "implementation": """
 DATABASE_POOL_SIZE=20
 DATABASE_MAX_OVERFLOW=10
@@ -101,14 +101,14 @@ DATABASE_POOL_RECYCLE=1800
             {
                 "category": "database",
                 "strategy": "Read Replicas",
-                "description": "Разделение read/write трафика на реплики",
+                "description": "Read/write traffic separation to replicas",
                 "priority": "medium",
                 "impact": "3-5x read throughput increase",
             },
             {
                 "category": "database",
                 "strategy": "Query Optimization",
-                "description": "Индексы, EXPLAIN ANALYZE, batch inserts",
+                "description": "Indexes, EXPLAIN ANALYZE, batch inserts",
                 "priority": "high",
                 "impact": "10-100x query speed improvement",
             },
@@ -119,7 +119,7 @@ DATABASE_POOL_RECYCLE=1800
             {
                 "category": "infrastructure",
                 "strategy": "CDN for Static Assets",
-                "description": "CloudFlare / CloudFront для статики и API caching",
+                "description": "CloudFlare / CloudFront for static assets and API caching",
                 "priority": "medium",
                 "impact": "60-90% reduction in origin load",
             },
@@ -130,7 +130,7 @@ DATABASE_POOL_RECYCLE=1800
             {
                 "category": "concurrency",
                 "strategy": "Async I/O with Connection Pooling",
-                "description": "Асинхронные операции с пулами соединений",
+                "description": "Async operations with connection pools",
                 "implementation": """
 import asyncio
 from concurrent.futures import ProcessPoolExecutor
@@ -151,7 +151,7 @@ async def cpu_bound_task(data):
             {
                 "category": "cdn",
                 "strategy": "Edge Caching with TTL",
-                "description": "Кэширование ответов на edge-серверах",
+                "description": "Caching responses on edge servers",
                 "priority": "low",
                 "impact": "50-70% latency reduction for global users",
             },
@@ -162,21 +162,21 @@ async def cpu_bound_task(data):
             {
                 "category": "ml",
                 "strategy": "Model Quantization",
-                "description": "INT8 квантизация для ускорения инференса в 2-4x",
+                "description": "INT8 quantization for 2-4x faster inference",
                 "priority": "high",
                 "impact": "2-4x inference speedup, 50% memory reduction",
             },
             {
                 "category": "ml",
                 "strategy": "Batch Inference",
-                "description": "Батчевый инференс с динамическим batching",
+                "description": "Batch inference with dynamic batching",
                 "priority": "high",
                 "impact": "3-10x throughput improvement",
             },
             {
                 "category": "ml",
                 "strategy": "Model Caching (GPU Memory)",
-                "description": "Удержание моделей в GPU памяти между запросами",
+                "description": "Keeping models in GPU memory between requests",
                 "priority": "medium",
                 "impact": "Eliminates model loading latency",
             },
@@ -187,14 +187,14 @@ async def cpu_bound_task(data):
             {
                 "category": "scaling",
                 "strategy": "Horizontal Pod Autoscaling",
-                "description": "HPA на основе CPU/Memory/custom metrics",
+                "description": "HPA based on CPU/Memory/custom metrics",
                 "priority": "high",
                 "impact": "Auto-scaling 1-100 pods based on load",
             },
             {
                 "category": "scaling",
                 "strategy": "Load Shedding",
-                "description": "Отбрасывание запросов при перегрузке",
+                "description": "Dropping requests under overload",
                 "priority": "medium",
                 "impact": "Graceful degradation under extreme load",
             },

@@ -117,7 +117,7 @@ class WorkerPool:
             task = asyncio.create_task(self._worker_loop(worker))
             self._worker_tasks.append(task)
 
-        logger.info(f"WorkerPool запущен с {self.max_workers} воркерами")
+        logger.info(f"WorkerPool started with {self.max_workers} workers")
 
     async def shutdown(self) -> None:
         """Cancel worker coroutines and release any pending submitters.
@@ -141,7 +141,7 @@ class WorkerPool:
         self._worker_tasks.clear()
         self._tasks.clear()
         self._done_events.clear()
-        logger.info("WorkerPool остановлен")
+        logger.info("WorkerPool stopped")
 
     async def submit(
         self,

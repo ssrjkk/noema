@@ -1,4 +1,4 @@
-"""Система обратной связи — обучение на результатах."""
+"""Feedback system — learning from outcomes."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class FeedbackEntry:
-    """Запись обратной связи."""
+    """A feedback entry."""
 
     solution_id: str
     task_title: str
@@ -34,7 +34,7 @@ class FeedbackEntry:
 
 @dataclass
 class SolutionMetrics:
-    """Метрики решения для анализа."""
+    """Solution metrics for analysis."""
 
     task_tags: list[str] = field(default_factory=list)
     quality_given: str = ""
@@ -48,9 +48,9 @@ class SolutionMetrics:
 
 class FeedbackStore:
     """
-    Хранилище обратной связи.
+    Feedback store.
 
-    Анализирует паттерны успеха/неудачи для улучшения генерации.
+    Analyzes success/failure patterns to improve generation.
     """
 
     def __init__(self, persist_path: str | None = None) -> None:
@@ -59,7 +59,7 @@ class FeedbackStore:
         self._metrics: list[SolutionMetrics] = []
 
     async def load(self) -> None:
-        """Загрузка данных."""
+        """Load data from disk."""
         if self.persist_path.exists():
             try:
                 data = json.loads(self.persist_path.read_text(encoding="utf-8"))
@@ -67,12 +67,12 @@ class FeedbackStore:
                     self.entries.append(FeedbackEntry(**entry_data))
                 for m in data.get("metrics", []):
                     self._metrics.append(SolutionMetrics(**m))
-                logger.info(f"Загружено {len(self.entries)} feedback entries")
+                logger.info(f"Loaded {len(self.entries)} feedback entries")
             except Exception as e:
-                logger.warning(f"Ошибка загрузки feedback: {e}")
+                logger.warning(f"Failed to load feedback: {e}")
 
     async def persist(self) -> None:
-        """Сохранение данных (атомарно: tmp + rename, перезапись не рвёт файл)."""
+        """Persist data (atomically: tmp + rename, so a rewrite never corrupts the file)."""
         data = {
             "entries": [asdict(e) for e in self.entries],
             "metrics": [asdict(m) for m in self._metrics],
@@ -90,7 +90,7 @@ class FeedbackStore:
         would_use_again: bool = True,
         improvements: list[str] | None = None,
     ) -> FeedbackEntry:
-        """Записать обратную связь."""
+        """Record feedback for a solution."""
         entry = FeedbackEntry(
             solution_id=solution.id,
             task_title=task.title,
@@ -117,14 +117,14 @@ class FeedbackStore:
         return entry
 
     def analyze_patterns(self) -> dict[str, Any]:
-        """Анализ паттернов в обратной связи."""
+        """Analyze patterns in the collected feedback."""
         if not self.entries:
             return {"status": "no_data"}
 
         avg_rating = sum(e.rating for e in self.entries) / len(self.entries)
         reuse_rate = sum(1 for e in self.entries if e.would_use_again) / len(self.entries)
 
-        # Анализ по тегам
+        # Analysis by tags
         tag_ratings: dict[str, list[int]] = {}
         for entry in self.entries:
             for tag in entry.tags:
@@ -139,7 +139,7 @@ class FeedbackStore:
             elif avg <= 2.5:
                 worst_tags[tag] = avg
 
-        # Топ улучшений
+        # Top improvements
         all_improvements = []
         for entry in self.entries:
             all_improvements.extend(entry.improvements_suggested)
@@ -161,7 +161,7 @@ class FeedbackStore:
         }
 
     def get_stack_recommendations(self, tags: list[str]) -> dict[str, Any]:
-        """Рекомендации стека на основе обратной связи."""
+        """Stack recommendations based on feedback."""
         relevant = [m for m in self._metrics if any(t in m.task_tags for t in tags)]
         if not relevant:
             return {"recommendation": "no_data"}

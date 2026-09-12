@@ -1,4 +1,4 @@
-"""Graph-based knowledge — NetworkX граф связей между технологиями и паттернами."""
+"""Graph-based knowledge — a NetworkX graph of relations between technologies and patterns."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ logger = get_logger(__name__)
 
 class KnowledgeGraph:
     """
-    Граф знаний на основе NetworkX.
+    Knowledge graph built on NetworkX.
 
-    Связывает технологии, паттерны, проблемы и решения
-    в граф для поиска оптимальных путей.
+    Links technologies, patterns, problems, and solutions
+    in a graph to find optimal paths.
     """
 
     def __init__(self) -> None:
@@ -25,9 +25,9 @@ class KnowledgeGraph:
         self._build_default_graph()
 
     def _build_default_graph(self) -> None:
-        """Построение графа по умолчанию."""
+        """Build the default graph."""
 
-        # ── Технологии ──────────────────────────────────────────────────────
+        # ── Technologies ──────────────────────────────────────────────────────
         techs = {
             "python": {"type": "language", "category": "backend"},
             "typescript": {"type": "language", "category": "fullstack"},
@@ -94,7 +94,7 @@ class KnowledgeGraph:
             for name, attrs in nodes.items():
                 self.graph.add_node(name, **attrs)
 
-        # ── Связи: язык → фреймворк ────────────────────────────────────────
+        # ── Relations: language → framework ────────────────────────────────────────
         lang_fw = [
             ("python", "fastapi"),
             ("python", "django"),
@@ -116,7 +116,7 @@ class KnowledgeGraph:
         for src, dst in lang_fw:
             self.graph.add_edge(src, dst, relationship="supports")
 
-        # ── Фреймворк → БД ─────────────────────────────────────────────────
+        # ── Framework → database ─────────────────────────────────────────────────
         fw_db = [
             ("fastapi", "postgresql"),
             ("fastapi", "redis"),
@@ -136,7 +136,7 @@ class KnowledgeGraph:
         for src, dst in fw_db:
             self.graph.add_edge(src, dst, relationship="integrates_with")
 
-        # ── БД → инфра ─────────────────────────────────────────────────────
+        # ── Database → infrastructure ─────────────────────────────────────────────────────
         db_infra = [
             ("redis", "kubernetes"),
             ("postgresql", "kubernetes"),
@@ -146,7 +146,7 @@ class KnowledgeGraph:
         for src, dst in db_infra:
             self.graph.add_edge(src, dst, relationship="deploys_on")
 
-        # ── Фреймворк → инфра ──────────────────────────────────────────────
+        # ── Framework → infrastructure ──────────────────────────────────────────────
         fw_infra = [
             ("fastapi", "docker"),
             ("fastapi", "kubernetes"),
@@ -158,7 +158,7 @@ class KnowledgeGraph:
         for src, dst in fw_infra:
             self.graph.add_edge(src, dst, relationship="containerized_by")
 
-        # ── Проблемы и решения ──────────────────────────────────────────────
+        # ── Problems and solutions ──────────────────────────────────────────────
         problems = {
             "high-load": {"type": "problem", "category": "scalability"},
             "real-time": {"type": "problem", "category": "latency"},
@@ -189,12 +189,12 @@ class KnowledgeGraph:
         requirements: list[str],
         max_depth: int = 3,
     ) -> list[list[str]]:
-        """Найти оптимальный путь стека по требованиям."""
+        """Find the optimal stack path for the requirements."""
         candidates = []
         for req in requirements:
             req_lower = req.lower()
             if req_lower in self.graph:
-                # BFS от проблемы к решениям
+                # BFS from problem to solutions
                 paths = []
                 for target in self.graph.nodes():
                     if self.graph.nodes[target].get("type") in ("framework", "database"):
@@ -205,12 +205,12 @@ class KnowledgeGraph:
                             paths.append(path)
                 candidates.extend(paths)
 
-        # Сортировка по длине (короткий путь = лучше)
+        # Sort by length (shorter path = better)
         candidates.sort(key=len)
         return candidates[:5]
 
     def get_compatible_technologies(self, tech: str) -> dict[str, list[str]]:
-        """Получить совместимые технологии."""
+        """Get compatible technologies."""
         if tech.lower() not in self.graph:
             return {}
 
@@ -231,7 +231,7 @@ class KnowledgeGraph:
         return result
 
     def suggest_architecture(self, tags: list[str]) -> dict[str, Any]:
-        """Предложить архитектуру на основе тегов."""
+        """Suggest an architecture based on tags."""
         tag_nodes = [t.lower() for t in tags if t.lower() in self.graph]
 
         components = []
@@ -248,7 +248,7 @@ class KnowledgeGraph:
                         }
                     )
 
-        # Кластеризация по типам
+        # Cluster by type
         by_type: dict[str, list[str]] = {}
         for node in tag_nodes:
             ntype = self.graph.nodes[node].get("type", "unknown")

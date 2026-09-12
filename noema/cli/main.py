@@ -75,18 +75,18 @@ def _main(ctx: typer.Context) -> None:
 
 @app.command(rich_help_panel="Core")
 def think(
-    title: str = typer.Argument(..., help="Название задачи"),
-    description: str = typer.Option("", "--desc", "-d", help="Описание задачи"),
-    tags: str = typer.Option("", "--tags", "-t", help="Теги через запятую"),
+    title: str = typer.Argument(..., help="Task title"),
+    description: str = typer.Option("", "--desc", "-d", help="Task description"),
+    tags: str = typer.Option("", "--tags", "-t", help="Comma-separated tags"),
     complexity: str = typer.Option(
         "moderate", "--complexity", "-c", help="trivial|simple|moderate|complex|extreme"
     ),
-    stack: str = typer.Option("", "--stack", "-s", help="Стек через запятую"),
+    stack: str = typer.Option("", "--stack", "-s", help="Comma-separated stack"),
     output: str = typer.Option("summary", "--output", "-o", help="summary|full|json"),
-    scaffold: bool = typer.Option(False, "--scaffold", help="Экспорт в структуру проекта"),
-    scaffold_dir: str = typer.Option(".", "--scaffold-dir", help="Директория для экспорта"),
-    llm: str = typer.Option("", "--llm", help="LLM провайдер: openai|anthropic|ollama"),
-    model: str = typer.Option("", "--model", help="Модель LLM"),
+    scaffold: bool = typer.Option(False, "--scaffold", help="Export to project structure"),
+    scaffold_dir: str = typer.Option(".", "--scaffold-dir", help="Directory for export"),
+    llm: str = typer.Option("", "--llm", help="LLM provider: openai|anthropic|ollama"),
+    model: str = typer.Option("", "--model", help="LLM model"),
 ) -> None:
     """Generate a technical solution for a task."""
     asyncio.run(
@@ -238,10 +238,10 @@ def _print_full(solution: Solution, thought: ThoughtProcess) -> None:
 @app.command(rich_help_panel="Core")
 def pipeline(
     name: str = typer.Argument("fullstack", help="Pipeline: fullstack|quick|security|arch-review"),
-    title: str = typer.Option("My Project", "--title", help="Название задачи"),
-    tags: str = typer.Option("", "--tags", "-t", help="Теги через запятую"),
+    title: str = typer.Option("My Project", "--title", help="Task title"),
+    tags: str = typer.Option("", "--tags", "-t", help="Comma-separated tags"),
 ) -> None:
-    """Запустить пайплайн ядер."""
+    """Run a kernel pipeline."""
     asyncio.run(_pipeline(name, title, tags))
 
 
@@ -309,10 +309,10 @@ async def _pipeline(name: str, title: str, tags: str) -> None:
 @app.command(rich_help_panel="Knowledge")
 def graph(
     action: str = typer.Argument("stats", help="stats|suggest|compatible"),
-    tech: str = typer.Option("", "--tech", help="Технология для анализа"),
-    tags: str = typer.Option("", "--tags", "-t", help="Теги для suggestions"),
+    tech: str = typer.Option("", "--tech", help="Technology to analyze"),
+    tags: str = typer.Option("", "--tags", "-t", help="Tags for suggestions"),
 ) -> None:
-    """Работа с графом знаний."""
+    """Work with the knowledge graph."""
     asyncio.run(_graph(action, tech, tags))
 
 
@@ -348,9 +348,9 @@ async def _graph(action: str, tech: str, tags: str) -> None:
 @app.command(rich_help_panel="Knowledge")
 def knowledge(
     action: str = typer.Argument("stats", help="stats|search|add"),
-    query: str = typer.Option("", "--query", "-q", help="Поисковый запрос"),
+    query: str = typer.Option("", "--query", "-q", help="Search query"),
 ) -> None:
-    """Работа с базой знаний."""
+    """Work with the knowledge store."""
     asyncio.run(_knowledge(action, query))
 
 
@@ -388,7 +388,7 @@ async def _knowledge(action: str, query: str) -> None:
 def feedback(
     action: str = typer.Argument("stats", help="stats|analyze"),
 ) -> None:
-    """Анализ обратной связи."""
+    """Analyze feedback."""
     asyncio.run(_feedback(action))
 
 
@@ -440,7 +440,7 @@ def serve(
 
 @app.command(rich_help_panel="Core")
 def kernels() -> None:
-    """Показать доступные ядра."""
+    """Show available kernels."""
     from noema.kernels import (
         AIMLKernel,
         AnalysisKernel,
@@ -470,7 +470,7 @@ def kernels() -> None:
 
 @app.command(rich_help_panel="Core")
 def agents() -> None:
-    """Показать доступных агентов."""
+    """Show available agents."""
     from noema.agents.base import (
         AIEngineerAgent,
         ArchitectAgent,

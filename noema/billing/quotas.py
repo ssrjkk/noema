@@ -1,4 +1,4 @@
-"""Tenant Quotas & Rate Limiting — контроль затрат и лимитов per tenant."""
+"""Tenant Quotas & Rate Limiting — cost and limit control per tenant."""
 
 from __future__ import annotations
 

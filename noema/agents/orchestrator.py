@@ -62,7 +62,7 @@ class AgentOrchestrator:
         self._initialized = False
 
     async def initialize(self) -> None:
-        """Инициализация и регистрация агентов по умолчанию."""
+        """Initialize and register the default agents."""
         if self._initialized:
             return
 
@@ -79,17 +79,17 @@ class AgentOrchestrator:
             self.agents[agent.name] = agent
 
         self._initialized = True
-        logger.info(f"AgentOrchestrator инициализирован с {len(self.agents)} агентами")
+        logger.info(f"AgentOrchestrator initialized with {len(self.agents)} agents")
 
     async def shutdown(self) -> None:
-        """Завершение работы."""
+        """Shut down the orchestrator and its agents."""
         self.agents.clear()
         self._initialized = False
 
     def register_agent(self, agent: BaseAgent) -> None:
-        """Регистрация нового агента."""
+        """Register a new agent."""
         self.agents[agent.name] = agent
-        logger.info(f"Зарегистрирован агент: {agent.name} (role={agent.role.value})")
+        logger.info(f"Registered agent: {agent.name} (role={agent.role.value})")
 
     async def get_analyses(self, task: Task) -> dict[str, dict]:
         """Collect analyses from all agents, concurrently.
@@ -164,20 +164,20 @@ class AgentOrchestrator:
         Complexity: ``O(B + O + S)`` for B code blocks, O optimizations, and
         S security checks, plus one parallel contribution pass.
         """
-        # Создаём базовое решение
+        # Build the base solution
         solution = Solution(
             task_id=task.id,
-            title=f"Решение: {task.title}",
+            title=f"Solution: {task.title}",
             summary=self._build_summary(task, architecture, stack),
             stack=stack,
         )
 
-        # Архитектура
+        # Architecture
         if architecture and "pattern" in architecture:
             pattern_data = architecture["pattern"]
             solution.architecture = ArchitecturePattern(**pattern_data)
 
-        # Кодовые блоки
+        # Code blocks
         for block_data in code_blocks:
             if isinstance(block_data, dict) and "filename" in block_data:
                 solution.code_blocks.append(
@@ -189,7 +189,7 @@ class AgentOrchestrator:
                     )
                 )
 
-        # Оптимизации
+        # Optimizations
         if optimizations:
             for strategy in optimizations.get("strategies", []):
                 solution.performance_notes.append(
@@ -197,7 +197,7 @@ class AgentOrchestrator:
                     f"{strategy.get('description', '')}"
                 )
 
-        # Безопасность
+        # Security
         if security_notes:
             for check in security_notes.get("checks", []):
                 solution.security_notes.append(
@@ -208,7 +208,7 @@ class AgentOrchestrator:
         # Deployment
         solution.deployment = architecture.get("deployment", {}) if architecture else {}
 
-        # Получаем вклад от агентов
+        # Collect contributions from agents
         context = {
             "architecture": architecture,
             "optimizations": optimizations,
@@ -225,22 +225,22 @@ class AgentOrchestrator:
         return solution
 
     def _build_summary(self, task: Task, architecture: dict, stack: TechStack) -> str:
-        """Построение краткого описания решения."""
-        parts = [f"Решение для: {task.title}"]
-        parts.append(f"Стек: {stack.summary()}")
+        """Build a short solution description."""
+        parts = [f"Solution for: {task.title}"]
+        parts.append(f"Stack: {stack.summary()}")
 
         if architecture and "pattern" in architecture:
             pattern = architecture["pattern"]
-            parts.append(f"Архитектура: {pattern.get('name', 'N/A')}")
+            parts.append(f"Architecture: {pattern.get('name', 'N/A')}")
 
         if architecture and "components" in architecture:
-            parts.append(f"Компоненты: {len(architecture['components'])}")
+            parts.append(f"Components: {len(architecture['components'])}")
 
-        parts.append(f"Сложность: {task.complexity.value}")
+        parts.append(f"Complexity: {task.complexity.value}")
         return " | ".join(parts)
 
     def get_agent_for_role(self, role: AgentRole) -> BaseAgent | None:
-        """Получить агента по роли."""
+        """Get an agent by role."""
         for agent in self.agents.values():
             if agent.role == role:
                 return agent

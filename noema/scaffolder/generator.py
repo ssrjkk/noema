@@ -1,4 +1,4 @@
-"""Скаффолдер — экспорт решений в реальные файлы проекта."""
+"""Scaffolder — exporting solutions into real project files."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ logger = get_logger(__name__)
 
 class ProjectScaffolder:
     """
-    Генератор структуры проекта из решения.
+    Project structure generator for a solution.
 
-    Создаёт полную структуру файлов: код, конфиги, Dockerfile, tests, CI/CD.
+    Creates the full file structure: code, configs, Dockerfile, tests, CI/CD.
     """
 
     def __init__(self, output_dir: str = ".") -> None:
@@ -25,15 +25,15 @@ class ProjectScaffolder:
         self._files_created: list[str] = []
 
     async def scaffold(self, solution: Solution, task: Task) -> dict[str, Any]:
-        """Создать полную структуру проекта из решения."""
+        """Create the full project structure from a solution."""
         project_name = self._slugify(task.title)
         project_dir = self.output_dir / project_name
         self._files_created = []
 
-        # Основная структура
+        # Base structure
         dirs = self._create_directories(project_dir, solution)
 
-        # Кодовые блоки
+        # Code blocks
         project_root = project_dir.resolve()
         for block in solution.code_blocks:
             file_path = project_dir / self._map_filename(block, dirs)
@@ -44,7 +44,7 @@ class ProjectScaffolder:
             target.write_text(block.content, encoding="utf-8")
             self._files_created.append(str(target.relative_to(project_root)))
 
-        # Конфиги
+        # Configs
         self._create_configs(project_dir, solution, task)
 
         # README
@@ -61,7 +61,7 @@ class ProjectScaffolder:
         }
 
     def _create_directories(self, project_dir: Path, solution: Solution) -> dict[str, str]:
-        """Создание структуры директорий."""
+        """Create the directory structure."""
         lang = solution.stack.languages[0].lower() if solution.stack.languages else "python"
 
         dirs = {
@@ -107,7 +107,7 @@ class ProjectScaffolder:
         return "/".join(parts)
 
     def _map_filename(self, block: CodeBlock, dirs: dict[str, str]) -> str:
-        """Маппинг имён файлов в структуру проекта."""
+        """Map filenames into the project structure."""
         fn = self._sanitize_filename(block.filename)
 
         test_indicators = ("test_", "_test", "spec_")
@@ -127,7 +127,7 @@ class ProjectScaffolder:
         return fn
 
     def _create_configs(self, project_dir: Path, solution: Solution, task: Task) -> None:
-        """Создание конфигурационных файлов."""
+        """Create the configuration files."""
         # .gitignore
         gitignore_content = self._generate_gitignore(solution)
         (project_dir / ".gitignore").write_text(gitignore_content, encoding="utf-8")
@@ -138,14 +138,14 @@ class ProjectScaffolder:
         (project_dir / ".env.example").write_text(env_content, encoding="utf-8")
         self._files_created.append(".env.example")
 
-        # ruff.toml для Python
+        # ruff.toml for Python
         if solution.stack.languages and solution.stack.languages[0].lower() == "python":
             ruff_content = '[tool.ruff]\nline-length = 100\ntarget-version = "py312"\n\n[tool.ruff.lint]\nselect = ["E", "F", "I", "N", "UP"]\n'
             (project_dir / "ruff.toml").write_text(ruff_content, encoding="utf-8")
             self._files_created.append("ruff.toml")
 
     def _create_project_manifest(self, project_dir: Path, solution: Solution) -> None:
-        """Создание манифеста проекта (pyproject.toml / package.json)."""
+        """Create the project manifest (pyproject.toml / package.json)."""
         lang = solution.stack.languages[0].lower() if solution.stack.languages else "python"
         name = self._slugify(solution.title)
 
@@ -192,7 +192,7 @@ packages = ["src/{name}"]
             self._files_created.append("package.json")
 
     def _create_readme(self, project_dir: Path, solution: Solution, task: Task) -> None:
-        """Создание README.md."""
+        """Create README.md."""
         stack_line = solution.stack.summary()
         arch_line = f"Architecture: {solution.architecture.name}" if solution.architecture else ""
         quality_line = f"Quality: {solution.quality.value} | Confidence: {solution.confidence:.0%}"
@@ -290,7 +290,7 @@ node_modules/
         return text or "project"
 
     def _tree(self, path: Path, prefix: str = "", max_depth: int = 4) -> str:
-        """Генерация ASCII-дерева."""
+        """Build an ASCII tree of the project."""
         if max_depth <= 0:
             return ""
         lines = []

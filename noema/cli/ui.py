@@ -92,7 +92,7 @@ LOGO = """\
    n  nn  o    o  e     m   m  a   a
    n   n   oooo   eeee  m   m  a   a"""
 
-TAGLINE = "Генерация мощных технических решений на любом стеке"
+TAGLINE = "Generating powerful technical solutions on any stack"
 
 
 def print_banner() -> None:

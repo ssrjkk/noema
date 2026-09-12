@@ -1,4 +1,4 @@
-"""Tracing — LLM Observability (OpenTelemetry-совместимый трейсинг)."""
+"""Tracing — LLM Observability (OpenTelemetry-compatible tracing)."""
 
 from noema.tracing.reasoning_trace import (
     ReasoningTrace,

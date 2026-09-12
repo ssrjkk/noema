@@ -1,4 +1,4 @@
-"""Ядро Frontend — генерация клиентских решений."""
+"""Frontend kernel — generation of client-side solutions."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class FrontendKernel(BaseKernel):
-    """Ядро frontend-генерации."""
+    """Frontend generation kernel."""
 
     @property
     def name(self) -> str:
@@ -22,7 +22,7 @@ class FrontendKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "Генерация frontend решений: React, Vue, Svelte, Next.js, Tailwind"
+        return "Frontend solution generation: React, Vue, Svelte, Next.js, Tailwind"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         tags = {t.lower() for t in task.tags}
@@ -89,12 +89,12 @@ class FrontendKernel(BaseKernel):
             {
                 "name": "AppShell",
                 "type": "layout",
-                "description": "Основной layout с навигацией",
+                "description": "Main layout with navigation",
             },
             {
                 "name": "ThemeProvider",
                 "type": "provider",
-                "description": "Провайдер темы (dark/light)",
+                "description": "Theme provider (dark/light)",
             },
         ]
 
@@ -104,22 +104,22 @@ class FrontendKernel(BaseKernel):
                     {
                         "name": "Sidebar",
                         "type": "navigation",
-                        "description": "Боковая навигация",
+                        "description": "Side navigation",
                     },
                     {
                         "name": "Header",
                         "type": "navigation",
-                        "description": "Верхняя панель",
+                        "description": "Top bar",
                     },
                     {
                         "name": "DataTable",
                         "type": "data-display",
-                        "description": "Таблица с сортировкой/фильтрацией",
+                        "description": "Table with sorting/filtering",
                     },
                     {
                         "name": "Charts",
                         "type": "data-visualization",
-                        "description": "Графики и диаграммы",
+                        "description": "Charts and diagrams",
                     },
                 ]
             )
@@ -127,16 +127,16 @@ class FrontendKernel(BaseKernel):
         if "auth" in tags or "user" in tags:
             base.extend(
                 [
-                    {"name": "LoginForm", "type": "form", "description": "Форма входа"},
+                    {"name": "LoginForm", "type": "form", "description": "Login form"},
                     {
                         "name": "RegisterForm",
                         "type": "form",
-                        "description": "Форма регистрации",
+                        "description": "Registration form",
                     },
                     {
                         "name": "ProfilePage",
                         "type": "page",
-                        "description": "Профиль пользователя",
+                        "description": "User profile",
                     },
                 ]
             )
@@ -147,13 +147,13 @@ class FrontendKernel(BaseKernel):
                     {
                         "name": "ProductCard",
                         "type": "card",
-                        "description": "Карточка товара",
+                        "description": "Product card",
                     },
-                    {"name": "Cart", "type": "widget", "description": "Корзина"},
+                    {"name": "Cart", "type": "widget", "description": "Cart"},
                     {
                         "name": "Checkout",
                         "type": "page",
-                        "description": "Оформление заказа",
+                        "description": "Checkout",
                     },
                 ]
             )
@@ -162,7 +162,7 @@ class FrontendKernel(BaseKernel):
             {
                 "name": "ErrorBoundary",
                 "type": "error-handling",
-                "description": "Обработка ошибок",
+                "description": "Error handling",
             }
         )
         return base

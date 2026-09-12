@@ -1,4 +1,4 @@
-"""Центральные типы фреймворка."""
+"""Core framework types."""
 
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ T = TypeVar("T")
 
 
 class TechStack(BaseModel):
-    """Описание технологического стека."""
+    """Technology stack description."""
 
     languages: list[str] = Field(default_factory=list)
     frameworks: list[str] = Field(default_factory=list)
@@ -100,20 +100,20 @@ class TechStack(BaseModel):
     def summary(self) -> str:
         parts = []
         if self.languages:
-            parts.append(f"Языки: {', '.join(self.languages)}")
+            parts.append(f"Languages: {', '.join(self.languages)}")
         if self.frameworks:
-            parts.append(f"Фреймворки: {', '.join(self.frameworks)}")
+            parts.append(f"Frameworks: {', '.join(self.frameworks)}")
         if self.databases:
-            parts.append(f"БД: {', '.join(self.databases)}")
+            parts.append(f"Databases: {', '.join(self.databases)}")
         if self.infrastructure:
-            parts.append(f"Инфра: {', '.join(self.infrastructure)}")
+            parts.append(f"Infrastructure: {', '.join(self.infrastructure)}")
         if self.cloud:
-            parts.append(f"Облако: {', '.join(self.cloud)}")
-        return " | ".join(parts) if parts else "Не определён"
+            parts.append(f"Cloud: {', '.join(self.cloud)}")
+        return " | ".join(parts) if parts else "Undefined"
 
 
 class ArchitecturePattern(BaseModel):
-    """Паттерн архитектуры."""
+    """Architecture pattern."""
 
     name: str
     description: str
@@ -124,7 +124,7 @@ class ArchitecturePattern(BaseModel):
 
 
 class Requirement(BaseModel):
-    """Требование к решению."""
+    """Requirement for a solution."""
 
     category: str
     description: str
@@ -133,7 +133,7 @@ class Requirement(BaseModel):
 
 
 class Task(BaseModel):
-    """Входная задача для генерации решения."""
+    """Input task for solution generation."""
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     title: str
@@ -147,7 +147,7 @@ class Task(BaseModel):
 
 
 class CodeBlock(BaseModel):
-    """Блок сгенерированного кода."""
+    """Generated code block."""
 
     filename: str
     language: str
@@ -157,7 +157,7 @@ class CodeBlock(BaseModel):
 
 
 class Solution(BaseModel):
-    """Генерируемое решение."""
+    """Generated solution."""
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     task_id: str
@@ -177,7 +177,7 @@ class Solution(BaseModel):
 
 
 class ThoughtProcess(BaseModel):
-    """Траектория мышления мозга при генерации решения."""
+    """Thought trajectory recorded while generating a solution."""
 
     task_id: str
     steps: list[ThoughtStep] = Field(default_factory=list)
@@ -206,7 +206,7 @@ class ThoughtProcess(BaseModel):
 
 
 class ThoughtStep(BaseModel):
-    """Один шаг процесса мышления."""
+    """A single step of the thinking process."""
 
     step_number: int
     kernel: str
@@ -220,7 +220,7 @@ class ThoughtStep(BaseModel):
 
 
 class KnowledgeEntry(BaseModel):
-    """Запись в базе знаний."""
+    """Knowledge base entry."""
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     category: str
@@ -234,7 +234,7 @@ class KnowledgeEntry(BaseModel):
 
 
 class Pattern(BaseModel):
-    """Паттерн решения из базы знаний."""
+    """Solution pattern from the knowledge base."""
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     name: str

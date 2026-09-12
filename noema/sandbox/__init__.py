@@ -1,4 +1,4 @@
-"""Sandbox — изолированное исполнение и верификация сгенерированного кода.
+"""Sandbox — isolated execution and verification of generated code.
 
 The :class:`~noema.sandbox.environment.Environment` abstraction is the seam
 for future non-code media (physics engines, hardware simulators, molecular

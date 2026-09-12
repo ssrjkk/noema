@@ -1,4 +1,4 @@
-"""Token Budget Manager — жёсткий лимит токенов на задачу с graceful degradation."""
+"""Token Budget Manager — a hard token limit per task with graceful degradation."""
 
 from __future__ import annotations
 

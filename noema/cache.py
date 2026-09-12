@@ -1,4 +1,4 @@
-"""Semantic Cache — кэширование LLM-ответов через dense embedding similarity."""
+"""Semantic Cache — caching of LLM responses via dense embedding similarity."""
 
 from __future__ import annotations
 

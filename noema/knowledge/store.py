@@ -1,4 +1,4 @@
-"""Хранилище знаний — база паттернов, решений, технологий."""
+"""Knowledge store — a database of patterns, solutions, and technologies."""
 
 from __future__ import annotations
 
@@ -15,13 +15,13 @@ from noema.logging import get_logger
 
 logger = get_logger(__name__)
 
-# ── Встроенные базы знаний ──────────────────────────────────────────────────
+# ── Built-in knowledge bases ──────────────────────────────────────────────────
 
 BUILTIN_PATTERNS: list[Pattern] = [
     Pattern(
         name="api-gateway-microservices",
         category="architecture",
-        description="API Gateway паттерн для микросервисов",
+        description="API Gateway pattern for microservices",
         template={
             "gateway": {"type": "nginx/envoy", "routing": "path-based"},
             "services": {"discovery": "consul", "communication": "gRPC"},
@@ -32,7 +32,7 @@ BUILTIN_PATTERNS: list[Pattern] = [
     Pattern(
         name="event-sourcing-cqrs",
         category="architecture",
-        description="CQRS + Event Sourcing для event-driven систем",
+        description="CQRS + Event Sourcing for event-driven systems",
         template={
             "write_model": "event_store",
             "read_model": "projections",
@@ -44,7 +44,7 @@ BUILTIN_PATTERNS: list[Pattern] = [
     Pattern(
         name="ml-pipeline-mlops",
         category="ml",
-        description="ML Pipeline с MLOps практиками",
+        description="ML Pipeline with MLOps practices",
         template={
             "data": "feature_store",
             "training": "mlflow",
@@ -71,7 +71,7 @@ BUILTIN_PATTERNS: list[Pattern] = [
     Pattern(
         name="go-microservice",
         category="backend",
-        description="Высокопроизводительный микросервис на Go",
+        description="High-performance microservice written in Go",
         template={
             "framework": "gin/chi",
             "database": "postgresql",
@@ -85,7 +85,7 @@ BUILTIN_PATTERNS: list[Pattern] = [
     Pattern(
         name="rust-web-service",
         category="backend",
-        description="Высокопроизводительный веб-сервис на Rust",
+        description="High-performance web service written in Rust",
         template={
             "framework": "axum/actix",
             "database": "sqlx+postgres",
@@ -98,7 +98,7 @@ BUILTIN_PATTERNS: list[Pattern] = [
     Pattern(
         name="flutter-mobile-backend",
         category="mobile",
-        description="Mobile приложение Flutter + бэкенд",
+        description="Flutter mobile app + backend",
         template={
             "mobile": "Flutter/Dart",
             "backend": "Firebase/Supabase",
@@ -111,7 +111,7 @@ BUILTIN_PATTERNS: list[Pattern] = [
     Pattern(
         name="data-lakehouse",
         category="data",
-        description="Data Lakehouse архитектура",
+        description="Data Lakehouse architecture",
         template={
             "ingestion": "kafka/flink",
             "storage": "S3/delta-lake",
@@ -124,7 +124,7 @@ BUILTIN_PATTERNS: list[Pattern] = [
     Pattern(
         name="spring-boot-enterprise",
         category="enterprise",
-        description="Enterprise приложение на Spring Boot",
+        description="Enterprise application on Spring Boot",
         template={
             "framework": "Spring Boot 3",
             "security": "Spring Security",
@@ -240,10 +240,10 @@ BUILTIN_KNOWLEDGE: list[KnowledgeEntry] = [
 
 class KnowledgeStore:
     """
-    Хранилище знаний с TF-IDF поиском.
+    Knowledge store with TF-IDF search.
 
-    Содержит базу паттернов, best practices и стеков технологий
-    для генерации обоснованных решений.
+    Contains a base of patterns, best practices, and technology stacks
+    for generating well-grounded recommendations.
     """
 
     def __init__(self, persist_path: str | None = None) -> None:
@@ -255,7 +255,7 @@ class KnowledgeStore:
         self._corpus: list[str] = []
 
     async def load(self) -> None:
-        """Загрузка знаний из файла (если есть)."""
+        """Load knowledge from a file (if any)."""
         if self.persist_path.exists():
             try:
                 data = json.loads(self.persist_path.read_text(encoding="utf-8"))
@@ -275,19 +275,19 @@ class KnowledgeStore:
                         self.patterns.append(Pattern(**pattern_data))
                         known_patterns.add(pattern_data.get("name"))
                 logger.info(
-                    f"Загружено {len(data.get('entries', []))} entries, {len(data.get('patterns', []))} patterns"
+                    f"Loaded {len(data.get('entries', []))} entries, {len(data.get('patterns', []))} patterns"
                 )
             except Exception as e:
-                logger.warning(f"Ошибка загрузки знаний: {e}")
+                logger.warning(f"Failed to load knowledge: {e}")
 
         self._build_index()
 
     async def persist(self) -> None:
-        """Сохранение знаний в файл."""
+        """Save knowledge to a file."""
         self._write()
 
     def save(self) -> None:
-        """Синхронное сохранение — интерфейс, ожидаемый ``KnowledgeLoader``."""
+        """Synchronous save — the interface expected by ``KnowledgeLoader``."""
         self._write()
 
     def _write(self) -> None:
@@ -300,10 +300,10 @@ class KnowledgeStore:
         from noema.utils.atomic_io import atomic_write_json
 
         atomic_write_json(self.persist_path, data)
-        logger.info(f"Сохранено {len(self.entries)} entries, {len(self.patterns)} patterns")
+        logger.info(f"Saved {len(self.entries)} entries, {len(self.patterns)} patterns")
 
     def _build_index(self) -> None:
-        """Построение TF-IDF индекса."""
+        """Build the TF-IDF index."""
         self._corpus = []
         for entry in self.entries:
             text = f"{entry.title} {entry.content} {' '.join(entry.tags)}"
@@ -321,7 +321,7 @@ class KnowledgeStore:
             self._vectors = self._vectorizer.fit_transform(self._corpus)
 
     async def search(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
-        """Поиск по базе знаний."""
+        """Search the knowledge base."""
         if not self._vectorizer or self._vectors is None:
             return []
 
@@ -361,7 +361,7 @@ class KnowledgeStore:
         return results
 
     async def find_relevant_stacks(self, task: Task) -> list[TechStack]:
-        """Поиск релевантных стеков для задачи."""
+        """Find relevant stacks for a task."""
         query = f"{task.title} {task.description} {' '.join(task.tags)}"
         results = await self.search(query, top_k=10)
 
@@ -384,7 +384,7 @@ class KnowledgeStore:
         return stacks
 
     async def add_entry(self, entry: KnowledgeEntry) -> None:
-        """Добавить новую запись."""
+        """Add a new entry."""
         self.entries.append(entry)
         self._build_index()
 
@@ -396,7 +396,7 @@ class KnowledgeStore:
         source: str = "",
         tags: list[str] | None = None,
     ) -> None:
-        """Записать факт — интерфейс, ожидаемый ``KnowledgeLoader``."""
+        """Record a fact — the interface expected by ``KnowledgeLoader``."""
         self.entries.append(
             KnowledgeEntry(
                 category=topic,
@@ -410,12 +410,12 @@ class KnowledgeStore:
         self._build_index()
 
     async def add_pattern(self, pattern: Pattern) -> None:
-        """Добавить новый паттерн."""
+        """Add a new pattern."""
         self.patterns.append(pattern)
         self._build_index()
 
     def get_stats(self) -> dict[str, Any]:
-        """Статистика хранилища."""
+        """Store statistics."""
         return {
             "total_entries": len(self.entries),
             "total_patterns": len(self.patterns),

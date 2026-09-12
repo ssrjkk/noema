@@ -1,4 +1,4 @@
-"""Redis-backed cache with in-memory fallback — для масштабирования в K8s."""
+"""Redis-backed cache with in-memory fallback — for K8s scaling."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Утилиты фреймворка."""
+"""Framework utilities."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ log = get_logger(__name__)
 
 
 def timer(func: Callable[..., Coroutine]) -> Callable[..., Coroutine]:
-    """Декоратор для измерения времени выполнения (async)."""
+    """Async execution time measurement decorator."""
 
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -31,12 +31,12 @@ def timer(func: Callable[..., Coroutine]) -> Callable[..., Coroutine]:
 
 
 def generate_id(data: str) -> str:
-    """Генерация короткого ID из данных."""
+    """Generate a short ID from data."""
     return hashlib.sha256(data.encode()).hexdigest()[:12]
 
 
 def deep_merge(base: dict, override: dict) -> dict:
-    """Глубокое слияние словарей."""
+    """Deep-merge two dictionaries."""
     result = base.copy()
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
@@ -47,12 +47,12 @@ def deep_merge(base: dict, override: dict) -> dict:
 
 
 def truncate(text: str, max_len: int = 100, suffix: str = "...") -> str:
-    """Обрезка текста."""
+    """Truncate text."""
     if len(text) <= max_len:
         return text
     return text[: max_len - len(suffix)] + suffix
 
 
 def chunk_list(lst: list, size: int) -> list[list]:
-    """Разбиение списка на чанки."""
+    """Split a list into chunks."""
     return [lst[i : i + size] for i in range(0, len(lst), size)]

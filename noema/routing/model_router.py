@@ -1,4 +1,4 @@
-"""Model Router — выбирает LLM по сложности, бюджету и здоровью провайдеров."""
+"""Model Router — selects an LLM by complexity, budget, and provider health."""
 
 from __future__ import annotations
 

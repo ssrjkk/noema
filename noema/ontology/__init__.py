@@ -1,4 +1,4 @@
-"""Ontology — типизированный граф знаний о мире (entities/relations).
+"""Ontology — a typed knowledge graph about the world (entities/relations).
 
 Includes the ORL pipeline: hypotheses (:mod:`noema.ontology.hypothesis`),
 the epistemic validator (:mod:`noema.ontology.validator`) and the

@@ -1,4 +1,4 @@
-"""Ядро AI/ML — генерация ML-pайплайнов и моделей."""
+"""AI/ML kernel — generation of ML pipelines and models."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class AIMLKernel(BaseKernel):
-    """Ядро AI/ML."""
+    """AI/ML kernel."""
 
     @property
     def name(self) -> str:
@@ -22,7 +22,7 @@ class AIMLKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "ML-pайплайны, модели, training, serving, MLOps"
+        return "ML pipelines, models, training, serving, MLOps"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         tags = {t.lower() for t in task.tags}
