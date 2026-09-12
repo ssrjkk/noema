@@ -1,4 +1,4 @@
-"""Ядро Data — моделирование данных, ETL, аналитика."""
+"""Data kernel — data modeling, ETL, analytics."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class DataKernel(BaseKernel):
-    """Ядро работы с данными."""
+    """Kernel for working with data."""
 
     @property
     def name(self) -> str:
@@ -22,7 +22,7 @@ class DataKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "Моделирование данных, ETL пайплайны, аналитика, data warehousing"
+        return "Data modeling, ETL pipelines, analytics, data warehousing"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         tags = {t.lower() for t in task.tags}

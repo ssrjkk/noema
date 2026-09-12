@@ -1,4 +1,4 @@
-"""PostgreSQL-backed MemoryStore with file fallback — для масштабирования в K8s."""
+"""PostgreSQL-backed MemoryStore with file fallback — for K8s scaling."""
 
 from __future__ import annotations
 

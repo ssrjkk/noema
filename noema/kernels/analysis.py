@@ -1,4 +1,4 @@
-"""Ядро анализа — анализ требований, сложности, рисков."""
+"""Analysis kernel — requirements, complexity, and risk analysis."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 
 class AnalysisKernel(BaseKernel):
-    """Ядро глубокого анализа задач."""
+    """Kernel for deep task analysis."""
 
     @property
     def name(self) -> str:
@@ -20,7 +20,7 @@ class AnalysisKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "Анализ требований, оценка сложности, выявление рисков"
+        return "Requirements analysis, complexity estimation, risk identification"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         phase = kwargs.get("phase", "full")
@@ -81,18 +81,18 @@ class AnalysisKernel(BaseKernel):
         req_count = len(task.requirements)
         score += min(req_count * 2, 20)
         if req_count > 10:
-            factors.append(f"Много требований ({req_count})")
+            factors.append(f"Many requirements ({req_count})")
 
         tags = {t.lower() for t in task.tags}
         complex_tags = {"distributed", "microservice", "ml", "real-time", "high-load", "security"}
         intersection = tags & complex_tags
         score += len(intersection) * 10
         if intersection:
-            factors.append(f"Сложные теги: {', '.join(intersection)}")
+            factors.append(f"Complex tags: {', '.join(intersection)}")
 
         if task.complexity in (TaskComplexity.COMPLEX, TaskComplexity.EXTREME):
             score += 20
-            factors.append(f"Указанная сложность: {task.complexity.value}")
+            factors.append(f"Declared complexity: {task.complexity.value}")
 
         if task.preferred_stack:
             stack_complexity = len(task.preferred_stack.languages) + len(
@@ -101,7 +101,7 @@ class AnalysisKernel(BaseKernel):
             score += stack_complexity * 3
 
         if not factors:
-            factors.append("Стандартная задача")
+            factors.append("Standard task")
 
         level = (
             "extreme"

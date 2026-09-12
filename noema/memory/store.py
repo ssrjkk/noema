@@ -192,8 +192,12 @@ class MemoryStore:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # No event loop: persist immediately (synchronous callers).
-            self.save()
+            # No event loop: persist immediately (synchronous callers). A
+            # subclass's save() may be async (e.g. PostgresMemoryStore); drive
+            # the coroutine to completion instead of leaking an un-awaited one.
+            result = cast("Any", self.save())
+            if inspect.isawaitable(result):
+                asyncio.run(cast("Coroutine[Any, Any, None]", result))
             return
         self._cancel_debounce()
         self._debounce_handle = loop.call_later(self._auto_save_interval, self._debounced_save)

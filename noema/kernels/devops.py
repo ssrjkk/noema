@@ -1,4 +1,4 @@
-"""Ядро DevOps — инфраструктура, CI/CD, мониторинг."""
+"""DevOps kernel — infrastructure, CI/CD, monitoring."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class DevOpsKernel(BaseKernel):
-    """Ядро DevOps и инфраструктуры."""
+    """DevOps and infrastructure kernel."""
 
     @property
     def name(self) -> str:
@@ -22,7 +22,7 @@ class DevOpsKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "CI/CD, контейнеризация, оркестрация, мониторинг, IaC"
+        return "CI/CD, containerization, orchestration, monitoring, IaC"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         tags = {t.lower() for t in task.tags}

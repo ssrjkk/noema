@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -118,8 +119,10 @@ def chain(
         if not import_path:
             console.print("[err]Specify --import FILE[/err]")
             raise typer.Exit(code=1)
-        doc = json.loads(Path(import_path).read_text(encoding="utf-8"))
-        chain_obj = MerkleChainAudit.import_blocks(doc["chain_id"], doc["blocks"])
+        import_data: dict[str, Any] = json.loads(Path(import_path).read_text(encoding="utf-8"))
+        chain_obj = MerkleChainAudit.import_blocks(
+            str(import_data.get("chain_id")), import_data.get("blocks") or []
+        )
         verified = chain_obj.verify_chain()
         section("Chain Import")
         ok(f"chain_id={chain_obj.chain_id} height={chain_obj.height} verified={verified}")

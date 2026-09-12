@@ -6,9 +6,12 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any
 
 from noema.logging import get_logger
+
+if TYPE_CHECKING:
+    from noema.audit.merkle_proof import IncrementalMerkleTree
 
 log = get_logger(__name__)
 
@@ -89,7 +92,7 @@ class AuditLogger:
         self._initialized = False
         self._file_fallback = False
         self._leaf_hashes: list[bytes] = []
-        self._tree: Any = None
+        self._tree: IncrementalMerkleTree | None = None
 
     def _sync_tree(self) -> None:
         from noema.audit.merkle_proof import IncrementalMerkleTree
@@ -323,7 +326,7 @@ class AuditLogger:
                 proof = generate_inclusion_proof(leaf_data, target_index, self._leaf_hashes)
         else:
             proof = generate_inclusion_proof(leaf_data, target_index, leaf_hashes)
-        result = cast("dict[str, Any]", proof.to_dict())
+        result = proof.to_dict()
         result["leaf_data"] = leaf_data
         return result
 

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# ── Шаблоны кода по стекам ──────────────────────────────────────────────────
+# ── Stack code templates ──────────────────────────────────────────────────
 
 CODE_TEMPLATES: dict[str, dict[str, str]] = {
     "python": {
@@ -136,7 +136,7 @@ from typing import Optional
 
 @dataclass
 class {service_name}Service:
-    """Бизнес-логика для {resource_name}."""
+    """Business logic for {resource_name}."""
 
     # dependencies injected here
 
@@ -282,7 +282,7 @@ public class Application {{
     },
 }
 
-# ── Конфигурации ────────────────────────────────────────────────────────────
+# ── Configurations ────────────────────────────────────────────────────────────
 
 DOCKERFILE_TEMPLATES: dict[str, str] = {
     "python": """FROM python:3.12-slim
@@ -412,7 +412,7 @@ class CodegenKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "Генерация кодовых блоков, конфигов и инфраструктурных файлов"
+        return "Generation of code blocks, configs, and infrastructure files"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         """Generate the full set of service artifacts for a task.
@@ -435,22 +435,22 @@ class CodegenKernel(BaseKernel):
 
         blocks = []
 
-        # Основной сервис
+        # Main service
         service_block = self._gen_service(task, primary_lang)
         if service_block:
             blocks.append(service_block)
 
-        # Модели данных
+        # Data models
         model_block = self._gen_models(task, primary_lang)
         if model_block:
             blocks.append(model_block)
 
-        # Репозиторий
+        # Repository
         repo_block = self._gen_repository(task, primary_lang)
         if repo_block:
             blocks.append(repo_block)
 
-        # Сервисный слой
+        # Service layer
         service_layer = self._gen_service_layer(task, primary_lang)
         if service_layer:
             blocks.append(service_layer)
@@ -508,7 +508,7 @@ class CodegenKernel(BaseKernel):
             "filename": filename,
             "language": lang,
             "content": content,
-            "description": f"Модуль: {requirement}",
+            "description": f"Module: {requirement}",
         }
 
     def _infer_stack(self, task: Task) -> TechStack:
@@ -570,7 +570,7 @@ class CodegenKernel(BaseKernel):
             "filename": f"main{ext}",
             "language": lang,
             "content": content,
-            "description": f"Основной сервис для {task.title}",
+            "description": f"Main service for {task.title}",
         }
 
     def _gen_models(self, task: Task, lang: str) -> dict | None:
@@ -590,7 +590,7 @@ class CodegenKernel(BaseKernel):
                 "filename": "models.py",
                 "language": lang,
                 "content": content,
-                "description": "Модели данных",
+                "description": "Data models",
             }
         return None
 
@@ -601,7 +601,7 @@ class CodegenKernel(BaseKernel):
                 "filename": "repository.py",
                 "language": lang,
                 "content": CODE_TEMPLATES["python"]["repository"],
-                "description": "Repository pattern для работы с БД",
+                "description": "Repository pattern for working with a database",
             }
         return None
 
@@ -615,7 +615,7 @@ class CodegenKernel(BaseKernel):
                 "filename": "service.py",
                 "language": lang,
                 "content": content,
-                "description": "Сервисный слой",
+                "description": "Service layer",
             }
         return None
 
@@ -627,7 +627,7 @@ class CodegenKernel(BaseKernel):
                 "filename": "Dockerfile",
                 "language": "dockerfile",
                 "content": template,
-                "description": "Docker-конфигурация",
+                "description": "Docker configuration",
             }
         return None
 
@@ -646,7 +646,7 @@ class CodegenKernel(BaseKernel):
             "filename": "docker-compose.yml",
             "language": "yaml",
             "content": template,
-            "description": "Docker Compose конфигурация",
+            "description": "Docker Compose configuration",
         }
 
     def _gen_module(self, requirement: str, lang: str, subtask: dict) -> str:
@@ -660,7 +660,7 @@ class CodegenKernel(BaseKernel):
         safe_name = requirement.replace('"', '\\"').replace("\\", "\\\\")[:80]
 
         templates = {
-            "python": f'''"""Модуль: {safe_name}"""
+            "python": f'''"""Module: {safe_name}"""
 
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -671,21 +671,21 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Handler:
-    """Обработчик: {safe_name}"""
+    """Handler: {safe_name}"""
 
     config: dict[str, Any] = field(default_factory=dict)
 
     async def process(self, input_data: dict[str, Any]) -> dict[str, Any]:
-        """Основной метод обработки."""
+        """Main processing method."""
         logger.info("Processing: {safe_name}")
         # TODO: implement logic for {safe_name}
         return {{"status": "ok", "input": input_data}}
 
     def validate(self, data: dict[str, Any]) -> bool:
-        """Валидация входных данных."""
+        """Validation of input data."""
         return bool(data)
 ''',
-            "typescript": f"""// Модуль: {safe_name}
+            "typescript": f"""// Module: {safe_name}
 
 interface InputData {{
   [key: string]: any;
@@ -718,7 +718,7 @@ export class Handler {{
 
 import "log"
 
-// Handler для {safe_name}
+// Handler for {safe_name}
 type Handler struct {{
 	Config map[string]interface{{}}
 }}

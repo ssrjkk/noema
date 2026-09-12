@@ -1,4 +1,4 @@
-"""RAG Injection Sanitizer — проверка документов при ingest на prompt injection."""
+"""RAG Injection Sanitizer — checks documents for prompt injection on ingest."""
 
 from __future__ import annotations
 

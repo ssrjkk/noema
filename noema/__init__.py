@@ -1,4 +1,4 @@
-"""Noema — фреймворк генерации технических решений."""
+"""Noema — a framework for generating technical solutions."""
 
 from noema.core.engine import NoemaEngine
 from noema.core.types import (

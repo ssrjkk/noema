@@ -1,4 +1,4 @@
-"""Replay & Debug Mode — повторение трейсов с измененными параметрами."""
+"""Replay & Debug Mode — replaying traces with modified parameters."""
 
 from __future__ import annotations
 

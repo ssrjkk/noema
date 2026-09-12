@@ -193,7 +193,7 @@ class NoemaEngine:
         """
         if self._initialized:
             return
-        log.info("Инициализация NoemaEngine (LLM-first)...")
+        log.info("Initializing NoemaEngine (LLM-first)...")
         await self.knowledge.load()
         await self.feedback.load()
         ontology_path = self._settings.ontology_persist_path

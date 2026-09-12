@@ -1,4 +1,4 @@
-"""Базовый класс ядра — интерфейс для всех kernels."""
+"""Base kernel class — interface for all kernels."""
 
 from __future__ import annotations
 
@@ -15,15 +15,15 @@ logger = get_logger(__name__)
 
 class BaseKernel(abc.ABC):
     """
-    Абстрактное ядро (kernel).
+    Abstract kernel.
 
-    Каждое ядро отвечает за свою область генерации решений:
-    - Архитектура
-    - Генерация кода
-    - Оптимизация
-    - Безопасность
-    - Анализ
-    и т.д.
+    Each kernel is responsible for its own area of solution generation:
+    - Architecture
+    - Code generation
+    - Optimization
+    - Security
+    - Analysis
+    etc.
     """
 
     def __init__(self, knowledge: Any = None, **kwargs: Any) -> None:
@@ -34,32 +34,32 @@ class BaseKernel(abc.ABC):
     @property
     @abc.abstractmethod
     def name(self) -> str:
-        """Имя ядра."""
+        """Kernel name."""
         ...
 
     @property
     @abc.abstractmethod
     def description(self) -> str:
-        """Описание ядра."""
+        """Kernel description."""
         ...
 
     @abc.abstractmethod
     async def execute(self, task: Task, **kwargs: Any) -> dict[str, Any]:
-        """Основной метод выполнения ядра."""
+        """Main kernel execution method."""
         ...
 
     async def execute_subtask(
         self, subtask: dict, stack: TechStack | None = None
     ) -> dict[str, Any]:
-        """Выполнение подзадачи (для параллельной обработки)."""
+        """Execute a subtask (for parallel processing)."""
         return {"subtask": subtask, "status": "processed"}
 
     def on(self, event: str, callback: Any) -> None:
-        """Регистрация хука на событие."""
+        """Register a hook for an event."""
         self._hooks.setdefault(event, []).append(callback)
 
     async def _emit(self, event: str, data: Any) -> None:
-        """Эмиссия события."""
+        """Emit an event."""
         for cb in self._hooks.get(event, []):
             if callable(cb):
                 result = cb(data)
@@ -67,7 +67,7 @@ class BaseKernel(abc.ABC):
                     await result
 
     async def _query_knowledge(self, query: str, top_k: int = 5) -> list[dict]:
-        """Запрос к базе знаний."""
+        """Query the knowledge base."""
         if self.knowledge:
             return cast("list[dict]", await self.knowledge.search(query, top_k=top_k))
         return []

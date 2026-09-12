@@ -1,4 +1,4 @@
-"""Ядро архитектуры — проектирование системных решений."""
+"""Architecture kernel — designing system solutions."""
 
 from __future__ import annotations
 
@@ -14,157 +14,157 @@ from noema.logging import get_logger
 
 logger = get_logger(__name__)
 
-# ── Архитектурные паттерны ─────────────────────────────────────────────────
+# ── Architecture patterns ─────────────────────────────────────────────────
 
 PATTERNS_DB: dict[str, ArchitecturePattern] = {
     "microservices": ArchitecturePattern(
         name="Microservices",
-        description="Микросервисная архитектура с независимыми сервисами",
+        description="Microservice architecture with independent services",
         pros=[
-            "Независимое деплоивание",
-            "Масштабирование по сервисам",
-            "Технологическая свобода",
+            "Independent deployment",
+            "Scaling per service",
+            "Technology freedom",
             "Fault isolation",
         ],
         cons=[
-            "Сложность распределённых вызовов",
-            "Дистрибутивные транзакции",
-            "Операционная сложность",
+            "Complexity of distributed calls",
+            "Distributed transactions",
+            "Operational complexity",
         ],
         use_cases=[
-            "Высоконагруженные системы",
-            "Большие команды",
-            "Сложный домен",
+            "High-load systems",
+            "Large teams",
+            "Complex domain",
         ],
         complexity=TaskComplexity.COMPLEX,
     ),
     "event_driven": ArchitecturePattern(
         name="Event-Driven",
-        description="Событийно-управляемая архитектура с асинхронной обработкой",
+        description="Event-driven architecture with asynchronous processing",
         pros=[
-            "Слабая связанность",
-            "Высокая吞吐ость",
-            "Естественная шина данных",
-            "Replay событий",
+            "Loose coupling",
+            "High throughput",
+            "Natural data bus",
+            "Event replay",
         ],
         cons=[
-            "Сложность отладки",
+            "Debugging complexity",
             "Eventual consistency",
-            "Сложность order guarantee",
+            "Order guarantee complexity",
         ],
-        use_cases=["Real-time системы", "IoT", "Финансовые системы"],
+        use_cases=["Real-time systems", "IoT", "Financial systems"],
         complexity=TaskComplexity.COMPLEX,
     ),
     "clean_architecture": ArchitecturePattern(
         name="Clean Architecture",
-        description="Чистая архитектура с чёткими слоями и dependency rule",
+        description="Clean architecture with clear layers and dependency rule",
         pros=[
-            "Тестируемость",
-            "Независимость от фреймворков",
-            "Ясная структура",
-            "Легкая замена слоёв",
+            "Testability",
+            "Framework independence",
+            "Clear structure",
+            "Easy layer replacement",
         ],
         cons=[
-            "Больше boilerplate",
-            "Кривая обучения",
-            "Over-engineering для простых задач",
+            "More boilerplate",
+            "Learning curve",
+            "Over-engineering for simple tasks",
         ],
         use_cases=[
-            "Долгосрочные проекты",
-            "Сложная бизнес-логика",
+            "Long-term projects",
+            "Complex business logic",
             "Enterprise",
         ],
         complexity=TaskComplexity.MODERATE,
     ),
     "serverless": ArchitecturePattern(
         name="Serverless",
-        description="Бессерверная архитектура на managed functions",
+        description="Serverless architecture on managed functions",
         pros=[
-            "Нулевая серверная нагрузка",
+            "Zero server load",
             "Pay-per-use",
-            "Автоматическое масштабирование",
-            "Быстрый старт",
+            "Automatic scaling",
+            "Fast start",
         ],
         cons=[
             "Vendor lock-in",
             "Cold starts",
-            "Ограничения на execution time",
-            "Сложность локальной отладки",
+            "Execution time limits",
+            "Local debugging complexity",
         ],
-        use_cases=["Event processing", "APIs с переменной нагрузкой", "MVP"],
+        use_cases=["Event processing", "APIs with variable load", "MVP"],
         complexity=TaskComplexity.SIMPLE,
     ),
     "modular_monolith": ArchitecturePattern(
         name="Modular Monolith",
-        description="Модульный монолит с чёткими границами между модулями",
+        description="Modular monolith with clear boundaries between modules",
         pros=[
-            "Простота деплоя",
-            "Единая транзакция",
-            "Лёгкая отладка",
-            "Путь к микросервисам",
+            "Deployment simplicity",
+            "Single transaction",
+            "Easy debugging",
+            "Path to microservices",
         ],
         cons=[
-            "Сложность масштабирования",
-            "Тесная связанность модулей",
-            "Единая точка отказа",
+            "Scaling complexity",
+            "Tight coupling between modules",
+            "Single point of failure",
         ],
         use_cases=[
-            "Средние проекты",
-            "Малые команды",
-            "Стартапы",
+            "Medium projects",
+            "Small teams",
+            "Startups",
         ],
         complexity=TaskComplexity.MODERATE,
     ),
     "cqrs_event_sourcing": ArchitecturePattern(
         name="CQRS + Event Sourcing",
-        description="Разделение чтения/записи с хранением событий",
+        description="Read/write separation with event storage",
         pros=[
-            "Полная история изменений",
-            "Оптимизация read/write путей",
+            "Full change history",
+            "Read/write path optimization",
             "Time-travel debugging",
-            "Высокая吞吐ость записи",
+            "High write throughput",
         ],
         cons=[
-            "Сложность implementation",
+            "Implementation complexity",
             "Event versioning",
-            "Объём данных",
+            "Data volume",
         ],
-        use_cases=["Финансовые системы", "Audit-heavy", "Collaborative editing"],
+        use_cases=["Financial systems", "Audit-heavy", "Collaborative editing"],
         complexity=TaskComplexity.EXTREME,
     ),
     "pipeline": ArchitecturePattern(
         name="Pipeline / ETL",
-        description="Конвейерная обработка данных с этапами трансформации",
+        description="Pipeline data processing with transformation stages",
         pros=[
-            "Параллелизм",
-            "Модульность этапов",
-            "Легко масштабировать",
-            "Простая отладка",
+            "Parallelism",
+            "Stage modularity",
+            "Easy to scale",
+            "Simple debugging",
         ],
         cons=[
-            "Латентность",
-            "Потеря данных при сбоях",
-            "Сложность управления состоянием",
+            "Latency",
+            "Data loss on failures",
+            "State management complexity",
         ],
         use_cases=["Data processing", "ML pipelines", "ETL"],
         complexity=TaskComplexity.MODERATE,
     ),
     "layered": ArchitecturePattern(
         name="Layered (N-Tier)",
-        description="Классическая многоуровневая архитектура",
+        description="Classic multi-layered architecture",
         pros=[
-            "Простота понимания",
-            "Стандартный паттерн",
-            "Лёгкое разделение обязанностей",
+            "Ease of understanding",
+            "Standard pattern",
+            "Easy separation of concerns",
         ],
         cons=[
-            "Рigid layers",
-            "Сложность модификации",
-            "Overhead между слоями",
+            "Rigid layers",
+            "Modification complexity",
+            "Overhead between layers",
         ],
         use_cases=[
-            "CRUD-приложения",
-            "Внутренние инструменты",
+            "CRUD applications",
+            "Internal tools",
             "Legacy modernization",
         ],
         complexity=TaskComplexity.SIMPLE,
@@ -173,7 +173,7 @@ PATTERNS_DB: dict[str, ArchitecturePattern] = {
 
 
 class ArchitectureKernel(BaseKernel):
-    """Ядро проектирования архитектуры."""
+    """Architecture design kernel."""
 
     @property
     def name(self) -> str:
@@ -181,7 +181,7 @@ class ArchitectureKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "Проектирование архитектуры системы и выбор паттернов"
+        return "System architecture design and pattern selection"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         phase = kwargs.get("phase", "design")
@@ -191,7 +191,7 @@ class ArchitectureKernel(BaseKernel):
         return await self._design(task)
 
     async def _analyze(self, task: Task) -> dict[str, Any]:
-        """Анализ задачи для определения архитектурных требований."""
+        """Analyze the task to determine architectural requirements."""
         constraints = []
         for req in task.requirements:
             if req.priority >= 7:
@@ -209,7 +209,7 @@ class ArchitectureKernel(BaseKernel):
         }
 
     async def _design(self, task: Task) -> dict[str, Any]:
-        """Проектирование архитектуры."""
+        """Architecture design."""
         tags = {t.lower() for t in task.tags}
         pattern = self._select_pattern(tags, task)
 
@@ -230,7 +230,7 @@ class ArchitectureKernel(BaseKernel):
         }
 
     def _select_pattern(self, tags: set[str], task: Task) -> ArchitecturePattern:
-        """Выбор паттерна на основе тегов и сложности."""
+        """Select a pattern based on tags and complexity."""
         if "microservice" in tags or "distributed" in tags:
             return PATTERNS_DB["microservices"]
         if "event" in tags or "stream" in tags or "real-time" in tags:
@@ -252,7 +252,7 @@ class ArchitectureKernel(BaseKernel):
         return PATTERNS_DB["modular_monolith"]
 
     def _suggest_patterns(self, tags: set[str], task: Task) -> list[str]:
-        """Предложение нескольких подходящих паттернов."""
+        """Suggest several suitable patterns."""
         suggested = []
         for _name, pattern in PATTERNS_DB.items():
             score = 0
@@ -266,17 +266,17 @@ class ArchitectureKernel(BaseKernel):
         return suggested or ["Modular Monolith"]
 
     def _design_components(self, pattern: ArchitecturePattern, task: Task) -> list[dict]:
-        """Проектирование компонентов архитектуры."""
+        """Design architecture components."""
         base_components = [
             {
                 "name": "API Gateway",
                 "type": "gateway",
-                "responsibility": "Маршрутизация и аутентификация",
+                "responsibility": "Routing and authentication",
             },
             {
                 "name": "Auth Service",
                 "type": "service",
-                "responsibility": "Управление пользователями и токенами",
+                "responsibility": "User and token management",
             },
         ]
 
@@ -290,7 +290,7 @@ class ArchitectureKernel(BaseKernel):
                 {
                     "name": "ML Service",
                     "type": "service",
-                    "responsibility": "Обучение и инференс моделей",
+                    "responsibility": "Model training and inference",
                 }
             )
         if "data" in tags or "analytics" in tags:
@@ -298,7 +298,7 @@ class ArchitectureKernel(BaseKernel):
                 {
                     "name": "Data Pipeline",
                     "type": "pipeline",
-                    "responsibility": "Сбор и обработка данных",
+                    "responsibility": "Data collection and processing",
                 }
             )
 
@@ -307,17 +307,17 @@ class ArchitectureKernel(BaseKernel):
                 {
                     "name": "Database",
                     "type": "database",
-                    "responsibility": "Персистентное хранение данных",
+                    "responsibility": "Persistent data storage",
                 },
                 {
                     "name": "Cache",
                     "type": "cache",
-                    "responsibility": "Кэширование горячих данных",
+                    "responsibility": "Caching hot data",
                 },
                 {
                     "name": "Message Queue",
                     "type": "messaging",
-                    "responsibility": "Асинхронный обмен сообщениями",
+                    "responsibility": "Asynchronous message exchange",
                 },
             ]
         )
@@ -325,7 +325,7 @@ class ArchitectureKernel(BaseKernel):
         return base_components
 
     def _design_communication(self, pattern: ArchitecturePattern) -> dict[str, Any]:
-        """Проектирование коммуникации между компонентами."""
+        """Design communication between components."""
         if pattern.name in ("Microservices", "Event-Driven"):
             return {
                 "sync": "gRPC / REST",
@@ -339,7 +339,7 @@ class ArchitectureKernel(BaseKernel):
         }
 
     def _design_deployment(self, task: Task) -> dict[str, Any]:
-        """Проектирование деплоя."""
+        """Design deployment."""
         return {
             "containerization": "Docker",
             "orchestration": "Kubernetes",
@@ -349,7 +349,7 @@ class ArchitectureKernel(BaseKernel):
         }
 
     def _infer_scale(self, tags: set[str], task: Task) -> str:
-        """Определение требований к масштабируемости."""
+        """Determine scalability requirements."""
         if "high-load" in tags or "scale" in tags:
             return "high"
         if task.complexity in (TaskComplexity.COMPLEX, TaskComplexity.EXTREME):

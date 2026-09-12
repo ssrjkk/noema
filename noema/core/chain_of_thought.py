@@ -1,4 +1,4 @@
-"""DAG-based Chain-of-Thought engine — параллельное рассуждение с Reflexion.
+"""DAG-based Chain-of-Thought engine — parallel reasoning with Reflexion.
 
 Architecture:
 - :class:`StepPlanner` — pure function mapping (tags, complexity, error context) to an

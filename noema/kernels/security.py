@@ -1,4 +1,4 @@
-"""Ядро безопасности — аудит, защита, best practices."""
+"""Security kernel — audit, protection, best practices."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 class SecurityKernel(BaseKernel):
-    """Ядро анализа безопасности."""
+    """Security analysis kernel."""
 
     @property
     def name(self) -> str:
@@ -22,7 +22,7 @@ class SecurityKernel(BaseKernel):
 
     @property
     def description(self) -> str:
-        return "Аудит безопасности, защита, compliance"
+        return "Security audit, protection, compliance"
 
     async def execute(self, task: Task, **kwargs) -> dict[str, Any]:
         tags = {t.lower() for t in task.tags}
@@ -54,21 +54,21 @@ class SecurityKernel(BaseKernel):
             {
                 "category": "dependency",
                 "check": "Dependency Vulnerability Scan",
-                "description": "Проверка зависимостей через safety/bandit/trivy",
+                "description": "Dependency check via safety/bandit/trivy",
                 "tool": "safety check && bandit -r . && trivy fs .",
                 "severity": "high",
             },
             {
                 "category": "secrets",
                 "check": "No Hardcoded Secrets",
-                "description": "Проверка на захардкоженные секреты в коде",
+                "description": "Check for hardcoded secrets in code",
                 "tool": "trufflehog . && gitleaks detect",
                 "severity": "critical",
             },
             {
                 "category": "docker",
                 "check": "Docker Image Scan",
-                "description": "Сканирование Docker-образа на уязвимости",
+                "description": "Docker image vulnerability scan",
                 "tool": "trivy image <image:tag>",
                 "severity": "high",
             },
@@ -79,21 +79,21 @@ class SecurityKernel(BaseKernel):
             {
                 "category": "web",
                 "check": "SQL Injection Prevention",
-                "description": "Использование parameterized queries / ORM",
-                "recommendation": "Всегда использовать prepared statements или ORM",
+                "description": "Use of parameterized queries / ORM",
+                "recommendation": "Always use prepared statements or ORM",
                 "severity": "critical",
             },
             {
                 "category": "web",
                 "check": "XSS Prevention",
-                "description": "Санитайзинг вывода и CSP headers",
+                "description": "Output sanitization and CSP headers",
                 "recommendation": "Content-Security-Policy header + output encoding",
                 "severity": "high",
             },
             {
                 "category": "web",
                 "check": "Rate Limiting",
-                "description": "Ограничение частоты запросов",
+                "description": "Request rate limiting",
                 "implementation": """
 from slowapi import Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -108,7 +108,7 @@ async def endpoint(request: Request):
             {
                 "category": "web",
                 "check": "CORS Configuration",
-                "description": "Строгая настройка CORS",
+                "description": "Strict CORS configuration",
                 "recommendation": "Allow only specific origins, never use * in production",
                 "severity": "medium",
             },
@@ -119,14 +119,14 @@ async def endpoint(request: Request):
             {
                 "category": "auth",
                 "check": "JWT Best Practices",
-                "description": "Короткие TTL, refresh tokens, ротация ключей",
+                "description": "Short TTLs, refresh tokens, key rotation",
                 "recommendation": "Access token: 15min, Refresh token: 7d, rotation on use",
                 "severity": "high",
             },
             {
                 "category": "auth",
                 "check": "Password Hashing",
-                "description": "bcrypt/argon2 для хеширования паролей",
+                "description": "bcrypt/argon2 for password hashing",
                 "implementation": """
 from argon2 import PasswordHasher
 ph = PasswordHasher(
@@ -142,7 +142,7 @@ verified = ph.verify(hash, password)
             {
                 "category": "auth",
                 "check": "MFA Support",
-                "description": "Многофакторная аутентификация",
+                "description": "Multi-factor authentication",
                 "severity": "high",
             },
         ]
@@ -152,20 +152,20 @@ verified = ph.verify(hash, password)
             {
                 "category": "data",
                 "check": "Encryption at Rest",
-                "description": "Шифрование данных в БД (AES-256)",
+                "description": "Data encryption at rest (AES-256)",
                 "severity": "high",
             },
             {
                 "category": "data",
                 "check": "Encryption in Transit",
-                "description": "TLS 1.3 для всех соединений",
+                "description": "TLS 1.3 for all connections",
                 "recommendation": "Enforce HTTPS, HSTS header, certificate pinning",
                 "severity": "critical",
             },
             {
                 "category": "data",
                 "check": "PII Data Handling",
-                "description": "Маскирование и ротация персональных данных",
+                "description": "Masking and rotation of personal data",
                 "severity": "high",
             },
         ]

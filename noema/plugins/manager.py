@@ -1,4 +1,4 @@
-"""Система плагинов — расширение фреймворка кастомными ядрами и агентами."""
+"""Plugin system — extending the framework with custom kernels and agents."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 
 class PluginMeta:
-    """Метаданные плагина."""
+    """Plugin metadata."""
 
     def __init__(
         self,
@@ -34,7 +34,7 @@ class PluginMeta:
 
 
 class Plugin:
-    """Базовый класс плагина."""
+    """Base plugin class."""
 
     def __init__(self, meta: PluginMeta) -> None:
         self.meta = meta
@@ -44,11 +44,11 @@ class Plugin:
         self._initialized = False
 
     async def setup(self) -> None:
-        """Инициализация плагина (переопределить)."""
+        """Initialize the plugin (override)."""
         self._initialized = True
 
     async def teardown(self) -> None:
-        """Очистка при выгрузке (переопределить)."""
+        """Cleanup on unload (override)."""
         self._initialized = False
 
     def register_kernel(self, kernel: BaseKernel) -> None:
@@ -74,9 +74,9 @@ class Plugin:
 
 class PluginManager:
     """
-    Менеджер плагинов.
+    Plugin manager.
 
-    Управляет загрузкой, регистрацией и жизненным циклом плагинов.
+    Manages loading, registration, and the plugin lifecycle.
     """
 
     def __init__(self, plugin_dirs: list[str] | None = None) -> None:
@@ -85,7 +85,7 @@ class PluginManager:
         self._load_paths: list[Path] = []
 
     async def discover(self) -> list[str]:
-        """Обнаружение плагинов в указанных директориях."""
+        """Discover plugins in the configured directories."""
         discovered = []
 
         for dir_path in self._plugin_dirs:
@@ -98,12 +98,12 @@ class PluginManager:
                 meta_file = plugin_dir / "plugin_meta.json"
                 if meta_file.exists():
                     discovered.append(str(plugin_dir))
-                    logger.info(f"Обнаружен плагин: {plugin_dir}")
+                    logger.info(f"Discovered plugin: {plugin_dir}")
 
         return discovered
 
     async def load_plugin(self, plugin_path: str) -> Plugin | None:
-        """Загрузка плагина из директории."""
+        """Load a plugin from a directory."""
         path = Path(plugin_path)
         meta_file = path / "plugin_meta.json"
         plugin_file = path / "plugin.py"
@@ -112,7 +112,7 @@ class PluginManager:
             logger.error(f"plugin.py not found in {plugin_path}")
             return None
 
-        # Читаем метаданные
+        # Read metadata
         import json
 
         meta_data = {}
@@ -127,7 +127,7 @@ class PluginManager:
             dependencies=meta_data.get("dependencies", []),
         )
 
-        # Загружаем модуль
+        # Load the module
         import sys
 
         sys.path.insert(0, str(path))
@@ -138,7 +138,7 @@ class PluginManager:
                 plugin = plugin_class(meta)
                 await plugin.setup()
                 self.plugins[meta.name] = plugin
-                logger.info(f"Плагин загружен: {meta.name} v{meta.version}")
+                logger.info(f"Plugin loaded: {meta.name} v{meta.version}")
                 return cast("Plugin | None", plugin)
             else:
                 logger.error(f"PluginImpl not found or not a Plugin subclass in {plugin_path}")
@@ -151,7 +151,7 @@ class PluginManager:
         return None
 
     async def load_all(self) -> int:
-        """Загрузка всех обнаруженных плагинов."""
+        """Load all discovered plugins."""
         discovered = await self.discover()
         loaded = 0
         for path in discovered:
@@ -161,24 +161,24 @@ class PluginManager:
         return loaded
 
     async def unload_plugin(self, name: str) -> bool:
-        """Выгрузка плагина."""
+        """Unload a plugin by name."""
         plugin = self.plugins.get(name)
         if plugin:
             await plugin.teardown()
             del self.plugins[name]
-            logger.info(f"Плагин выгружен: {name}")
+            logger.info(f"Plugin unloaded: {name}")
             return True
         return False
 
     def get_all_kernels(self) -> list[BaseKernel]:
-        """Получить все ядра из плагинов."""
+        """Get all kernels contributed by plugins."""
         kernels = []
         for plugin in self.plugins.values():
             kernels.extend(plugin._kernels)
         return kernels
 
     def get_all_agents(self) -> list[BaseAgent]:
-        """Получить всех агентов из плагинов."""
+        """Get all agents contributed by plugins."""
         agents = []
         for plugin in self.plugins.values():
             agents.extend(plugin._agents)
