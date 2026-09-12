@@ -73,7 +73,7 @@ sentry = [
 ]
 grpc = [
     "grpcio>=1.60",
-    "grpcio-tools>=1.83.0",
+    "grpcio-tools>=1.83.1",
     "protobuf>=7.36.1",
 ]
 vault = [
