@@ -3,6 +3,7 @@ problem details, versioning, diagnostics, and cache headers."""
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,7 @@ from noema.api.cache_headers import CacheControlMiddleware
 from noema.api.middleware import (
     RequestIDMiddleware,
     RequestSizeLimitMiddleware,
+    RequestTimeoutMiddleware,
     SecurityHeadersMiddleware,
 )
 from noema.api.problem import ProblemResponse, problem_response
@@ -149,6 +151,64 @@ class TestRequestSizeLimitMiddleware:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/hello")
+        assert resp.status_code == 200
+
+
+# ── RequestTimeoutMiddleware ─────────────────────────────────────────────────
+
+
+class TestRequestTimeoutMiddleware:
+    async def test_returns_504_when_handler_exceeds_timeout(self, app: FastAPI):
+        """A handler that outlives request_timeout_seconds must fail closed with 504."""
+
+        @app.get("/slow")
+        async def slow():
+            await asyncio.sleep(0.5)
+            return {"ok": True}
+
+        _override_api_settings(request_timeout_seconds=0.05)
+        app.add_middleware(RequestTimeoutMiddleware)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/slow")
+        assert resp.status_code == 504
+        body = resp.json()
+        assert body["error"] == "request_timeout"
+
+    async def test_passes_when_handler_finishes_quickly(self, app: FastAPI):
+        _override_api_settings(request_timeout_seconds=5.0)
+        app.add_middleware(RequestTimeoutMiddleware)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/hello")
+        assert resp.status_code == 200
+
+    async def test_zero_timeout_disables_the_middleware(self, app: FastAPI):
+        """request_timeout_seconds = 0 must mean 'no timeout'."""
+
+        @app.get("/slow")
+        async def slow():
+            await asyncio.sleep(0.1)
+            return {"ok": True}
+
+        _override_api_settings(request_timeout_seconds=0)
+        app.add_middleware(RequestTimeoutMiddleware)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/slow")
+        assert resp.status_code == 200
+
+    async def test_exempt_path_is_not_timed_out(self, app: FastAPI):
+        @app.get("/slow")
+        async def slow():
+            await asyncio.sleep(0.2)
+            return {"ok": True}
+
+        _override_api_settings(request_timeout_seconds=0.05, request_timeout_exempt=["/slow"])
+        app.add_middleware(RequestTimeoutMiddleware)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/slow")
         assert resp.status_code == 200
 
 

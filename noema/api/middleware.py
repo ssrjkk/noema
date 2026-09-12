@@ -1,7 +1,8 @@
-"""Request/response middleware: correlation ID, CORS, body size limit."""
+"""Request/response middleware: correlation ID, CORS, body size limit, timeout."""
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -9,10 +10,12 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import JSONResponse
 
 from noema.config.settings import get_settings
-from noema.logging import set_correlation_id
+from noema.logging import get_logger, set_correlation_id
 
 if TYPE_CHECKING:
     from fastapi import Request, Response
+
+log = get_logger(__name__)
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -64,3 +67,34 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         for key, val in self._HEADERS.items():
             response.headers[key] = val
         return response
+
+
+class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+    """Fails closed with 504 when a request handler exceeds the configured duration.
+
+    Streaming responses (SSE) return before the body streams, so they are
+    naturally exempt from the wait; add a path to ``api.request_timeout_exempt``
+    if a handler must never be interrupted. Setting ``api.request_timeout_seconds``
+    to 0 disables the timeout entirely.
+    """
+
+    def __init__(self, app: Any) -> None:
+        super().__init__(app)
+        settings = get_settings().api
+        self._timeout: float = settings.request_timeout_seconds
+        self._exempt: tuple[str, ...] = tuple(settings.request_timeout_exempt)
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if self._timeout <= 0 or request.url.path in self._exempt:
+            return await call_next(request)
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=self._timeout)
+        except TimeoutError:
+            log.warning("request_timeout", path=request.url.path, timeout=self._timeout)
+            return JSONResponse(
+                status_code=504,
+                content={
+                    "error": "request_timeout",
+                    "message": f"Request handler exceeded {self._timeout:g}s",
+                },
+            )

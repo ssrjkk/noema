@@ -12,7 +12,7 @@ import os
 import socket
 import time
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from redis.asyncio import Redis
@@ -21,6 +21,8 @@ from noema.core.engine import NoemaEngine
 from noema.core.types import Task, TaskComplexity
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from redis.asyncio import Redis as AsyncRedis
 
 logger = structlog.get_logger(__name__)
@@ -91,19 +93,23 @@ class NodeHeartbeat:
     async def _beat(self) -> None:
         if self._redis is None:
             return
-        await self._redis.hset(
-            self._key(),
-            mapping={
-                "node_id": self.node_id,
-                "hostname": socket.gethostname(),
-                "pid": str(os.getpid()),
-                "started_at": str(self.started_at),
-                "last_heartbeat": str(int(time.time())),
-                "draining": "1" if self.draining else "0",
-                "metrics_port": str(self.metrics_port),
-            },
+        r: Redis = self._redis
+        await cast(
+            "Awaitable[int]",
+            r.hset(
+                self._key(),
+                mapping={
+                    "node_id": self.node_id,
+                    "hostname": socket.gethostname(),
+                    "pid": str(os.getpid()),
+                    "started_at": str(self.started_at),
+                    "last_heartbeat": str(int(time.time())),
+                    "draining": "1" if self.draining else "0",
+                    "metrics_port": str(self.metrics_port),
+                },
+            ),
         )
-        await self._redis.expire(self._key(), HEARTBEAT_TTL)
+        await r.expire(self._key(), HEARTBEAT_TTL)
 
     async def _loop(self) -> None:
         while True:
@@ -218,8 +224,7 @@ class NoemaWorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     poll_delay = 1.0
-    max_retries = 3
-    retry_delay = 5.0
+    max_tries = 3
 
 
 async def create_worker(redis_url: str | None = None, burst: bool = False) -> Any:
@@ -240,8 +245,7 @@ async def create_worker(redis_url: str | None = None, burst: bool = False) -> An
         on_startup=NoemaWorkerSettings.on_startup,
         on_shutdown=NoemaWorkerSettings.on_shutdown,
         poll_delay=NoemaWorkerSettings.poll_delay,
-        max_retries=NoemaWorkerSettings.max_retries,
-        retry_delay=NoemaWorkerSettings.retry_delay,
+        max_tries=NoemaWorkerSettings.max_tries,
         burst=burst,
     )
     return worker
@@ -283,13 +287,13 @@ async def list_active_workers(
     redis_url: str, redis: AsyncRedis | None = None
 ) -> list[dict[str, str]]:
     """List live worker nodes from their Redis heartbeat keys."""
-    r: AsyncRedis = redis or Redis.from_url(redis_url, decode_responses=True)
+    r: Redis = redis or Redis.from_url(redis_url, decode_responses=True)
     owned = redis is None
     try:
         keys = await r.keys(f"{HEARTBEAT_PREFIX}*")
         workers: list[dict[str, str]] = []
         for key in keys:
-            data = await r.hgetall(key)
+            data = await cast("Awaitable[dict[Any, Any]]", r.hgetall(key))
             if not data:
                 continue
             decoded = {

@@ -209,6 +209,17 @@ class APISettings(BaseSettings):
     max_description_length: int = Field(default=10_000, ge=1)
     max_tags: int = Field(default=20, ge=1)
 
+    # Handler timeout (fail-closed safety net above the engine's own timeouts)
+    request_timeout_seconds: float = Field(
+        default=960.0,
+        ge=0,
+        description="HTTP handler timeout in seconds; 0 disables it (504 when exceeded)",
+    )
+    request_timeout_exempt: list[str] = Field(
+        default_factory=list,
+        description="Request paths exempt from the handler timeout",
+    )
+
 
 class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NOEMA_WORKER_")
@@ -293,6 +304,13 @@ class NeurosymbolicSettings(BaseSettings):
     # Causal reasoning
     causal_enabled: bool = Field(default=True)
     causal_max_counterfactuals: int = Field(default=5, ge=1, le=20)
+
+    # Verifiable reasoning traces (T4.2)
+    trace_dir: str = Field(
+        default=".noema/traces",
+        description="Directory (relative to project root) for committed verifiable "
+        "reasoning traces; empty disables trace commit",
+    )
 
 
 class AuditSettings(BaseSettings):

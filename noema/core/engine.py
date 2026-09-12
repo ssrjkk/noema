@@ -28,6 +28,7 @@ import json
 import re
 import time
 from collections.abc import Callable, Coroutine
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from noema.agents.orchestrator import AgentOrchestrator
@@ -167,6 +168,7 @@ class NoemaEngine:
         self.tracer: Tracer = get_tracer()
         self.checkpointer = CheckpointStore(persist_dir=f"{project_root}/.noema/checkpoints")
         ns_cfg = self._settings.neurosymbolic
+        trace_dir = str(Path(project_root) / ns_cfg.trace_dir) if ns_cfg.trace_dir else ""
         self.neurosymbolic = (
             NeuroSymbolicEngine(
                 max_refinement_attempts=ns_cfg.max_refinement_attempts,
@@ -174,6 +176,7 @@ class NoemaEngine:
                 enable_evolution=ns_cfg.evolution_enabled,
                 enable_causal=ns_cfg.causal_enabled,
                 max_counterfactuals=ns_cfg.causal_max_counterfactuals,
+                trace_dir=trace_dir,
             )
             if ns_cfg.enabled
             else None

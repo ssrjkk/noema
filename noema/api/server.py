@@ -39,6 +39,7 @@ from noema.api.diagnostics import router as diagnostics_router
 from noema.api.middleware import (
     RequestIDMiddleware,
     RequestSizeLimitMiddleware,
+    RequestTimeoutMiddleware,
     SecurityHeadersMiddleware,
 )
 from noema.api.problem import ProblemResponse, problem_response
@@ -195,6 +196,7 @@ app.include_router(tasks_router)
 app.add_middleware(CacheControlMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(RequestTimeoutMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(APIKeyAuthMiddleware)

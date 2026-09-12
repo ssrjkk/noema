@@ -47,27 +47,28 @@ async def _seed_node(redis, node_id: str, hostname: str, port: int) -> None:
 class TestGridEndpoint:
     def test_grid_snapshot_returns_nodes_and_totals(self):
         client = _client()
-        redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
-        import asyncio
 
-        async def _seed() -> None:
-            await _seed_node(redis, "node-1", "host1", 9091)
-            await _seed_node(redis, "node-2", "host2", 9092)
+        with client:
+            # Same event loop as the ASGI app: fakeredis must never cross
+            # an asyncio loop boundary, or snapshot() fails to bind tasks.
+            async def _seed() -> None:
+                redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+                await _seed_node(redis, "node-1", "host1", 9091)
+                await _seed_node(redis, "node-2", "host2", 9092)
+                set_dashboard(GridDashboard(redis=redis, fetch=_ok_fetch))
 
-        asyncio.run(_seed())
-        dashboard = GridDashboard(redis=redis, fetch=_ok_fetch)
-        set_dashboard(dashboard)
-        try:
-            resp = client.get("/grid")
-            assert resp.status_code == 200
-            body = resp.json()
-            assert body["totals"]["nodes_total"] == 2
-            assert body["totals"]["nodes_reachable"] == 2
-            nodes = {n["node_id"]: n for n in body["nodes"]}
-            assert nodes["node-1"]["llm_tokens"] == 500.0
-            assert nodes["node-1"]["http_errors"] == 1
-        finally:
-            set_dashboard(None)
+            client.portal.call(_seed)
+            try:
+                resp = client.get("/grid")
+                assert resp.status_code == 200
+                body = resp.json()
+                assert body["totals"]["nodes_total"] == 2
+                assert body["totals"]["nodes_reachable"] == 2
+                nodes = {n["node_id"]: n for n in body["nodes"]}
+                assert nodes["node-1"]["llm_tokens"] == 500.0
+                assert nodes["node-1"]["http_errors"] == 1
+            finally:
+                set_dashboard(None)
 
     def test_grid_endpoint_never_500s(self):
         client = _client()

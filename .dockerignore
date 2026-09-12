@@ -1,0 +1,46 @@
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# Tooling metadata
+.github
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+.python-version
+
+# Python artifacts
+__pycache__
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tests, benchmarks and local workloads
+tests/
+benchmarks/
+experiments/
+results/
+locustfile.py
+locust.conf
+
+# Docs and deployment sources are not part of the runtime image
+docs/
+deploy/
+Makefile
+mkdocs.yml
+
+# Local data and secrets
+*.log
+.env
+.env.*
+*.pem
+*.key
+data/
+.noema/
