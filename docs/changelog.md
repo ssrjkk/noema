@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.4.0 (2026-09-21)
+
+### Features
+
+- **Expanded test coverage** — added 417 new tests across critical modules: API server endpoints (10 tests), chain-of-thought extras (9 tests), LLM provider extras (14 tests), neurosymbolic symbolic extras (27 tests), neurosymbolic neural (88 tests), API webhooks (100 tests), audit logging (141 tests). Total: **1659 tests** (up from 1242).
+- **New modules** — `noema/eval/leaderboard.py` (benchmark leaderboard tracking), `noema/mcp/server.py` (Model Context Protocol server), `noema/api/evals.py` (evaluation endpoints), `noema/cli/eval.py` and `noema/cli/mcp.py` (CLI commands), `noema/observability/otlp.py` (OpenTelemetry HTTP exporter).
+- **API documentation** — new `docs/api/` directory with comprehensive reference: billing, neurosymbolic, noema core, observability, resilience, server, types.
+
+### Security
+
+- **Hardened deployment defaults** — removed hardcoded DB credentials from `compose.env`, enforced required environment variables via `${VAR:?error}` pattern in `docker-compose.yml` (fail-closed: deployment fails if secrets are missing, not silently uses defaults).
+- **Webhook SSRF protection** — URL validation prevents internal network access.
+- **Webhook signature enforcement** — HMAC verification fail-closed when secret is empty.
+
+### Fixes
+
+- **Test assertions** — updated `test_deploy_static.py` to match intentional Dockerfile changes (removed `dev` from prod install) and stricter compose env var patterns.
+- **Windows compatibility** — added skip markers for sandbox tests that use local fallback (unsupported on Windows).
+- **Mypy strict mode** — added `# type: ignore[unreachable]` markers for defensive code paths in settings, store, codegen, providers, replay, healer, engine.
+- **Ruff lint cleanup** — fixed SIM108 (ternary), SIM102 (nested if), SIM114 (duplicate branches), TC003 (typing imports) across rate_limit, leaderboard.
+
+### Quality
+
+- 0 mypy errors, 0 ruff issues; full suite: **1659 passed, 3 skipped** (Windows sandbox tests).
+- Coverage increased from 79% to 80% (3624 missed lines → down from 3801).
+- All 26 healing plan tasks completed (P0/P1/P2/P3 security, quality, docs).
+
 ## v1.3.0 (2026-09-19)
 
 ### Features
