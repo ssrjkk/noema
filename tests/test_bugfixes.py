@@ -8,6 +8,7 @@ Covers:
 """
 
 import json
+import sys
 import time
 
 import pytest
@@ -140,6 +141,7 @@ def test_pytest_counts_fallback_to_returncode():
     assert _parse_pytest_counts("no summary here", 1) == (0, 1)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="local sandbox fallback not supported on Windows")
 @pytest.mark.asyncio
 async def test_sandbox_counts_green_tests():
     engine = SandboxEngine(
@@ -168,6 +170,7 @@ async def test_sandbox_counts_green_tests():
     assert result.tests_failed == 0
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="local sandbox fallback not supported on Windows")
 @pytest.mark.asyncio
 async def test_sandbox_counts_failing_tests():
     engine = SandboxEngine(

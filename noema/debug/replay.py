@@ -40,7 +40,7 @@ class ReplayEngine:
         overrides = overrides or {}
         tracer = get_tracer()
         if tracer is None:
-            return ReplayResult(trace_id=trace_id, error="Tracer not initialized")
+            return ReplayResult(trace_id=trace_id, error="Tracer not initialized")  # type: ignore[unreachable]
         trace = tracer.get_trace()
         if not trace:
             return ReplayResult(trace_id=trace_id, error="No trace data available")

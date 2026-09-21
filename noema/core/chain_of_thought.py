@@ -557,7 +557,17 @@ class ChainOfThought:
         step.result = response.content
         step.duration_ms = duration
         step.tokens_used = response.tokens_used or 0
-        step.confidence = min(1.0, step.tokens_used / 1000) if step.tokens_used else 0.7
+        # Confidence from completion signal, not token count.
+        # finish_reason="stop" = model completed naturally; "length" = truncated.
+        # Empty content = no useful output.
+        if not response.content:
+            step.confidence = 0.0
+        elif response.finish_reason == "length":
+            step.confidence = 0.4
+        elif response.finish_reason == "stop":
+            step.confidence = 0.7
+        else:
+            step.confidence = 0.5
 
         if budget and response.tokens_used:
             budget.record(response.tokens_used)

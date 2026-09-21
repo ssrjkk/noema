@@ -10,9 +10,9 @@ services:
       - compose.env
     environment:
       NOEMA_API_HOST: "0.0.0.0"
-      NOEMA_API__CORS_ORIGINS: '["*"]'
-      NOEMA_REDIS__URL: "redis://:${REDIS_PASSWORD:-noema}@redis:6379/0"
-      NOEMA_DB__URL: "postgresql+asyncpg://noema:${POSTGRES_PASSWORD:-noema}@postgres:5432/noema"
+      NOEMA_API__CORS_ORIGINS: '["http://localhost:3000", "http://localhost:8000"]'
+      NOEMA_REDIS__URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+      NOEMA_DB__URL: "postgresql+asyncpg://noema:${POSTGRES_PASSWORD}@postgres:5432/noema"
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,8 +32,9 @@ services:
     container_name: noema-postgres
     environment:
       POSTGRES_USER: noema
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-noema}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: noema
+    # Production: remove host port mapping (access only via noema-network)
     ports:
       - "5432:5432"
     volumes:
@@ -50,11 +51,12 @@ services:
   redis:
     image: redis:7-alpine
     container_name: noema-redis
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-noema}"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set}"]
+    # Production: remove host port mapping (access only via noema-network)
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-noema}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -168,7 +168,7 @@ class SelfHealer:
                         # (or its caller) forever.
                         result = await asyncio.wait_for(candidate, timeout=self.strategy.timeout)
                     else:
-                        result = candidate
+                        result = candidate  # type: ignore[unreachable]
                     elapsed = (time.time() - start) * 1000
 
                     self._success_count += 1

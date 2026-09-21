@@ -325,7 +325,7 @@ class KnowledgeStore:
         if not self._vectorizer or self._vectors is None:
             return []
 
-        query_vec = self._vectorizer.transform([query])
+        query_vec = self._vectorizer.transform([query])  # type: ignore[unreachable]
         scores = cosine_similarity(query_vec, self._vectors).flatten()
         top_indices = scores.argsort()[::-1][:top_k]
 

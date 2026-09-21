@@ -48,7 +48,7 @@ def test_env_empty_value_skipped(tmp_path, monkeypatch):
     monkeypatch.setenv("NOEMA_LLM__PROVIDER", "")
     monkeypatch.setenv("NOEMA_COT_MAX_STEPS", "")
     s = NoemaSettings.from_yaml(_missing_path(tmp_path))
-    assert s.llm.provider == "ollama"
+    assert s.llm.provider == "fallback"
     assert s.cot_max_steps == 12
 
 
@@ -62,7 +62,7 @@ def test_env_stray_var_ignored(tmp_path, monkeypatch):
 def test_direct_construction_ignores_env(monkeypatch):
     monkeypatch.setenv("NOEMA_LLM__PROVIDER", "openai")
     s = NoemaSettings()
-    assert s.llm.provider == "ollama"
+    assert s.llm.provider == "fallback"
 
 
 def test_secret_fields_stay_secret(tmp_path, monkeypatch):

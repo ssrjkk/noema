@@ -25,7 +25,7 @@ def test_dockerfile_python_versions_match():
 def test_dockerfile_install_is_not_editable():
     d = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "-e " not in d, "editable installs leave .pth files pointing at the builder dir"
-    assert 'pip install ".[dev,db,full,sentry]"' in d
+    assert 'pip install ".[db,full,sentry]"' in d
 
 
 def test_compose_redis_requires_password():
@@ -37,7 +37,7 @@ def test_compose_redis_requires_password():
 def test_compose_no_hardcoded_plaintext_db_password():
     c = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     assert "POSTGRES_PASSWORD: noema" not in c
-    assert "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-noema}" in c
+    assert "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD" in c
 
 
 def test_compose_env_template_committed():

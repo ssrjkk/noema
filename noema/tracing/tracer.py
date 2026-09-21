@@ -47,13 +47,15 @@ class TraceSpan:
     start_time: float = 0.0
     end_time: float = 0.0
     duration_ms: float = 0.0
+    start_epoch_ns: int = 0
+    end_epoch_ns: int = 0
     attributes: dict[str, Any] = field(default_factory=dict)
     events: list[dict[str, Any]] = field(default_factory=list)
     status: str = "ok"
     error: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "span_id": self.span_id,
             "parent_id": self.parent_id,
             "trace_id": self.trace_id,
@@ -66,6 +68,11 @@ class TraceSpan:
             "events": self.events[-10:],
             "error": self.error[:500] if self.error else "",
         }
+        if self.start_epoch_ns:
+            d["start_epoch_ns"] = self.start_epoch_ns
+        if self.end_epoch_ns:
+            d["end_epoch_ns"] = self.end_epoch_ns
+        return d
 
 
 class Tracer:
@@ -77,6 +84,13 @@ class Tracer:
         self._spans: list[TraceSpan] = []
         self._stack: list[TraceSpan] = []
         self._prompt_registry: dict[str, PromptVersion] = {}
+        if self.config.export_endpoint:
+            from noema.observability.otlp import start_otlp_exporter
+
+            start_otlp_exporter(
+                endpoint=self.config.export_endpoint,
+                service_name=self.config.service_name or "noema",
+            )
 
     @property
     def trace_id(self) -> str:
@@ -164,6 +178,7 @@ class Tracer:
             name=name,
             kind=kind,
             start_time=time.monotonic(),
+            start_epoch_ns=time.time_ns(),
             attributes=attributes or {},
         )
         self._stack.append(span)
@@ -188,6 +203,7 @@ class Tracer:
                     del self._stack[i]
                     break
         s.end_time = time.monotonic()
+        s.end_epoch_ns = time.time_ns()
         s.duration_ms = (s.end_time - s.start_time) * 1000
         s.status = status
         s.error = error
@@ -195,6 +211,10 @@ class Tracer:
         # Bounded history: a long-lived tracer must not grow without limit.
         if len(self._spans) > self.config.max_spans:
             self._spans = self._spans[-self.config.max_spans :]
+        if self.config.export_endpoint:
+            from noema.observability.otlp import emit_otlp_span
+
+            emit_otlp_span(s.to_dict())
         return s
 
     def add_event(self, name: str, attributes: dict[str, Any] | None = None) -> None:
@@ -270,6 +290,20 @@ def get_tracer() -> Tracer:
     global _tracer
     if _tracer is None:
         _tracer = Tracer()
+        try:
+            from noema.config.settings import get_settings
+
+            settings = get_settings()
+            if settings.obs.tracing_enabled and settings.obs.tracing_endpoint:
+                _tracer.config.export_endpoint = settings.obs.tracing_endpoint
+                from noema.observability.otlp import start_otlp_exporter
+
+                start_otlp_exporter(
+                    endpoint=settings.obs.tracing_endpoint,
+                    service_name=_tracer.config.service_name,
+                )
+        except Exception:
+            pass
     return _tracer
 
 

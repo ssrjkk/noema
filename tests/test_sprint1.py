@@ -26,7 +26,7 @@ class TestNoemaSettings:
         monkeypatch.delenv("NOEMA_LLM_PROVIDER", raising=False)
         reset_settings()
         s = NoemaSettings()
-        assert s.llm.provider == "ollama"
+        assert s.llm.provider == "fallback"
         assert s.api.port == 8000
         assert s.worker.pool_size == 10
         assert s.db.pool_min >= 1
@@ -555,4 +555,5 @@ class TestLLMResilience:
 
         fp = FallbackProvider()
         resp = await fp.complete([LLMMessage(role="user", content="test")])
-        assert resp.content.startswith("[Fallback mode]")
+        assert resp.model == "fallback/template-based"
+        assert resp.content.startswith("```json\n")

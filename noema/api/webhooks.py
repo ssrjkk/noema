@@ -6,11 +6,13 @@ import asyncio
 import contextlib
 import hashlib
 import hmac
+import ipaddress
 import json
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlparse
 
 import structlog
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -21,6 +23,48 @@ from noema.config.settings import get_settings
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Validate webhook URL to prevent SSRF attacks.
+
+    Rejects:
+    - Private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+    - Loopback (127.0.0.0/8, ::1)
+    - Link-local (169.254.0.0/16, fe80::/10)
+    - Cloud metadata endpoints (169.254.169.254)
+    - Internal hostnames (localhost, etc.)
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception as e:
+        raise ValueError(f"Invalid URL: {e}") from e
+
+    if not parsed.scheme:
+        raise ValueError("URL must have a scheme (http or https)")
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"URL scheme must be http or https, got {parsed.scheme}")
+    if not parsed.netloc:
+        raise ValueError("URL must have a hostname")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("URL must have a hostname")
+
+    blocked_hostnames = {"localhost", "0.0.0.0", "127.0.0.1", "::1", "metadata.google.internal"}
+    if hostname.lower() in blocked_hostnames:
+        raise ValueError(f"Blocked hostname: {hostname}")
+
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError(f"Blocked IP range: {hostname}")
+    except ValueError as e:
+        if "Blocked IP range" in str(e):
+            raise
+        # Not an IP address, continue with DNS resolution check
+        # Note: For production, you'd want to resolve DNS and check the IP
+        # This is a best-effort check without DNS resolution
 
 
 @dataclass
@@ -194,6 +238,12 @@ class WebhookRegisterResponse(BaseModel):
 @router.post("/register", response_model=WebhookRegisterResponse)
 async def register_webhook(body: WebhookRegisterRequest) -> WebhookRegisterResponse:
     """Register a new webhook."""
+    # Validate URL to prevent SSRF attacks
+    try:
+        _validate_webhook_url(body.url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid webhook URL: {e}") from e
+
     dispatcher = get_webhook_dispatcher()
     webhook_id = str(uuid.uuid4())[:8]
     registration = WebhookRegistration(
@@ -244,9 +294,10 @@ async def incident_webhook(
 ) -> dict[str, Any]:
     """Consume an incident (Sentry alert / webhook) and enqueue a fix task.
 
-    If ``settings.api.webhook_secret`` is set, the request must carry an
-    ``X-Noema-Signature: sha256=<hex>`` HMAC over the raw request body
-    (constant-time comparison, fail-closed).
+    The request must carry an ``X-Noema-Signature: sha256=<hex>`` HMAC over the
+    raw request body (constant-time comparison, fail-closed). If
+    ``settings.api.webhook_secret`` is not configured, the endpoint rejects all
+    requests (fail-closed: no secret means no trust).
 
     Prefers the async worker (arq over Redis) when available; falls back to
     running the incident→PR loop inline so a standalone deployment still
@@ -255,7 +306,12 @@ async def incident_webhook(
     """
     settings = get_settings()
     secret = settings.api.webhook_secret.get_secret_value()
-    if secret and not _verify_signature(secret, await request.body(), x_noema_signature):
+    if not secret:
+        raise HTTPException(
+            status_code=401,
+            detail="Webhook secret not configured — rejecting request (fail-closed)",
+        )
+    if not _verify_signature(secret, await request.body(), x_noema_signature):
         raise HTTPException(
             status_code=401,
             detail="Invalid or missing X-Noema-Signature",

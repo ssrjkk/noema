@@ -92,18 +92,17 @@ def calculate_line_costs(total_cost: float, lines_by_file: dict[str, int]) -> di
 class CostTracker:
     """Tracks LLM costs per tenant/task/step with Redis + in-memory backends.
 
-    ``pg`` (an asyncpg-style pool/connection factory) enables best-effort
-    write-through to the ``cost_records`` table that ``QuotaManager`` reads
-    for monthly/hourly enforcement.
+    ``db`` (a Database instance) enables best-effort write-through to the
+    ``cost_records`` table that ``QuotaManager`` reads for monthly/hourly enforcement.
     """
 
-    def __init__(self, redis_url: str = "", pg: Any = None) -> None:
+    def __init__(self, redis_url: str = "", db: Any = None) -> None:
         self._records: list[CostRecord] = []
         self._daily: dict[str, float] = {}
         self._monthly: dict[str, float] = {}
         self._file_costs: list[FileCost] = []
         self._redis = None
-        self._pg = pg
+        self._db = db
         if redis_url:
             try:
                 import redis.asyncio as aioredis
@@ -161,7 +160,7 @@ class CostTracker:
             except Exception as e:
                 log.warning("redis_cost_write_failed", error=str(e))
 
-        if self._pg is not None:
+        if self._db is not None:
             await self._write_cost_record(record)
 
         self._daily[day_key] = self._daily.get(day_key, 0) + cost
@@ -169,27 +168,35 @@ class CostTracker:
         return record
 
     async def _write_cost_record(self, record: CostRecord) -> None:
-        if self._pg is None:
+        if self._db is None:
             return
         try:
-            await self._pg.execute(CREATE_COST_RECORDS_TABLE_SQL)
-            await self._pg.execute(
-                """INSERT INTO cost_records
-                   (tenant_id, task_id, provider, model, input_tokens, output_tokens,
-                    cost_usd, step_name, recorded_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,to_timestamp($9))""",
-                record.tenant_id,
-                record.task_id,
-                record.provider,
-                record.model,
-                record.input_tokens,
-                record.output_tokens,
-                record.cost_usd,
-                record.step_name,
-                record.timestamp,
-            )
+            from sqlalchemy import text
+
+            async with self._db.session() as session:
+                await session.execute(
+                    text(CREATE_COST_RECORDS_TABLE_SQL)
+                )
+                await session.execute(
+                    text("""INSERT INTO cost_records
+                       (tenant_id, task_id, provider, model, input_tokens, output_tokens,
+                        cost_usd, step_name, recorded_at)
+                       VALUES (:tenant_id, :task_id, :provider, :model, :input_tokens, :output_tokens,
+                        :cost_usd, :step_name, to_timestamp(:timestamp))"""),
+                    {
+                        "tenant_id": record.tenant_id,
+                        "task_id": record.task_id,
+                        "provider": record.provider,
+                        "model": record.model,
+                        "input_tokens": record.input_tokens,
+                        "output_tokens": record.output_tokens,
+                        "cost_usd": record.cost_usd,
+                        "step_name": record.step_name,
+                        "timestamp": record.timestamp,
+                    },
+                )
         except Exception as e:  # noqa: BLE001 - billing must never break inference
-            log.warning("cost_record_pg_write_failed", error=str(e))
+            log.warning("cost_record_db_write_failed", error=str(e))
 
     async def get_tenant_cost(self, tenant_id: str) -> dict[str, float]:
         day_key = self._day_key(tenant_id)

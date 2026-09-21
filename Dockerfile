@@ -22,7 +22,7 @@ COPY noema/ noema/
 
 RUN pip install --upgrade pip && \
     pip install build && \
-    pip install ".[dev,db,full,sentry]"
+    pip install ".[db,full,sentry]"
 
 # =============================================================================
 # Stage 2: Runtime — minimal image

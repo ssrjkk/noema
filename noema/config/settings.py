@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ─── Paths ───────────────────────────────────────────────────────────────
@@ -149,7 +149,10 @@ class RedisSettings(BaseSettings):
 class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NOEMA_LLM_")
 
-    provider: str = Field(default="ollama", description="ollama | openai | anthropic")
+    provider: str = Field(
+        default="fallback",
+        description="fallback | ollama | openai | anthropic. Default = fallback so the engine works out-of-the-box without keys or a local Ollama install. Set NOEMA_LLM__PROVIDER=ollama to use a local model.",
+    )
     ollama_url: str = Field(default="http://localhost:11434")
     ollama_model: str = Field(default="llama3.1")
     openai_api_key: SecretStr = Field(default=SecretStr(""))
@@ -168,20 +171,33 @@ class LLMSettings(BaseSettings):
     retry_max_delay: float = Field(default=30.0, gt=0)
 
 
+class APIKeyBinding(BaseModel):
+    """API key with tenant binding for multi-tenant deployments."""
+
+    key: SecretStr
+    tenant_id: str = Field(default="default")
+    description: str = Field(default="")
+
+
 class APISettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NOEMA_API_")
 
     host: str = Field(default="0.0.0.0")
     port: int = Field(default=8000, ge=1, le=65535)
-    workers: int = Field(default=1, ge=1)
     reload: bool = Field(default=False)
 
     # Auth
     api_key: SecretStr = Field(
         default=SecretStr(""),
-        description="Master API key. Empty = auth disabled (dev only).",
+        description="Master API key. Empty = auth disabled (dev only). "
+        "For multi-tenant, use api_keys list instead.",
     )
     api_key_header: str = Field(default="X-API-Key")
+    api_keys: list[APIKeyBinding] = Field(
+        default_factory=list,
+        description="List of API keys with tenant bindings. "
+        "When set, each key is mapped to a specific tenant_id.",
+    )
 
     # Inbound webhook verification
     webhook_secret: SecretStr = Field(
@@ -192,7 +208,6 @@ class APISettings(BaseSettings):
     # Rate limiting
     rate_limit_enabled: bool = Field(default=True)
     rate_limit_rpm: int = Field(default=60, ge=1, description="Requests per minute per key")
-    rate_limit_burst: int = Field(default=10, ge=1, description="Burst allowance")
     trusted_proxies: list[str] = Field(
         default_factory=list,
         description="IPs/CIDRs of trusted reverse proxies that may set X-Forwarded-For. "
@@ -295,7 +310,12 @@ class ObservabilitySettings(BaseSettings):
 class NeurosymbolicSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NOEMA_NS_")
 
-    enabled: bool = Field(default=False)
+    enabled: bool = Field(
+        default=False,
+        description="Enable Z3-based neurosymbolic verification (the main product feature). "
+        "When disabled, the engine uses Chain-of-Thought reasoning only (no formal verification). "
+        "Set NOEMA_NS__ENABLED=true to enable.",
+    )
     max_refinement_attempts: int = Field(default=3, ge=1, le=10)
     verification_timeout: float = Field(default=5.0, gt=0)
     evolution_enabled: bool = Field(default=True)
@@ -350,6 +370,13 @@ class AutonomySettings(BaseSettings):
         description="Path prefixes (e.g. 'crypto/') whose changed .py files must "
         "ship a matching .lean spec or the merge gate blocks with "
         "'missing_formal_spec'",
+    )
+    judge_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum judge score (0.0-1.0) for merge gate to pass. "
+        "Set to 0.0 to disable judge (sandbox-only gate).",
     )
 
 
@@ -446,7 +473,7 @@ class NoemaSettings(BaseSettings):
             with open(cfg_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
         if not isinstance(data, dict):
-            data = {}
+            data = {}  # type: ignore[unreachable]
         merged = _deep_merge(data, _env_overrides())
         return cls(**merged)
 

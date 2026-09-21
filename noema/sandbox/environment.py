@@ -109,15 +109,27 @@ def _safe_join(tmp_dir: Path, rel_path: str) -> Path:
 
 
 def _build_isolated_env() -> dict[str, str]:
-    """Build environment without network access."""
-    env = os.environ.copy()
+    """Build minimal environment for sandbox execution.
+
+    Whitelists only safe variables to prevent leaking host secrets
+    (API keys, database passwords, etc.) into untrusted code.
+    """
+    # Whitelist: only these variables are safe to pass to sandbox
+    safe_vars = {"PATH", "HOME", "LANG", "LC_ALL", "TERM"}
+    env = {k: v for k, v in os.environ.items() if k in safe_vars}
+
+    # Network isolation: block all proxy access
     env["NO_PROXY"] = "*"
     env["no_proxy"] = "*"
     env["HTTP_PROXY"] = ""
     env["HTTPS_PROXY"] = ""
     env["http_proxy"] = ""
     env["https_proxy"] = ""
+
+    # Python-specific
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+
     return env
 
 

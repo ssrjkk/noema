@@ -47,6 +47,7 @@ safety-report.json
 pip-audit-report.json
 results.xml
 results/
+site/
 
 # OS
 .DS_Store
@@ -55,3 +56,6 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+.trae/
+.zed/
+docs/.opencode/

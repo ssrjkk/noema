@@ -238,6 +238,11 @@ class NoemaEngine:
         if self.neurosymbolic:
             await self.neurosymbolic.start()
             log.info("neurosymbolic_engine_started")
+        else:
+            log.warning(
+                "neurosymbolic_engine_disabled",
+                hint="Set NOEMA_NS__ENABLED=true to enable Z3-based formal verification",
+            )
 
         self._initialized = True
         log.info(
@@ -950,21 +955,59 @@ class NoemaEngine:
     async def _kernel_based_reasoning(self, task: Task, thought: ThoughtProcess) -> dict[str, Any]:
         """Degraded-mode reasoning through kernels when the LLM is unavailable.
 
-        Complexity: ``O(K)`` kernel executions for a fixed kernel set K (<= 5).
+        Runs the deterministic kernels (analysis, stack, architecture,
+        optimization, security) and then pulls real code files from the
+        fallback provider's template solution — so a keyless install still
+        returns a complete, well-shaped solution instead of an empty shell.
+
+        Complexity: ``O(K)`` kernel executions for a fixed kernel set K (<= 6).
         """
         analysis = await self._run_kernel("analysis", task, thought, phase="full")
         stack = await self._select_stack(task, thought)
         architecture = await self._run_kernel("architecture", task, thought, phase="design")
         optimizations = await self._run_kernel("optimization", task, thought)
         security = await self._run_kernel("security", task, thought)
+
+        template = await self._fallback_solution_payload(task)
+        code_files = template.get("code", {}).get("files", [])
+        if not isinstance(code_files, list):
+            code_files = []
+        code_files = [f for f in code_files if isinstance(f, dict)]
+        if code_files:
+            thought.add_step(
+                kernel="codegen",
+                input_summary=f"Generate code files for '{task.title}'",
+                output_summary=f"{len(code_files)} files from template solution",
+                confidence=0.9,
+            )
+
         return {
             "analysis": analysis,
             "architecture": architecture,
             "stack": stack.model_dump() if stack else {},
             "optimization": optimizations,
             "security": security,
-            "code": {"files": []},
+            "code": {"files": code_files},
+            "review": template.get("review", {}),
         }
+
+    async def _fallback_solution_payload(self, task: Task) -> dict[str, Any]:
+        """Ask the fallback LLM for its template solution payload (best-effort).
+
+        The fallback provider returns a fenced JSON document with real code
+        files; we parse it defensively so a content change never crashes the
+        degraded reasoning path. Returns ``{}`` on any failure.
+        """
+        from noema.llm.providers import LLMMessage
+
+        try:
+            prompt = f"Generate a complete technical solution for:\n{task.title}\n{task.description}".strip()
+            response = await self.llm.complete([LLMMessage(role="user", content=prompt)])
+            payload = extract_fenced_json(response.content, default=None)
+            return payload if isinstance(payload, dict) else {}
+        except Exception as exc:  # noqa: BLE001 - degraded path stays degraded
+            log.warning("fallback_codegen_failed", task=task.id, error=str(exc))
+            return {}
 
     async def _assemble_solution_from_reasoning(
         self, task: Task, reasoning: dict[str, Any]
@@ -1099,7 +1142,8 @@ class NoemaEngine:
         review = self._safe_parse(reasoning.get("review", "{}"))
         if isinstance(review, dict):
             parts.append(review.get("final_summary", "")[:200])
-        return " | ".join(parts) if parts else "Solution generated via Chain-of-Thought reasoning"
+        joined = " | ".join(p for p in parts if p)
+        return joined if joined else "Solution generated via Chain-of-Thought reasoning"
 
     def _safe_parse(self, data: Any) -> Any:
         """Parse arbitrary reasoning artifacts as JSON, degrading gracefully.
@@ -1142,7 +1186,7 @@ class NoemaEngine:
             )
             return {}
         if not isinstance(result, dict):
-            thought.add_step(kernel_name, input_summary, "Kernel returned non-dict", 0.0)
+            thought.add_step(kernel_name, input_summary, "Kernel returned non-dict", 0.0)  # type: ignore[unreachable]
             return {}
         raw_confidence = result.get("_confidence", 0.7)
         confidence = raw_confidence if isinstance(raw_confidence, (int, float)) else 0.7

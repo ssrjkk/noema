@@ -82,12 +82,12 @@ def seed() -> None:
 
             await session.execute(
                 text("""
-                INSERT INTO feature_flags (id, flag_key, tenant_id, value, created_at, updated_at)
+                INSERT INTO feature_flags (tenant_id, flag_name, enabled, created_at, updated_at)
                 VALUES
-                    ('f1', 'cost_tracking', 'default', true, NOW(), NOW()),
-                    ('f2', 'neurosymbolic', 'default', false, NOW(), NOW()),
-                    ('f3', 'streaming', 'default', true, NOW(), NOW())
-                ON CONFLICT (id) DO NOTHING
+                    ('default', 'cost_tracking', true, NOW(), NOW()),
+                    ('default', 'neurosymbolic', false, NOW(), NOW()),
+                    ('default', 'streaming', true, NOW(), NOW())
+                ON CONFLICT (tenant_id, flag_name) DO NOTHING
             """)
             )
             await session.commit()

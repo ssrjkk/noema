@@ -456,7 +456,7 @@ async def test_fallback_llm():
     assert provider.name == "fallback"
     response = await provider.complete([LLMMessage(role="user", content="test")])
     assert response.content
-    assert response.model == "fallback"
+    assert response.model == "fallback/template-based"
 
 
 @pytest.mark.asyncio
@@ -1533,7 +1533,7 @@ def complex_func(data):
 """
     report = analyzer.analyze(code, "python")
     assert report.grade in ("A", "B", "C", "D", "E", "F")
-    assert len(report.smells) >= 0
+    assert isinstance(report.smells, list)
 
 
 def test_quality_module_execute():

@@ -73,6 +73,7 @@ class SandboxEngine:
         # blocking subprocesses (docker --version / bwrap --version).
         self._has_docker: bool | None = None
         self._has_bwrap: bool | None = None
+        self._warned_local_fallback = False
 
     def _detect_capabilities(self) -> None:
         """Probe docker + bubblewrap availability synchronously.
@@ -95,7 +96,16 @@ class SandboxEngine:
 
     def _pick_env(self) -> Environment:
         """Best available environment for the next stage."""
-        return self._docker if self._has_docker else self._local
+        if self._has_docker:
+            return self._docker
+        if not self._warned_local_fallback:
+            log.warning(
+                "sandbox_docker_unavailable_fallback_to_local",
+                hint="Code will run on the host with rlimits only. "
+                "Install Docker for full isolation (network blocking, container sandbox).",
+            )
+            self._warned_local_fallback = True
+        return self._local
 
     def _bwrap_cmd(self, cmd: list[str], tmp_dir: Path) -> list[str]:
         """Wrap a command with bubblewrap (delegates to the local environment)."""

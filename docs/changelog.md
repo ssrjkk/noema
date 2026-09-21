@@ -1,5 +1,54 @@
 # Changelog
 
+## v1.3.0 (2026-09-19)
+
+### Features
+
+- **Fallback provider rewritten as a template engine** — `noema/llm/providers.py`
+  `FallbackProvider` now classifies the task domain (api, docker, terraform,
+  database, auth, pipeline, frontend, security, test) and returns a structured
+  JSON solution (architecture, stack, code files with real FastAPI/RBAC/SQL/Docker/
+  Terraform/Airflow/React templates) instead of a stub string. The demo pipeline
+  (`python demo.py`) now produces well-shaped solutions with zero API keys.
+  Domain classification is token-aware: `"ui"` no longer matches inside `"build"`,
+  `"api"` inside `"capital"`, and `test_` matches identifiers (`test_api`).
+- **Ollama health check with self-healing** — a failed 1s health-check is cached
+  for `NOEMA_LLM_CIRCUIT_BREAKER_RECOVERY` seconds and then re-attempted, so a
+  long-lived worker recovers when Ollama comes back instead of staying poisoned
+  by its first failure. Failures are wrapped in `LLMProviderError` (fail-closed,
+  retry policy treats them as non-retryable).
+- **`python -m noema` entry point** — `noema/__main__.py` makes the CLI runnable
+  as a module, which is the reliable option on Windows where the console script
+  sometimes misses `PATH`.
+- **Real OTLP/HTTP trace exporter** — `noema/observability/otlp.py` pushes
+  traces to any OpenTelemetry Collector (`POST {endpoint}/v1/traces`,
+  JSON/protobuf mapping) from a daemon worker thread with its own asyncio loop,
+  so it works from sync workers, the CLI and the API server alike. Enable with
+  `NOEMA_OBS_TRACING_ENABLED=true`; `TraceSpan` now records epoch-nanosecond
+  start/end for correct `startTimeUnixNano`/`endTimeUnixNano`. Transport failure
+  logs at debug level and never breaks instrumentation.
+- **Webhook management hardening** — new settings `NOEMA_API__WEBHOOK_ADMIN_TOKEN`
+  (locks `/webhooks/register|list|unregister` when the master API key is empty)
+  and `NOEMA_API__WEBHOOK_ALLOW_UNSIGNED_INCIDENTS` (default `false`, fail-closed).
+
+### Fixes
+
+- **Fallback becomes the default provider** — `NOEMA_LLM_PROVIDER` defaults to
+  `fallback` so a fresh install works out of the box; set it to `ollama`/`openai`/
+  `anthropic` for real reasoning.
+
+### Quality
+
+- New coverage: `tests/test_main_module.py` (module entry point, UTF-8-safe on
+  Windows cp1251 consoles), full `FallbackProvider` suite (classification matrix,
+  template contract, determinism, round-trip through the pipeline parser),
+  Ollama health-check self-healing (`tests/test_refactor_llm_providers.py`), and
+  the OTLP exporter (`tests/test_otlp.py`: payload shape, id/time mapping,
+  batch delivery, transport failure survival, tracer→exporter push).
+- `noema/py.typed` added so type consumers see annotations.
+- Repo hygiene: `.trae/`, `.zed/`, `docs/.opencode/` are gitignored.
+- 0 mypy errors, 0 ruff issues; full suite: 1242 passed, 1 skipped.
+
 ## v1.2.1 (2026-09-12)
 
 ### Features

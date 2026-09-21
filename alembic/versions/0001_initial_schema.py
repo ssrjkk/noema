@@ -8,7 +8,7 @@ Create Date: 2026-07-30 12:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 
 from alembic import op
 
@@ -100,12 +100,30 @@ def upgrade() -> None:
     op.create_table(
         "tenant_quotas",
         sa.Column("tenant_id", sa.String(100), primary_key=True),
-        sa.Column("monthly_budget", sa.Float(), nullable=False, server_default="100.0"),
-        sa.Column("hourly_limit", sa.Integer(), nullable=False, server_default="100"),
-        sa.Column("concurrent_limit", sa.Integer(), nullable=False, server_default="5"),
-        sa.Column("tasks_run", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("tasks_this_hour", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("reset_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "monthly_budget_usd",
+            sa.Numeric(10, 2),
+            nullable=False,
+            server_default="100.00",
+        ),
+        sa.Column(
+            "max_concurrent_tasks", sa.Integer(), nullable=False, server_default="5"
+        ),
+        sa.Column(
+            "max_tasks_per_hour", sa.Integer(), nullable=False, server_default="100"
+        ),
+        sa.Column(
+            "max_input_tokens_per_task",
+            sa.Integer(),
+            nullable=False,
+            server_default="100000",
+        ),
+        sa.Column(
+            "enabled_features",
+            JSONB(),
+            nullable=False,
+            server_default="'[\"basic\"]'::jsonb",
+        ),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
         ),
@@ -117,23 +135,16 @@ def upgrade() -> None:
     # --- feature_flags ---
     op.create_table(
         "feature_flags",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("flag_key", sa.String(100), nullable=False),
-        sa.Column("tenant_id", sa.String(100), nullable=True),
-        sa.Column("value", sa.Boolean(), nullable=False, server_default="false"),
+        sa.Column("tenant_id", sa.String(100), nullable=False),
+        sa.Column("flag_name", sa.String(100), nullable=False),
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
         ),
         sa.Column(
             "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
         ),
-    )
-    op.create_index(
-        "ix_feature_flags_key_tenant",
-        "feature_flags",
-        ["flag_key", "tenant_id"],
-        unique=True,
-        postgresql_where=sa.text("tenant_id IS NOT NULL"),
+        sa.PrimaryKeyConstraint("tenant_id", "flag_name"),
     )
 
 

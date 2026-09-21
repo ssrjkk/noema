@@ -399,12 +399,12 @@ async def test_execute_request_timeout():
 
 
 @pytest.mark.asyncio
-async def test_generate_hypothesis_fallback_no_client():
+async def test_generate_hypothesis_fails_when_no_client():
+    """Fail-closed: raise exception instead of fabricating response."""
     ni = NeuralInterface()
     ni._client = None
-    result = await ni.generate_hypothesis({"task": "test"})
-    assert isinstance(result, dict)
-    assert result.get("fallback") is True
+    with pytest.raises(RuntimeError, match="No LLM client available"):
+        await ni.generate_hypothesis({"task": "test"})
 
 
 # ── EvolutionEngine ───────────────────────────────────────────────────

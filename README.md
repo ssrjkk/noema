@@ -5,12 +5,31 @@
 Noema — это не ещё один генератор кода. Это **инженерный разум**: система, которая не просто выдаёт решение, а проверяет его формальной верификацией, выполняет в изолированной песочнице, ведёт аудируемый трейл каждой мысли и сама открывает pull-request'ы на свои же инциденты.
 
 <p align="center">
-<img src="https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white" alt="Python 3.12+">
+<img src="https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white" alt="Python 3.11+ (recommended 3.12)">
 <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
-<img src="https://img.shields.io/badge/tests-1201-blue?label=unit%20tests" alt="1201 unit tests">
-<img src="https://img.shields.io/badge/version-1.2.0-brightgreen" alt="v1.2.0">
+<img src="https://img.shields.io/badge/tests-1242-blue?label=unit%20tests" alt="1242 unit tests">
+<img src="https://img.shields.io/badge/version-1.3.0-brightgreen" alt="v1.3.0">
 <img src="https://img.shields.io/badge/domains-22-orange" alt="22 domain modules">
 </p>
+
+---
+
+## ⚡ Quick Start — 30 секунд
+
+Не хочется читать? Запусти это:
+
+```bash
+git clone https://github.com/ssrjkk/noema && cd noema
+pip install -e .
+python demo.py      # запускает 12 живых демо: security, quality, DB schema, Docker, Terraform, RBAC, GraphQL и т.д.
+```
+
+Если `python demo.py` вывел `=== ALL DEMOS COMPLETE ===` — всё работает. Дальше:
+
+```bash
+noema --help                                       # или: python -m noema --help
+noema think "Auth service on FastAPI" --tags "python,fastapi,auth"
+```
 
 ---
 
@@ -86,13 +105,77 @@ pip install -e ".[full]"
 pip install -e ".[dev,full,db,grpc,vault]"
 ```
 
-Python 3.11+. Провайдеры LLM: `openai`, `anthropic`, `ollama` + встроенный fallback-провайдер (работает без ключей, для демо и CI). Управление через env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+Python **3.11+** (рекомендуется 3.12 — основная разработка и CI идут на 3.12).
+Провайдеры LLM: `openai`, `anthropic`, `ollama` + встроенный **fallback-провайдер** (работает без ключей, для демо и CI — просто ставь и запускай).
+Управление через env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+
+### Проверка установки
+
+```bash
+# Убедиться, что всё поставилось:
+noema --help                  # вариант 1 — CLI скрипт
+python -m noema --help        # вариант 2 — модуль Python (надёжнее на Windows)
+
+# Запустить 12 живых демо без единого API-ключа:
+python demo.py
+# Должно вывестись === ALL DEMOS COMPLETE ===
+```
+
+## Production Setup — важные настройки по умолчанию
+
+**По умолчанию Noema настроен для разработки и демо, а не для продакшена.** Перед деплоем обязательно настройте:
+
+### Обязательные настройки
+
+1. **LLM-провайдер** — по умолчанию `fallback` (шаблонные ответы, не LLM)
+   ```bash
+   export NOEMA_LLM__PROVIDER=openai  # или anthropic, ollama
+   export OPENAI_API_KEY=sk-...
+   ```
+
+2. **API-ключ** — по умолчанию auth выключен (пустой ключ)
+   ```bash
+   export NOEMA_API__API_KEY=your-secret-key-here
+   ```
+
+3. **Neurosymbolic verification** — по умолчанию выключена (`NOEMA_NS__ENABLED=false`)
+   ```bash
+   export NOEMA_NS__ENABLED=true
+   pip install -e ".[full]"  # нужен Z3
+   ```
+
+4. **Webhook secret** — по умолчанию HMAC-верификация выключена
+   ```bash
+   export NOEMA_API__WEBHOOK_SECRET=your-webhook-secret
+   ```
+
+5. **Database** — для персистентности, аудита и billing
+   ```bash
+   export NOEMA_DB__URL=postgresql+asyncpg://user:pass@localhost/noema
+   pip install -e ".[db]"
+   ```
+
+### Опциональные, но рекомендуемые
+
+- **Redis** — для rate limiting в multi-worker deployments
+- **Sentry** — для мониторинга ошибок (`NOEMA_OBS__SENTRY_DSN`)
+- **Trusted proxies** — если за reverse proxy (`NOEMA_API__TRUSTED_PROXIES`)
+
+### Fail-closed поведение
+
+Noema следует принципу **fail-closed**: если компонент недоступен, система отказывает безопасно, а не фабрикуют ответ:
+- LLM недоступен → `RuntimeError`, а не шаблонный ответ
+- Webhook secret пустой → запрос отклоняется
+- Z3 solver недоступен → верификация не проходит
 
 ## Быстрый старт
 
 ### CLI
 
 ```bash
+# Везде, где написано `noema ...`, можно писать `python -m noema ...`
+# (полезно на Windows, где CLI-скрипт иногда не попадает в PATH)
+
 noema think "Real-time Chat App" --tags "python,websocket,redis" --complexity complex --output full
 
 # Экспорт в структуру проекта на диск
@@ -117,6 +200,8 @@ noema modules list
 
 ```bash
 noema serve
+# или
+python -m noema serve
 # http://localhost:8000
 ```
 
@@ -170,7 +255,7 @@ CI-джоба `.github/workflows/experiments.yml` гоняет smoke-бенчм�
 
 ## Как мы проверяем то, что строим
 
-- **1201 unit-тест** (pytest + hypothesis + pytest-benchmark), включая гейты: автономия, reasoning-trace round-trip, статический вердикт, извлечение контрактов из требований, доменные знания.
+- **1242 unit-тестов** (pytest + hypothesis + pytest-benchmark), включая гейты: автономия, reasoning-trace round-trip, статический вердикт, извлечение контрактов из требований, доменные знания.
 - **Ruff + mypy** в CI, **pre-commit** хуки.
 - **Проверка кодировки и mojibake-гейт** — сломанные юникод-строки не проходят CI.
 - **Security-сканеры** (bandit, safety, pip-audit) в пайплайне.

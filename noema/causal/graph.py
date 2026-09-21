@@ -113,7 +113,7 @@ class CausalGraph:
         self, treatment: str, outcome: str, *, exclude: set[str] | None = None
     ) -> list[str]:
         if not self.validate_dag():
-            raise ValueError("Causal graph must be a DAG for do-calculus")
+            raise ValueError("Causal graph must be a DAG for causal analysis")
         if treatment not in self._nodes:
             raise ValueError(f"Treatment node {treatment} not found")
         if outcome not in self._nodes:
@@ -130,7 +130,7 @@ class CausalGraph:
 
     def find_instruments(self, treatment: str, outcome: str) -> list[str]:
         if not self.validate_dag():
-            raise ValueError("Causal graph must be a DAG for do-calculus")
+            raise ValueError("Causal graph must be a DAG for causal analysis")
         instruments = []
         for node_id in self._nodes:
             if node_id in (treatment, outcome):
@@ -147,7 +147,7 @@ class CausalGraph:
 
     def find_mediators(self, treatment: str, outcome: str) -> list[str]:
         if not self.validate_dag():
-            raise ValueError("Causal graph must be a DAG for do-calculus")
+            raise ValueError("Causal graph must be a DAG for causal analysis")
         mediators = []
         for node_id in self._nodes:
             if node_id in (treatment, outcome):
@@ -162,7 +162,7 @@ class CausalGraph:
         self, treatment: str, outcome: str, intervention_value: float = 1.0
     ) -> InterventionResult:
         if not self.validate_dag():
-            raise ValueError("Causal graph must be a DAG for do-calculus")
+            raise ValueError("Causal graph must be a DAG for causal analysis")
         backdoor_set = self.find_confounders(treatment, outcome)
         frontdoor_set = self.find_mediators(treatment, outcome)
         current_val = self._node_values.get(outcome, 0.0)

@@ -106,10 +106,88 @@ class _SlidingWindowCounter:
             }
 
 
+class _RedisSlidingWindowCounter:
+    """Redis-backed sliding window counter for multi-worker deployments.
+
+    Uses sorted sets with timestamps as scores. Automatically expires old entries.
+    """
+
+    def __init__(
+        self, redis_url: str, window_seconds: int = 60, max_requests: int = 60
+    ) -> None:
+        self.redis_url = redis_url
+        self.window = window_seconds
+        self.max_requests = max_requests
+        self._redis: Any = None
+        self._fallback = _SlidingWindowCounter(
+            window_seconds=window_seconds, max_requests=max_requests
+        )
+        self._fallback_active = False
+
+    async def _ensure_redis(self) -> Any:
+        if self._redis is None:
+            try:
+                import redis.asyncio as aioredis
+                self._redis = aioredis.from_url(
+                    self.redis_url, decode_responses=True, socket_timeout=5.0
+                )
+                # Verify connectivity with a ping
+                await self._redis.ping()
+                self._fallback_active = False
+            except Exception:
+                self._redis = None
+                self._fallback_active = True
+        return self._redis
+
+    def start_cleanup(self) -> None:
+        self._fallback.start_cleanup()
+
+    async def allow(self, key: str) -> tuple[bool, dict[str, str]]:
+        """Return (allowed, headers) using Redis sorted sets."""
+        redis = await self._ensure_redis()
+        if redis is None:
+            return await self._fallback.allow(key)
+
+        try:
+            now = time.time()
+            window_start = now - self.window
+            redis_key = f"ratelimit:{key}"
+
+            await redis.zremrangebyscore(redis_key, 0, window_start)
+
+            current = await redis.zcard(redis_key)
+            reset_at = int(now + self.window)
+
+            if current >= self.max_requests:
+                oldest = await redis.zrange(redis_key, 0, 0, withscores=True)
+                retry_after = self.window - (now - oldest[0][1]) if oldest else self.window
+                return False, {
+                    "X-RateLimit-Limit": str(self.max_requests),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_at),
+                    "Retry-After": str(int(retry_after) + 1),
+                }
+
+            await redis.zadd(redis_key, {f"{now}:{id(key)}": now})
+            await redis.expire(redis_key, self.window * 2)
+
+            remaining = max(0, self.max_requests - current - 1)
+            return True, {
+                "X-RateLimit-Limit": str(self.max_requests),
+                "X-RateLimit-Remaining": str(remaining),
+                "X-RateLimit-Reset": str(reset_at),
+            }
+        except Exception:
+            # Redis error mid-request: fall back to in-memory for this call
+            self._fallback_active = True
+            return await self._fallback.allow(key)
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Sliding-window rate limiter.
 
     Client is identified by API key header or IP address.
+    Uses Redis for multi-worker deployments, falls back to in-memory for single-process.
     """
 
     _PUBLIC_PATHS: frozenset[str] = frozenset(
@@ -119,13 +197,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: Any) -> None:
         super().__init__(app)
         settings = get_settings()
-        self._limiter = _SlidingWindowCounter(
-            window_seconds=60,
-            max_requests=settings.api.rate_limit_rpm,
-        )
         self._enabled = settings.api.rate_limit_enabled
         self._key_header = settings.api.api_key_header
         self._trusted_proxies = list(settings.api.trusted_proxies)
+
+        # Use Redis if available, otherwise in-memory
+        redis_url = settings.redis.url
+        if redis_url:
+            self._limiter: _SlidingWindowCounter | _RedisSlidingWindowCounter = (
+                _RedisSlidingWindowCounter(
+                    redis_url=redis_url,
+                    window_seconds=60,
+                    max_requests=settings.api.rate_limit_rpm,
+                )
+            )
+        else:
+            self._limiter = _SlidingWindowCounter(
+                window_seconds=60,
+                max_requests=settings.api.rate_limit_rpm,
+            )
 
     def _client_key(self, request: Request) -> str:
         """Extract client identifier: API key or peer IP.
@@ -147,7 +237,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not self._enabled:
             return await call_next(request)
 
-        if self._limiter._cleanup_task is None:
+        # Start cleanup for in-memory limiter (or Redis fallback)
+        needs_cleanup = (
+            isinstance(self._limiter, _SlidingWindowCounter) and self._limiter._cleanup_task is None
+        ) or (
+            isinstance(self._limiter, _RedisSlidingWindowCounter)
+            and self._limiter._fallback._cleanup_task is None
+        )
+        if needs_cleanup:
             self._limiter.start_cleanup()
 
         if request.url.path in self._PUBLIC_PATHS:

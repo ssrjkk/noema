@@ -486,7 +486,7 @@ class CodegenKernel(BaseKernel):
         from noema.core.types import TechStack as _TechStack
 
         if isinstance(stack, dict):
-            stack = _TechStack(**stack)
+            stack = _TechStack(**stack)  # type: ignore[unreachable]
         lang = stack.languages[0].lower() if stack and stack.languages else "python"
         requirement = subtask.get("requirement", "")
         filename = subtask.get("filename", "module.py")

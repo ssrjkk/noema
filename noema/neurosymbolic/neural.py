@@ -232,11 +232,9 @@ class NeuralInterface:
 
     async def _execute_request(self, request: LLMRequest) -> LLMResponse:
         if self._client is None:
-            return LLMResponse(
-                content=json.dumps({"error": "No LLM client available", "fallback": True}),
-                tokens_used=0,
-                latency_ms=0,
-                model=self.model,
+            raise RuntimeError(
+                "No LLM client available — provider not initialized or API key missing. "
+                "Refusing to fabricate a response (fail-closed)."
             )
 
         start_time = asyncio.get_event_loop().time()

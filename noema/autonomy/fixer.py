@@ -39,9 +39,11 @@ GateRunner = Callable[[list[tuple[str, str]]], Awaitable[Any]]
 
 
 async def _default_engine_factory() -> Any:
+    from noema.config.settings import get_settings
     from noema.core.engine import NoemaEngine
 
-    engine = NoemaEngine(llm_provider="fallback")
+    provider = get_settings().llm.provider
+    engine = NoemaEngine(llm_provider=provider)
     await engine.initialize()
     return engine
 
@@ -50,8 +52,9 @@ async def _default_gate_runner(files: list[tuple[str, str]]) -> Any:
     """Run the merge gate over the fix's files (sandbox static pass + judge).
 
         Uses ``explicit_files`` so no local git diff is needed; the judge threshold
-        is 0.0 (the sandbox is the hard gate), and any judge/LLM failure surfaces
-        as a raised error which the fixer treats as *blocked* (fail-closed).
+        is read from ``autonomy.judge_threshold`` (default 0.7), and any judge/LLM
+        failure surfaces as a raised error which the fixer treats as *blocked*
+        (fail-closed).
 
     When ``autonomy.lean_verifier`` is enabled the gate additionally compiles
         every ``.lean`` proof obligation with the Lean 4 theorem prover and blocks
@@ -62,22 +65,22 @@ async def _default_gate_runner(files: list[tuple[str, str]]) -> Any:
         Files under ``autonomy.lean_verifier_required_paths`` must ship a matching
         ``.lean`` spec (``missing_formal_spec``) or the gate blocks.
     """
+    from noema.config.settings import get_settings
     from noema.experiments.gate import GateConfig, run_merge_gate
 
+    settings = get_settings().autonomy
     cfg = GateConfig(
-        judge_threshold=0.0,
+        judge_threshold=settings.judge_threshold,
         sandbox_enabled=True,
         sandbox_run=False,
         run_tests=False,
         explicit_files=[{"path": path, "content": content} for path, content in files],
     )
-    from noema.config.settings import get_settings
-
-    if get_settings().autonomy.lean_verifier:
+    if settings.lean_verifier:
         from noema.verifiers.lean import LeanVerifier
 
         cfg.verifier = LeanVerifier()
-        cfg.require_spec_patterns = tuple(get_settings().autonomy.lean_verifier_required_paths)
+        cfg.require_spec_patterns = tuple(settings.lean_verifier_required_paths)
     return await run_merge_gate(cfg)
 
 

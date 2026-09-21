@@ -32,6 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
+from noema import __version__
 from noema.api.admin import router as admin_router
 from noema.api.auth import APIKeyAuthMiddleware
 from noema.api.cache_headers import CacheControlMiddleware
@@ -113,6 +114,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _noema.initialize()
     app.state.noema = _noema
 
+    # OTLP tracing: get_tracer() auto-starts the exporter when
+    # settings.obs.tracing_enabled == True and an endpoint is configured.
+    from noema.tracing.tracer import get_tracer
+
+    tracer = get_tracer()
+    if tracer.config.export_endpoint:
+        log.info("otlp_enabled", endpoint=tracer.config.export_endpoint)
+    app.state.tracer = tracer
+
+    # Database for enterprise services
+    from noema.db.engine import get_db
+
+    db = get_db()
+    await db.init()
+    app.state.db = db
+
     # Enterprise services
     app.state.audit_logger = AuditLogger(pg_pool=None)
     await app.state.audit_logger.initialize()
@@ -120,7 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.quota_manager = QuotaManager(pg_pool=None)
     await app.state.quota_manager.initialize()
 
-    app.state.cost_tracker = CostTracker(redis_url=settings.redis.url)
+    app.state.cost_tracker = CostTracker(redis_url=settings.redis.url, db=db)
 
     app.state.feature_flags = FeatureFlagService()
     await app.state.feature_flags.initialize()
@@ -150,6 +167,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await webhook_dispatcher.stop()
     if _noema:
         await _noema.shutdown()
+    await db.close()
+    from noema.observability.otlp import flush_otlp_exporter, stop_otlp_exporter
+
+    flush_otlp_exporter()
+    stop_otlp_exporter()
     log.info("api_stopped")
 
 
@@ -173,13 +195,14 @@ settings = get_settings()
 app = FastAPI(
     title="Noema API",
     description="Production-grade AI reasoning engine",
-    version="1.0.0",
+    version=__version__,
     lifespan=lifespan,
     docs_url="/docs" if settings.api.reload else None,
     redoc_url="/redoc" if settings.api.reload else None,
 )
 
 # Include routers
+from noema.api.evals import router as evals_router  # noqa: PLC0415, E402
 from noema.api.experiments import router as experiments_router  # noqa: PLC0415, E402
 from noema.api.grid import router as grid_router  # noqa: PLC0415, E402
 from noema.api.tasks import router as tasks_router  # noqa: PLC0415, E402
@@ -188,6 +211,7 @@ from noema.api.webhooks import router as webhooks_router  # noqa: PLC0415, E402
 app.include_router(experiments_router)
 app.include_router(admin_router)
 app.include_router(diagnostics_router)
+app.include_router(evals_router)
 app.include_router(grid_router)
 app.include_router(webhooks_router)
 app.include_router(tasks_router)

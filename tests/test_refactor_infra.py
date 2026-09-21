@@ -249,7 +249,7 @@ async def test_replay_llm_span(monkeypatch):
     diff = result.diffs[0]
     assert diff.step_name == "cot.step"
     assert diff.original_preview == "original response"
-    assert "[Fallback mode]" in diff.new_preview
+    assert "Template-based fallback solution" in diff.new_preview
     assert diff.identical is False
 
 
@@ -270,7 +270,7 @@ async def test_replay_non_json_prompt(monkeypatch):
 
     result = await ReplayEngine().replay_trace("trace-1")
     assert result.diffs[0].original_preview == "(no response)"
-    assert "[Fallback mode]" in result.diffs[0].new_preview
+    assert "Template-based fallback solution" in result.diffs[0].new_preview
 
 
 # ── Sentry ──────────────────────────────────────────────────────────────────

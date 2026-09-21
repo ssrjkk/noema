@@ -25,10 +25,12 @@ import typer
 
 from noema.cli.arq import arq_app
 from noema.cli.audit import audit_app
+from noema.cli.eval import eval_app
 from noema.cli.grid import grid_app
 from noema.cli.grpc import grpc_app
 from noema.cli.health import health_app
 from noema.cli.init_cmd import init_app
+from noema.cli.mcp import mcp_app
 from noema.cli.ui import (
     ARROW,
     ELLIPSIS,
@@ -764,7 +766,9 @@ app.add_typer(init_app, name="init", rich_help_panel="System")
 app.add_typer(arq_app, name="arq", rich_help_panel="Background")
 app.add_typer(grid_app, name="grid", rich_help_panel="Background")
 app.add_typer(grpc_app, name="grpc", rich_help_panel="Background")
+app.add_typer(mcp_app, name="mcp", rich_help_panel="Background")
 app.add_typer(audit_app, name="audit", rich_help_panel="Audit")
+app.add_typer(eval_app, name="eval", rich_help_panel="Evaluation")
 
 if __name__ == "__main__":
     app()
