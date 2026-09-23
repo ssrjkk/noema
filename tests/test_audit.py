@@ -8,19 +8,17 @@ verification, edge cases, export/import).
 from __future__ import annotations
 
 import json
-import time
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from noema.audit.logger import (
+    CREATE_AUDIT_TABLE_SQL,
     AuditEvent,
     AuditLogger,
-    CREATE_AUDIT_TABLE_SQL,
     _tenant_filename,
 )
 from noema.audit.merkle import (
@@ -32,19 +30,18 @@ from noema.audit.merkle import (
     _hash,
 )
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
 def _make_event(**overrides: Any) -> AuditEvent:
-    defaults = dict(
-        timestamp=datetime.now(UTC),
-        event_type="test.event",
-        tenant_id="tenant-1",
-        user_id="user-1",
-        task_id="task-1",
-        details={"key": "value"},
-    )
+    defaults = {
+        "timestamp": datetime.now(UTC),
+        "event_type": "test.event",
+        "tenant_id": "tenant-1",
+        "user_id": "user-1",
+        "task_id": "task-1",
+        "details": {"key": "value"},
+    }
     defaults.update(overrides)
     return AuditEvent(**defaults)
 
@@ -177,7 +174,7 @@ class TestAuditLoggerLog:
         for i in range(3):
             await logger.log(_make_event(task_id=f"t-{i}"))
         fpath = Path(tmp_path) / "tenant-1.jsonl"
-        lines = [l for l in fpath.read_text(encoding="utf-8").splitlines() if l.strip()]
+        lines = [line for line in fpath.read_text(encoding="utf-8").splitlines() if line.strip()]
         assert len(lines) == 3
 
     @pytest.mark.asyncio
@@ -353,8 +350,12 @@ class TestAuditLoggerQuery:
     async def test_query_with_all_filters_combined(self, tmp_path):
         logger = AuditLogger(pg_pool=None, fallback_dir=str(tmp_path))
         now = datetime.now(UTC)
-        await logger.log(_make_event(timestamp=now - timedelta(hours=4), event_type="a", task_id="1"))
-        await logger.log(_make_event(timestamp=now - timedelta(hours=2), event_type="b", task_id="2"))
+        await logger.log(
+            _make_event(timestamp=now - timedelta(hours=4), event_type="a", task_id="1")
+        )
+        await logger.log(
+            _make_event(timestamp=now - timedelta(hours=2), event_type="b", task_id="2")
+        )
         await logger.log(_make_event(timestamp=now, event_type="a", task_id="3"))
         results = await logger.query(
             "tenant-1",
@@ -499,10 +500,12 @@ class TestLoadLeafHashes:
     @pytest.mark.asyncio
     async def test_load_from_pg_success(self, tmp_path):
         pg = _make_mock_pg()
-        pg.fetch = AsyncMock(return_value=[
-            {"commitment": "aa" * 32, "block_index": 0},
-            {"commitment": "bb" * 32, "block_index": 1},
-        ])
+        pg.fetch = AsyncMock(
+            return_value=[
+                {"commitment": "aa" * 32, "block_index": 0},
+                {"commitment": "bb" * 32, "block_index": 1},
+            ]
+        )
         logger = AuditLogger(pg_pool=pg, fallback_dir=str(tmp_path))
         await logger.initialize()
         assert len(logger._leaf_hashes) == 2
@@ -626,6 +629,7 @@ class TestWriteFallbackErrors:
         await logger.initialize()
         # Make directory read-only
         import os
+
         os.chmod(readonly_dir, 0o444)
         try:
             ev = _make_event()
@@ -740,7 +744,9 @@ class TestCreateAuditTableSQL:
     def test_contains_alter_columns(self):
         assert "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS commitment" in CREATE_AUDIT_TABLE_SQL
         assert "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS chain_link" in CREATE_AUDIT_TABLE_SQL
-        assert "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS block_index" in CREATE_AUDIT_TABLE_SQL
+        assert (
+            "ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS block_index" in CREATE_AUDIT_TABLE_SQL
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1209,7 +1215,7 @@ class TestMerkleChainAuditExportImport:
         chain.append({"event": "e1"})
         exported = chain.export_blocks()
         # Tamper with block_hash
-        exported[1]["block_hash"] = ("ff" * 32)
+        exported[1]["block_hash"] = "ff" * 32
         with pytest.raises(ValueError, match="failed chain verification"):
             MerkleChainAudit.import_blocks("tp", exported)
 

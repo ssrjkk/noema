@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from noema.neurosymbolic.symbolic import (
-    _to_num,
-    _coerce_int,
     _candidate_name,
+    _coerce_int,
     _render_bounds,
+    _to_num,
 )
-
 
 # ── _to_num ──────────────────────────────────────────────────────────────────
 
@@ -157,4 +154,4 @@ def test_render_bounds_integer_formatting():
 
 def test_render_bounds_float_formatting():
     result = _render_bounds("ratio", 0.1, 0.9)
-    assert "ratio in [0.1, 0.9]" == result
+    assert result == "ratio in [0.1, 0.9]"

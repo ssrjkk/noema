@@ -23,7 +23,6 @@ from noema.neurosymbolic.neural import (
     NeuralInterface,
 )
 
-
 # ── Helpers / Fixtures ────────────────────────────────────────────────
 
 
@@ -527,9 +526,7 @@ class TestNeuralInterfaceExecuteWithRetry:
     async def test_non_retryable_error_raises_immediately(self):
         ni = NeuralInterface(max_retries=5)
         ni._client = MagicMock()
-        ni._client.chat.completions.create = AsyncMock(
-            side_effect=ValueError("bad request")
-        )
+        ni._client.chat.completions.create = AsyncMock(side_effect=ValueError("bad request"))
         req = LLMRequest(messages=[{"role": "user", "content": "test"}])
         with pytest.raises(ValueError, match="bad request"):
             await ni._execute_with_retry(req)
@@ -609,13 +606,15 @@ class TestNeuralInterfaceGenerateHypothesis:
         ni = _make_neural_with_client(content='{"ok": true}')
         await ni.generate_hypothesis({"task": "test"})
         call_kwargs = ni._client.chat.completions.create.call_args
-        assert call_kwargs.kwargs.get("response_format") == {"type": "json_object"} or \
-               call_kwargs[1].get("response_format") == {"type": "json_object"} or \
-               call_kwargs.kwargs["response_format"] == {"type": "json_object"}
+        assert (
+            call_kwargs.kwargs.get("response_format") == {"type": "json_object"}
+            or call_kwargs[1].get("response_format") == {"type": "json_object"}
+            or call_kwargs.kwargs["response_format"] == {"type": "json_object"}
+        )
 
     @pytest.mark.asyncio
     async def test_temperature_is_0_3(self):
-        ni = _make_neural_with_client(content='{}')
+        ni = _make_neural_with_client(content="{}")
         await ni.generate_hypothesis({"task": "test"})
         call_kwargs = ni._client.chat.completions.create.call_args
         temp = call_kwargs.kwargs.get("temperature", call_kwargs[1].get("temperature"))
@@ -653,7 +652,7 @@ class TestNeuralInterfaceRefineHypothesis:
 
     @pytest.mark.asyncio
     async def test_temperature_is_0_2(self):
-        ni = _make_neural_with_client(content='{}')
+        ni = _make_neural_with_client(content="{}")
         await ni.refine_hypothesis({}, [], {})
         call_kwargs = ni._client.chat.completions.create.call_args
         temp = call_kwargs.kwargs.get("temperature", call_kwargs[1].get("temperature"))
@@ -831,9 +830,7 @@ class TestNeuralInterfaceIntegration:
         ni._client = MagicMock()
         hyp_resp = _make_mock_response(content='{"solution": "initial"}')
         ref_resp = _make_mock_response(content='{"solution": "refined"}')
-        ni._client.chat.completions.create = AsyncMock(
-            side_effect=[hyp_resp, ref_resp]
-        )
+        ni._client.chat.completions.create = AsyncMock(side_effect=[hyp_resp, ref_resp])
         hyp = await ni.generate_hypothesis({"requirements": []})
         assert hyp == {"solution": "initial"}
         refined = await ni.refine_hypothesis(hyp, ["constraint_violated"], {"requirements": []})
@@ -871,7 +868,7 @@ class TestNeuralInterfaceIntegration:
 class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_task_graph(self):
-        ni = _make_neural_with_client(content='{}')
+        ni = _make_neural_with_client(content="{}")
         result = await ni.generate_hypothesis({})
         assert result == {}
 

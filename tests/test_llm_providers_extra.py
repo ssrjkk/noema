@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -34,7 +34,9 @@ class _TestLLM(BaseLLMProvider):
     async def _complete(self, messages, temperature=0.7, max_tokens=4096):
         if self._error:
             raise self._error
-        return self._response or LLMResponse(content='{"ok": true}', model="test-model", tokens_used=10)
+        return self._response or LLMResponse(
+            content='{"ok": true}', model="test-model", tokens_used=10
+        )
 
 
 def _msgs() -> list[LLMMessage]:
@@ -52,9 +54,11 @@ async def test_complete_returns_cached_response():
     mock_tracer = MagicMock()
     mock_tracer.trace_llm_call = MagicMock()
 
-    with patch("noema.llm.providers.get_cache", return_value=mock_cache):
-        with patch("noema.llm.providers.get_tracer", return_value=mock_tracer):
-            resp = await provider.complete(_msgs(), tenant_id="t1")
+    with (
+        patch("noema.llm.providers.get_cache", return_value=mock_cache),
+        patch("noema.llm.providers.get_tracer", return_value=mock_tracer),
+    ):
+        resp = await provider.complete(_msgs(), tenant_id="t1")
 
     assert resp.content == '{"cached": true}'
     assert resp.model == "test-model"
@@ -70,9 +74,11 @@ async def test_complete_caches_successful_response():
     mock_cache.get.return_value = None
     mock_tracer = MagicMock()
 
-    with patch("noema.llm.providers.get_cache", return_value=mock_cache):
-        with patch("noema.llm.providers.get_tracer", return_value=mock_tracer):
-            resp = await provider.complete(_msgs(), tenant_id="t1")
+    with (
+        patch("noema.llm.providers.get_cache", return_value=mock_cache),
+        patch("noema.llm.providers.get_tracer", return_value=mock_tracer),
+    ):
+        resp = await provider.complete(_msgs(), tenant_id="t1")
 
     assert resp.content == '{"result": 1}'
     mock_cache.set.assert_called_once()
@@ -85,9 +91,11 @@ async def test_complete_does_not_cache_zero_tokens():
     mock_cache = MagicMock()
     mock_cache.get.return_value = None
 
-    with patch("noema.llm.providers.get_cache", return_value=mock_cache):
-        with patch("noema.llm.providers.get_tracer", return_value=MagicMock()):
-            await provider.complete(_msgs())
+    with (
+        patch("noema.llm.providers.get_cache", return_value=mock_cache),
+        patch("noema.llm.providers.get_tracer", return_value=MagicMock()),
+    ):
+        await provider.complete(_msgs())
 
     mock_cache.set.assert_not_called()
 
@@ -100,10 +108,15 @@ async def test_complete_raises_on_response_error():
     response = LLMResponse(content="", model="test", error="API key invalid")
     provider = _TestLLM(response=response)
 
-    with patch("noema.llm.providers.get_cache", return_value=MagicMock(get=MagicMock(return_value=None))):
-        with patch("noema.llm.providers.get_tracer", return_value=MagicMock()):
-            with pytest.raises(LLMProviderError, match="API key invalid"):
-                await provider.complete(_msgs())
+    with (
+        patch(
+            "noema.llm.providers.get_cache",
+            return_value=MagicMock(get=MagicMock(return_value=None)),
+        ),
+        patch("noema.llm.providers.get_tracer", return_value=MagicMock()),
+        pytest.raises(LLMProviderError, match="API key invalid"),
+    ):
+        await provider.complete(_msgs())
 
 
 @pytest.mark.asyncio
@@ -111,10 +124,15 @@ async def test_complete_traces_error_on_exception():
     provider = _TestLLM(error=RuntimeError("network down"))
     mock_tracer = MagicMock()
 
-    with patch("noema.llm.providers.get_cache", return_value=MagicMock(get=MagicMock(return_value=None))):
-        with patch("noema.llm.providers.get_tracer", return_value=mock_tracer):
-            with pytest.raises(Exception):
-                await provider.complete(_msgs())
+    with (
+        patch(
+            "noema.llm.providers.get_cache",
+            return_value=MagicMock(get=MagicMock(return_value=None)),
+        ),
+        patch("noema.llm.providers.get_tracer", return_value=mock_tracer),
+        pytest.raises(RuntimeError, match="network down"),
+    ):
+        await provider.complete(_msgs())
 
     mock_tracer.trace_llm_call.assert_called_once()
     call_kwargs = mock_tracer.trace_llm_call.call_args[1]
@@ -130,9 +148,11 @@ async def test_complete_uses_explicit_tenant_id():
     mock_cache = MagicMock()
     mock_cache.get.return_value = None
 
-    with patch("noema.llm.providers.get_cache", return_value=mock_cache):
-        with patch("noema.llm.providers.get_tracer", return_value=MagicMock()):
-            await provider.complete(_msgs(), tenant_id="explicit-tenant")
+    with (
+        patch("noema.llm.providers.get_cache", return_value=mock_cache),
+        patch("noema.llm.providers.get_tracer", return_value=MagicMock()),
+    ):
+        await provider.complete(_msgs(), tenant_id="explicit-tenant")
 
     call_args = mock_cache.get.call_args
     assert call_args[1]["tenant_id"] == "explicit-tenant"
@@ -144,10 +164,12 @@ async def test_complete_falls_back_to_context_tenant():
     mock_cache = MagicMock()
     mock_cache.get.return_value = None
 
-    with patch("noema.llm.providers.get_cache", return_value=mock_cache):
-        with patch("noema.llm.providers.get_tracer", return_value=MagicMock()):
-            with patch("noema.llm.providers.get_tenant_id", return_value="context-tenant"):
-                await provider.complete(_msgs())
+    with (
+        patch("noema.llm.providers.get_cache", return_value=mock_cache),
+        patch("noema.llm.providers.get_tracer", return_value=MagicMock()),
+        patch("noema.llm.providers.get_tenant_id", return_value="context-tenant"),
+    ):
+        await provider.complete(_msgs())
 
     call_args = mock_cache.get.call_args
     assert call_args[1]["tenant_id"] == "context-tenant"
