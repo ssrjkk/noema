@@ -38,7 +38,7 @@ dependencies = [
     "typer>=0.27.1",
 
     # Structured logging
-    "structlog>=23.0",
+    "structlog>=26.1.0",
 
     # Metrics
     "prometheus-client>=0.26.0",
