@@ -112,9 +112,7 @@ class _RedisSlidingWindowCounter:
     Uses sorted sets with timestamps as scores. Automatically expires old entries.
     """
 
-    def __init__(
-        self, redis_url: str, window_seconds: int = 60, max_requests: int = 60
-    ) -> None:
+    def __init__(self, redis_url: str, window_seconds: int = 60, max_requests: int = 60) -> None:
         self.redis_url = redis_url
         self.window = window_seconds
         self.max_requests = max_requests
@@ -128,6 +126,7 @@ class _RedisSlidingWindowCounter:
         if self._redis is None:
             try:
                 import redis.asyncio as aioredis
+
                 self._redis = aioredis.from_url(
                     self.redis_url, decode_responses=True, socket_timeout=5.0
                 )

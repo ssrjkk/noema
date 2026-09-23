@@ -98,17 +98,19 @@ def _think_sync(args: dict[str, Any]) -> dict[str, Any]:
 
     provider = os.environ.get("NOEMA_MCP_PROVIDER", "fallback")
     title = str(args.get("title", "")).strip() or "Untitled task"
-    description = str(args.get("description", ""))[: _MAX_DESC]
+    description = str(args.get("description", ""))[:_MAX_DESC]
     raw_tags = args.get("tags") or []
     if not isinstance(raw_tags, list):
         raise ValueError("tags must be a list of strings")
-    tags = [str(t)[:200] for t in raw_tags][: _MAX_TAGS]
+    tags = [str(t)[:200] for t in raw_tags][:_MAX_TAGS]
 
     async def _go() -> tuple:
         engine = NoemaEngine(llm_provider=provider)
         await engine.initialize()
         try:
-            return await engine.think(Task(title=title[: _MAX_TITLE], description=description, tags=tags))
+            return await engine.think(
+                Task(title=title[:_MAX_TITLE], description=description, tags=tags)
+            )
         finally:
             await engine.shutdown()
 
@@ -169,7 +171,9 @@ def _render_think(result: dict[str, Any]) -> str:
                 f"({f['language']}, {f['lines']} lines)"
             )
     if result.get("deployment"):
-        lines += ["", "## Deployment"] + [f"- `{k}`: {v}" for k, v in list(result["deployment"].items())[:8]]
+        lines += ["", "## Deployment"] + [
+            f"- `{k}`: {v}" for k, v in list(result["deployment"].items())[:8]
+        ]
     return "\n".join(lines)[:MAX_TEXT]
 
 
@@ -227,7 +231,9 @@ def handle_payload(raw: str) -> str | None:
 
     try:
         if method == "initialize":
-            server_protocol = (msg.get("params") or {}).get("protocolVersion", DEFAULT_PROTOCOL_VERSION)
+            server_protocol = (msg.get("params") or {}).get(
+                "protocolVersion", DEFAULT_PROTOCOL_VERSION
+            )
             return json.dumps(
                 _reply(
                     msg_id,

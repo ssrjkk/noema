@@ -208,8 +208,11 @@ class KnowledgeLoader:
         sentences = re.split(r"[.!?]+", text)
         sentences = [s.strip() for s in sentences if len(s.strip()) > 20]
 
-        # extract topic from source name
-        topic = Path(source).stem if "/" in source or "\\" in source else source
+        # extract topic from source name: paths and file names collapse to their
+        # stem ("/tmp/notes.md" and "notes.md" both yield "notes"), while
+        # free-form labels such as a text source name stay verbatim.
+        looks_like_file = "/" in source or "\\" in source or bool(Path(source).suffix)
+        topic = (Path(source).stem or source) if looks_like_file else source
 
         # extract key facts
         keywords = self._extract_keywords(text)

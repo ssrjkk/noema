@@ -152,9 +152,10 @@ async def _http_post(endpoint: str, payload: dict[str, Any]) -> bool:
     url = endpoint.rstrip("/") + OTLP_TRACE_PATH
     timeout = aiohttp.ClientTimeout(total=5.0)
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session, session.post(
-            url, json=payload
-        ) as resp:
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.post(url, json=payload) as resp,
+        ):
             return 200 <= resp.status < 300
     except (aiohttp.ClientError, TimeoutError, OSError) as exc:
         log.debug("otlp_export_failed", endpoint=endpoint, error=str(exc))
@@ -194,9 +195,7 @@ class _OTLPExporter:
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
-        self._thread = threading.Thread(
-            target=self._run, name="otlp-exporter", daemon=True
-        )
+        self._thread = threading.Thread(target=self._run, name="otlp-exporter", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
@@ -219,7 +218,9 @@ class _OTLPExporter:
         try:
             loop = asyncio.new_event_loop()
             try:
-                loop.run_until_complete(_post_any(self.endpoint, build_otlp_trace_request(batch, self.service_name)))
+                loop.run_until_complete(
+                    _post_any(self.endpoint, build_otlp_trace_request(batch, self.service_name))
+                )
             finally:
                 loop.close()
         except Exception as exc:  # pragma: no cover - defensive
@@ -241,7 +242,9 @@ class _OTLPExporter:
                 if batch:
                     try:
                         loop.run_until_complete(
-                            _post_any(self.endpoint, build_otlp_trace_request(batch, self.service_name))
+                            _post_any(
+                                self.endpoint, build_otlp_trace_request(batch, self.service_name)
+                            )
                         )
                     except Exception as exc:
                         log.debug("otlp_export_failed", error=str(exc))

@@ -371,67 +371,7 @@ class TerraformModule:
         provider = metadata.get("provider", "aws")
         project = metadata.get("project", "myproject")
 
-        if action == "terraform":
-            template_name = metadata.get("template", "")
-            if template_name and provider == "aws" and template_name in AWS_TEMPLATES:
-                tpl = AWS_TEMPLATES[template_name]
-                tf_code = self.tf_gen.generate_provider(provider, {"region": "us-east-1"})
-                tf_code += "\n\n"
-                tf_code += self.tf_gen.generate_resource(
-                    tpl["type"], template_name, dict(tpl["config"])
-                )
-                return {
-                    "action": "terraform",
-                    "template": template_name,
-                    "provider": provider,
-                    "content": tf_code,
-                    "_confidence": 0.88,
-                }
-
-            resources = metadata.get("resources", {})
-            variables = metadata.get(
-                "variables",
-                {
-                    "project": {
-                        "type": "string",
-                        "default": project,
-                        "description": "Project name",
-                    },
-                    "environment": {
-                        "type": "string",
-                        "default": "production",
-                        "description": "Environment",
-                    },
-                },
-            )
-
-            if not resources:
-                resources = {
-                    "main_vpc": {
-                        "resource_type": f"{provider}_vpc",
-                        "cidr_block": "10.0.0.0/16",
-                        "enable_dns_hostnames": True,
-                    },
-                    "main_subnet": {
-                        "resource_type": f"{provider}_subnet",
-                        "cidr_block": "10.0.1.0/24",
-                    },
-                }
-
-            tf_code = self.tf_gen.generate_full_config(provider, resources, variables)
-            return {
-                "action": "terraform",
-                "provider": provider,
-                "content": tf_code,
-                "available_templates": {
-                    "aws": list(AWS_TEMPLATES.keys()),
-                    "gcp": list(GCP_TEMPLATES.keys()),
-                    "azure": list(AZURE_TEMPLATES.keys()),
-                },
-                "_confidence": 0.85,
-            }
-
-        elif action == "pulumi":
+        if action == "pulumi":
             language = str(metadata.get("language", "python"))
             stack_name = str(metadata.get("stack_name", project))
             stack_code = self.pulumi_gen.generate_stack(stack_name, language)
@@ -443,7 +383,7 @@ class TerraformModule:
                 "_confidence": 0.80,
             }
 
-        elif action == "template":
+        if action == "template":
             all_templates = {
                 "aws": AWS_TEMPLATES,
                 "gcp": GCP_TEMPLATES,
@@ -452,18 +392,70 @@ class TerraformModule:
             return {
                 "action": "templates",
                 "templates": {
-                    provider: {
+                    provider_name: {
                         name: {"type": t["type"], "config": t["config"]}
                         for name, t in tmpls.items()
                     }
-                    for provider, tmpls in all_templates.items()
+                    for provider_name, tmpls in all_templates.items()
                 },
                 "_confidence": 0.90,
             }
 
+        template_name = metadata.get("template", "")
+        if template_name and provider == "aws" and template_name in AWS_TEMPLATES:
+            tpl = AWS_TEMPLATES[template_name]
+            tf_code = self.tf_gen.generate_provider(provider, {"region": "us-east-1"})
+            tf_code += "\n\n"
+            tf_code += self.tf_gen.generate_resource(
+                tpl["type"], template_name, dict(tpl["config"])
+            )
+            return {
+                "action": "terraform",
+                "template": template_name,
+                "provider": provider,
+                "content": tf_code,
+                "_confidence": 0.88,
+            }
+
+        resources = metadata.get("resources", {})
+        variables = metadata.get(
+            "variables",
+            {
+                "project": {
+                    "type": "string",
+                    "default": project,
+                    "description": "Project name",
+                },
+                "environment": {
+                    "type": "string",
+                    "default": "production",
+                    "description": "Environment",
+                },
+            },
+        )
+
+        if not resources:
+            resources = {
+                "main_vpc": {
+                    "resource_type": f"{provider}_vpc",
+                    "cidr_block": "10.0.0.0/16",
+                    "enable_dns_hostnames": True,
+                },
+                "main_subnet": {
+                    "resource_type": f"{provider}_subnet",
+                    "cidr_block": "10.0.1.0/24",
+                },
+            }
+
+        tf_code = self.tf_gen.generate_full_config(provider, resources, variables)
         return {
             "action": "terraform",
-            "message": "No specific action matched. Generating default Terraform config.",
-            "content": self.tf_gen.generate_full_config(provider, {}),
-            "_confidence": 0.50,
+            "provider": provider,
+            "content": tf_code,
+            "available_templates": {
+                "aws": list(AWS_TEMPLATES.keys()),
+                "gcp": list(GCP_TEMPLATES.keys()),
+                "azure": list(AZURE_TEMPLATES.keys()),
+            },
+            "_confidence": 0.85,
         }

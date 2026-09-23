@@ -54,9 +54,7 @@ class LeaderboardRow:
         return (self.provider, self.model)
 
     def as_table(self) -> list[str]:
-        sandbox = (
-            "—" if self.sandbox_pass_rate is None else f"{self.sandbox_pass_rate * 100:.1f}%"
-        )
+        sandbox = "—" if self.sandbox_pass_rate is None else f"{self.sandbox_pass_rate * 100:.1f}%"
         return [
             self.provider,
             self.model,
@@ -130,9 +128,7 @@ def compute_leaderboard(root: Path | str, top_n: int = 0) -> list[LeaderboardRow
             out.mean_total_tokens = _weighted(
                 out.mean_total_tokens, prev_cells, _to_float(row.get(_TOKENS_KEY)), n
             )
-            out.mean_cost = _weighted(
-                out.mean_cost, prev_cells, _to_float(row.get(_COST_KEY)), n
-            )
+            out.mean_cost = _weighted(out.mean_cost, prev_cells, _to_float(row.get(_COST_KEY)), n)
             out.error_rate = _weighted(
                 out.error_rate, prev_cells, _to_float(row.get(_ERROR_KEY)), n
             )

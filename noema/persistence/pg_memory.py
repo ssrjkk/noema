@@ -146,12 +146,14 @@ class PostgresMemoryStore(MemoryStore):
                 EpisodicMemory(
                     id=r["id"],
                     timestamp=r["timestamp"],
-                    task_description=r["task_description"],
-                    solution_summary=r["solution_summary"],
-                    tech_stack=r["tech_stack"],
-                    outcome=r["outcome"],
+                    # TEXT columns are nullable; a NULL must not poison the
+                    # whole load and drop the tenant onto the file fallback.
+                    task_description=r["task_description"] or "",
+                    solution_summary=r["solution_summary"] or "",
+                    tech_stack=r["tech_stack"] or "",
+                    outcome=r["outcome"] or "",
                     duration_seconds=r["duration_seconds"],
-                    error_message=r["error_message"],
+                    error_message=r["error_message"] or "",
                     tags=list(r["tags"]) if r["tags"] else [],
                     context=context,
                 )
@@ -163,10 +165,10 @@ class PostgresMemoryStore(MemoryStore):
         return [
             SemanticMemory(
                 id=r["id"],
-                topic=r["topic"],
-                fact=r["fact"],
+                topic=r["topic"] or "",
+                fact=r["fact"] or "",
                 confidence=r["confidence"],
-                source=r["source"],
+                source=r["source"] or "",
                 use_count=r["use_count"],
                 last_used=r["last_used"],
                 tags=list(r["tags"]) if r["tags"] else [],
@@ -181,7 +183,7 @@ class PostgresMemoryStore(MemoryStore):
         return [
             ProceduralMemory(
                 id=r["id"],
-                procedure_name=r["procedure_name"],
+                procedure_name=r["procedure_name"] or "",
                 steps=list(r["steps"]) if r["steps"] else [],
                 success_rate=r["success_rate"],
                 times_applied=r["times_applied"],
