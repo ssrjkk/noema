@@ -35,7 +35,7 @@ dependencies = [
 
     # CLI
     "rich>=15.0.0",
-    "typer>=0.27.1",
+    "typer>=0.27.2",
 
     # Structured logging
     "structlog>=26.1.0",
