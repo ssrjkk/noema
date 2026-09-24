@@ -24,7 +24,9 @@ try:
     import z3  # noqa: F401
 
     has_z3 = True
-except ImportError:
+except Exception:
+    # Either the package is missing, or it is installed but its native
+    # library cannot be loaded (z3 raises its own Z3Exception for that).
     has_z3 = False
 
 

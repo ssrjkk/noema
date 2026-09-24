@@ -42,6 +42,8 @@ compose.env
 
 # Logs & reports
 *.log
+*.err
+coverage_report.txt
 bandit-report.json
 safety-report.json
 pip-audit-report.json

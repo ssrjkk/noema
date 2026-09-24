@@ -6,11 +6,12 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
+
+    from fastapi import FastAPI
 
 
 @pytest.fixture

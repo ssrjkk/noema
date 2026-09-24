@@ -7,17 +7,18 @@ import hashlib
 import hmac
 import json
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 
 from noema.api.webhooks import (
     WebhookDispatcher,
-    WebhookRegistration,
     WebhookRegisterRequest,
+    WebhookRegistration,
     _mask_url,
     _validate_webhook_url,
     _verify_signature,
@@ -434,7 +435,13 @@ class TestWebhookDispatcher:
             await d._dispatch_event({"type": "task.completed", "payload": body_dict})
 
         call_kwargs = mock_session.post.call_args
-        headers = call_kwargs[1]["headers"] if "headers" in call_kwargs[1] else call_kwargs[0][1] if len(call_kwargs[0]) > 1 else call_kwargs[1].get("headers", {})
+        headers = (
+            call_kwargs[1]["headers"]
+            if "headers" in call_kwargs[1]
+            else call_kwargs[0][1]
+            if len(call_kwargs[0]) > 1
+            else call_kwargs[1].get("headers", {})
+        )
         # Get headers from the call
         _, call_kw = mock_session.post.call_args
         headers = call_kw["headers"]
@@ -968,24 +975,29 @@ class TestWebhookRegisterRequest:
         assert req.retry_count == 5
 
     def test_url_too_long(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError) as exc:
             WebhookRegisterRequest(url="x" * 2049)
+        assert exc.value.errors()[0]["loc"] == ("url",)
 
     def test_secret_too_long(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError) as exc:
             WebhookRegisterRequest(url="https://x.com", secret="x" * 513)
+        assert exc.value.errors()[0]["loc"] == ("secret",)
 
     def test_too_many_events(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError) as exc:
             WebhookRegisterRequest(url="https://x.com", events=["e"] * 51)
+        assert exc.value.errors()[0]["loc"] == ("events",)
 
     def test_retry_count_below_min(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError) as exc:
             WebhookRegisterRequest(url="https://x.com", retry_count=0)
+        assert exc.value.errors()[0]["type"] == "greater_than_equal"
 
     def test_retry_count_above_max(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError) as exc:
             WebhookRegisterRequest(url="https://x.com", retry_count=11)
+        assert exc.value.errors()[0]["type"] == "less_than_equal"
 
 
 # ─── Edge cases ───────────────────────────────────────────────────────

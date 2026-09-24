@@ -212,7 +212,6 @@ async def test_unknown_step_name_in_results_logged():
         CoTStep(name="analysis", role="r", depends_on=[], system_prompt="s", user_prompt="u"),
     ]
     cot._context = {}
-    import asyncio
 
     async def fake_execute(step):
         step.status = StepStatus.COMPLETED

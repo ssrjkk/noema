@@ -174,9 +174,7 @@ class CostTracker:
             from sqlalchemy import text
 
             async with self._db.session() as session:
-                await session.execute(
-                    text(CREATE_COST_RECORDS_TABLE_SQL)
-                )
+                await session.execute(text(CREATE_COST_RECORDS_TABLE_SQL))
                 await session.execute(
                     text("""INSERT INTO cost_records
                        (tenant_id, task_id, provider, model, input_tokens, output_tokens,

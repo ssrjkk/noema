@@ -35,10 +35,10 @@ dependencies = [
 
     # CLI
     "rich>=15.0.0",
-    "typer>=0.27.1",
+    "typer>=0.27.2",
 
     # Structured logging
-    "structlog>=23.0",
+    "structlog>=26.1.0",
 
     # Metrics
     "prometheus-client>=0.26.0",
@@ -54,23 +54,23 @@ dev = [
     "hypothesis>=6.167.1,<6.168",
     "httpx>=0.28.1",
     "fakeredis>=2.37.1",
-    "ruff>=0.1.0,<0.2.0",
-    "mypy>=2.3.0",
+    "ruff==0.16.8",
+    "mypy==2.3.1",
     "pre-commit>=4.6.2",
 ]
 db = [
-    "sqlalchemy[asyncio]>=2.0.51",
+    "sqlalchemy[asyncio]>=2.0.52",
     "asyncpg>=0.31.0",
     "alembic>=1.19.1",
 ]
 full = [
     "chromadb>=1.5.9",
-    "sentence-transformers>=2.0",
+    "sentence-transformers>=6.0.1",
     "openai>=3.8.0,<4.0",
     "z3-solver>=5.1.0.0",
 ]
 sentry = [
-    "sentry-sdk>=2.68.0",
+    "sentry-sdk>=2.69.1",
 ]
 grpc = [
     "grpcio>=1.60",

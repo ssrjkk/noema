@@ -173,9 +173,7 @@ def test_schema_metadata():
 
 
 def test_internal_error_answered():
-    reply = handle_payload(
-        json.dumps({"jsonrpc": "2.0", "id": 11, "method": "tools/call"})
-    )
+    reply = handle_payload(json.dumps({"jsonrpc": "2.0", "id": 11, "method": "tools/call"}))
     assert reply is not None
     out = json.loads(reply)
     assert out["id"] == 11

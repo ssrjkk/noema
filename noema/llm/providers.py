@@ -600,25 +600,25 @@ class FallbackProvider(BaseLLMProvider):
             'CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]\n'
         )
         tf_aws = (
-            'terraform {\n'
+            "terraform {\n"
             '  required_version = ">= 1.6.0"\n'
-            '  required_providers {\n'
+            "  required_providers {\n"
             '    aws = { source  = "hashicorp/aws"; version = "~> 5.0" }\n'
-            '  }\n'
-            '}\n\n'
+            "  }\n"
+            "}\n\n"
             'provider "aws" { region = "us-east-1" }\n\n'
             'resource "aws_vpc" "main" {\n'
             '  cidr_block           = "10.0.0.0/16"\n'
-            '  enable_dns_hostnames = true\n'
+            "  enable_dns_hostnames = true\n"
             '  tags = { Name = "noema-vpc" }\n'
-            '}\n\n'
+            "}\n\n"
             'resource "aws_subnet" "public" {\n'
-            '  count             = 2\n'
-            '  vpc_id            = aws_vpc.main.id\n'
-            '  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index)\n'
-            '  availability_zone = element(data.aws_availability_zones.available.names, count.index)\n'
+            "  count             = 2\n"
+            "  vpc_id            = aws_vpc.main.id\n"
+            "  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index)\n"
+            "  availability_zone = element(data.aws_availability_zones.available.names, count.index)\n"
             '  tags = { Name = "noema-public-${count.index}" }\n'
-            '}\n\n'
+            "}\n\n"
             'data "aws_availability_zones" "available" { state = "available" }\n'
         )
         rbac_py = (
@@ -751,14 +751,42 @@ class FallbackProvider(BaseLLMProvider):
         )
 
         files: list[dict] = [
-            {"path": "app/main.py", "content": python_api, "description": "FastAPI service scaffold (CRUD items)"},
-            {"path": "tests/test_api.py", "content": pytest_py, "description": "Pytest cases for the API"},
-            {"path": "Dockerfile", "content": docker_py, "description": "Production image for the service"},
+            {
+                "path": "app/main.py",
+                "content": python_api,
+                "description": "FastAPI service scaffold (CRUD items)",
+            },
+            {
+                "path": "tests/test_api.py",
+                "content": pytest_py,
+                "description": "Pytest cases for the API",
+            },
+            {
+                "path": "Dockerfile",
+                "content": docker_py,
+                "description": "Production image for the service",
+            },
             {"path": "infra/main.tf", "content": tf_aws, "description": "AWS VPC + subnet IaC"},
-            {"path": "auth/rbac.py", "content": rbac_py, "description": "Role-based access control module"},
-            {"path": "db/schema.sql", "content": sql_schema, "description": "PostgreSQL schema (users + items)"},
-            {"path": "pipelines/etl_dag.py", "content": airflow_dag, "description": "Airflow DAG for ETL"},
-            {"path": "web/ItemList.tsx", "content": react_component, "description": "React list component"},
+            {
+                "path": "auth/rbac.py",
+                "content": rbac_py,
+                "description": "Role-based access control module",
+            },
+            {
+                "path": "db/schema.sql",
+                "content": sql_schema,
+                "description": "PostgreSQL schema (users + items)",
+            },
+            {
+                "path": "pipelines/etl_dag.py",
+                "content": airflow_dag,
+                "description": "Airflow DAG for ETL",
+            },
+            {
+                "path": "web/ItemList.tsx",
+                "content": react_component,
+                "description": "React list component",
+            },
         ]
 
         pick: dict[str, list[int]] = {
@@ -788,8 +816,15 @@ class FallbackProvider(BaseLLMProvider):
                         "with RBAC, migrations and tests. IaC + Airflow DAGs "
                         "included for infrastructure and data flows."
                     ),
-                    "pros": ["Batteries included", "Production-ready scaffolding", "Tested defaults"],
-                    "cons": ["Generic template; adapt to your domain", "Not tailored to edge cases"],
+                    "pros": [
+                        "Batteries included",
+                        "Production-ready scaffolding",
+                        "Tested defaults",
+                    ],
+                    "cons": [
+                        "Generic template; adapt to your domain",
+                        "Not tailored to edge cases",
+                    ],
                 },
                 "high_level_design": (
                     "API → RBAC middleware → PostgreSQL; IaC provisions VPC; "

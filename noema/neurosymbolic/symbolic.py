@@ -283,6 +283,17 @@ def _coerce_value(var: Any, value: Any) -> Any:
     return None
 
 
+def _z3_unavailable(exc: BaseException) -> bool:
+    """Whether ``exc`` means the z3 package itself cannot be imported.
+
+    A missing package raises ``ImportError``. An installed package whose
+    native library the OS refuses to load raises ``z3.z3types.Z3Exception``
+    from the same import statement. z3 is an optional dependency, so both
+    must put the engine into degraded mode rather than crash it.
+    """
+    return isinstance(exc, ImportError) or type(exc).__name__ == "Z3Exception"
+
+
 class SymbolicEngine:
     def __init__(self, verification_timeout: float = 5.0, max_constraints: int = 1000) -> None:
         self.verification_timeout = verification_timeout
@@ -302,8 +313,10 @@ class SymbolicEngine:
             return
         try:
             from z3 import Solver
-        except ImportError:
-            logger.warning("z3 not installed; symbolic engine running in degraded mode")
+        except Exception as e:
+            if not _z3_unavailable(e):
+                raise
+            logger.warning("z3_unavailable; symbolic engine running in degraded mode", error=str(e))
             self._degraded = True
             self._initialized = True
             return
@@ -521,8 +534,10 @@ class SymbolicEngine:
     async def _parse_requirement(self, req: Any, name: str | None = None) -> Constraint | None:
         try:
             from z3 import And, Int, Real
-        except ImportError:
-            logger.warning("z3_not_installed; requirement skipped")
+        except Exception as e:
+            if not _z3_unavailable(e):
+                raise
+            logger.warning("z3_unavailable; requirement skipped", error=str(e))
             return None
 
         try:

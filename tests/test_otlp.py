@@ -70,11 +70,11 @@ def test_build_otlp_span_mapping():
     otlp = build_otlp_span(span)
 
     # traceId is 128-bit: a 16-hex-char id is left-zero-padded to 16 bytes.
-    assert otlp["traceId"] == base64.b64encode(bytes.fromhex(span["trace_id"].rjust(32, "0"))).decode()
+    assert (
+        otlp["traceId"] == base64.b64encode(bytes.fromhex(span["trace_id"].rjust(32, "0"))).decode()
+    )
     assert otlp["spanId"] == base64.b64encode(bytes.fromhex(span["span_id"])).decode()
-    assert otlp["parentSpanId"] == base64.b64encode(
-        bytes.fromhex(span["parent_id"])
-    ).decode()
+    assert otlp["parentSpanId"] == base64.b64encode(bytes.fromhex(span["parent_id"])).decode()
     assert otlp["name"] == "llm.openai"
     assert otlp["kind"] == KIND_TO_OTLP["llm"]
     assert otlp["status"] == {"code": 1}
@@ -137,14 +137,22 @@ def test_exporter_delivers_batch():
     exporter = get_otlp_exporter()
     assert exporter is not None
 
-    emit_otlp_span({"span_id": "0123456789abcdef", "name": "one", "status": "ok", "trace_id": "t" * 16})
-    emit_otlp_span({"span_id": "fedcba9876543210", "name": "two", "status": "ok", "trace_id": "t" * 16})
+    emit_otlp_span(
+        {"span_id": "0123456789abcdef", "name": "one", "status": "ok", "trace_id": "t" * 16}
+    )
+    emit_otlp_span(
+        {"span_id": "fedcba9876543210", "name": "two", "status": "ok", "trace_id": "t" * 16}
+    )
 
-    assert _wait_until(lambda: records and records[0]["payload"]["resourceSpans"][0]["scopeSpans"][0]["spans"])
+    assert _wait_until(
+        lambda: records and records[0]["payload"]["resourceSpans"][0]["scopeSpans"][0]["spans"]
+    )
 
     assert records[0]["endpoint"] == "http://collector:4318"
     sent_names = [
-        s["name"] for r in records for s in r["payload"]["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        s["name"]
+        for r in records
+        for s in r["payload"]["resourceSpans"][0]["scopeSpans"][0]["spans"]
     ]
     assert "one" in sent_names
     assert "two" in sent_names
@@ -161,7 +169,9 @@ def test_exporter_survives_transport_failure():
 
     assert is_otlp_active()
     assert get_otlp_exporter() is not None
-    emit_otlp_span({"span_id": "a" * 16, "name": "still-works", "status": "ok", "trace_id": "t" * 16})
+    emit_otlp_span(
+        {"span_id": "a" * 16, "name": "still-works", "status": "ok", "trace_id": "t" * 16}
+    )
 
 
 def test_emit_without_exporter_is_noop():

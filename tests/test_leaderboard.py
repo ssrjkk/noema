@@ -38,7 +38,12 @@ def _summary_rows(provider: str, model: str, score: float, n: int = 2, **over) -
 
 
 def _run_summary(run_id: str, rows: list[dict]) -> dict:
-    return {"run_id": run_id, "generated_at": "2026-01-01T00:00:00Z", "n_records": sum(r["n"] for r in rows), "summary": rows}
+    return {
+        "run_id": run_id,
+        "generated_at": "2026-01-01T00:00:00Z",
+        "n_records": sum(r["n"] for r in rows),
+        "summary": rows,
+    }
 
 
 @pytest.fixture
@@ -47,12 +52,16 @@ def results_root(tmp_path):
     _write_summary(
         exp_a,
         ["run1", "summary.json"],
-        _run_summary("run1", [_summary_rows("openai", "gpt-4", 0.90), _summary_rows("ollama", "gemma", 0.60)]),
+        _run_summary(
+            "run1", [_summary_rows("openai", "gpt-4", 0.90), _summary_rows("ollama", "gemma", 0.60)]
+        ),
     )
     _write_summary(
         exp_a,
         ["run2", "summary.json"],
-        _run_summary("run2", [_summary_rows("openai", "gpt-4", 0.80), _summary_rows("ollama", "gemma", 0.70)]),
+        _run_summary(
+            "run2", [_summary_rows("openai", "gpt-4", 0.80), _summary_rows("ollama", "gemma", 0.70)]
+        ),
     )
     # second experiment for the same provider/model → merged
     exp_b = tmp_path / "exp_b"
@@ -123,7 +132,9 @@ def test_missing_optional_fields_do_not_crash(tmp_path):
 
 
 def test_empty_provider_model_skipped(tmp_path):
-    _write_summary(tmp_path, ["x", "summary.json"], _run_summary("x", [_summary_rows("", "m", 0.5)]))
+    _write_summary(
+        tmp_path, ["x", "summary.json"], _run_summary("x", [_summary_rows("", "m", 0.5)])
+    )
     assert compute_leaderboard(tmp_path) == []
 
 
@@ -153,6 +164,10 @@ def test_to_dict_json_serializable(results_root):
 
 def test_flat_run_layout_supported(tmp_path):
     # `--out results` without experiment grouping → results/<run_id>/summary.json
-    _write_summary(tmp_path, ["runA", "summary.json"], _run_summary("runA", [_summary_rows("openai", "gpt-4", 0.7)]))
+    _write_summary(
+        tmp_path,
+        ["runA", "summary.json"],
+        _run_summary("runA", [_summary_rows("openai", "gpt-4", 0.7)]),
+    )
     rows = compute_leaderboard(tmp_path)
     assert rows[0].key == ("openai", "gpt-4")

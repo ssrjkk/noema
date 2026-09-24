@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import fakeredis.aioredis
 import pytest
+from aiohttp import ClientResponseError
 
 from noema.observability.grid import (
     GridDashboard,
     NodeView,
+    _default_fetch,
     _fold_samples,
+    _parse_exposition_lines,
     parse_exposition,
 )
 from noema.workers.arq_worker import HEARTBEAT_PREFIX
@@ -161,3 +165,126 @@ class TestRouterRegistry:
             await dashboard.aclose()
         assert len(snaps) == 2
         assert snaps[0]["totals"]["nodes_total"] == 1
+
+
+class TestDefaultFetch:
+    async def test_default_fetch_success(self):
+        mock_resp = AsyncMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.text = AsyncMock(return_value="metrics text")
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=None)
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=mock_resp)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            result = await _default_fetch("http://localhost:9090/metrics")
+
+        assert result == "metrics text"
+        mock_resp.raise_for_status.assert_called_once()
+
+    async def test_default_fetch_raises_on_http_error(self):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock(
+            side_effect=ClientResponseError(MagicMock(), (), status=500, message="Server Error")
+        )
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=None)
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=mock_resp)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(ClientResponseError, match="500"),
+        ):
+            await _default_fetch("http://localhost:9090/metrics")
+
+
+class TestParseExpositionLines:
+    def test_parse_simple_metric(self):
+        text = "noema_http_requests_total 42.0"
+        result = _parse_exposition_lines(text)
+        assert "noema_http_requests_total" in result
+        assert result["noema_http_requests_total"][0]["value"] == 42.0
+        assert result["noema_http_requests_total"][0]["labels"] == {}
+
+    def test_parse_metric_with_labels(self):
+        text = 'noema_http_requests_total{method="POST",status="200"} 120.0'
+        result = _parse_exposition_lines(text)
+        assert len(result["noema_http_requests_total"]) == 1
+        sample = result["noema_http_requests_total"][0]
+        assert sample["value"] == 120.0
+        assert sample["labels"]["method"] == "POST"
+        assert sample["labels"]["status"] == "200"
+
+    def test_skip_comments_and_empty_lines(self):
+        text = """# HELP metric Help text
+# TYPE metric counter
+
+noema_metric 10.0
+"""
+        result = _parse_exposition_lines(text)
+        assert len(result) == 1
+        assert "noema_metric" in result
+
+    def test_skip_invalid_value(self):
+        text = "noema_metric not_a_number"
+        result = _parse_exposition_lines(text)
+        assert result == {}
+
+    def test_skip_malformed_lines(self):
+        text = "single_token"
+        result = _parse_exposition_lines(text)
+        assert result == {}
+
+    def test_parse_multiple_metrics(self):
+        text = """noema_metric_a 1.0
+noema_metric_b 2.0
+noema_metric_a 3.0"""
+        result = _parse_exposition_lines(text)
+        assert len(result["noema_metric_a"]) == 2
+        assert len(result["noema_metric_b"]) == 1
+
+
+class TestParseExpositionFallback:
+    def test_fallback_on_import_error(self):
+        text = "noema_metric 42.0"
+        with patch(
+            "noema.observability.grid.parse_exposition",
+            side_effect=ImportError("no prometheus_client"),
+        ):
+            result = _parse_exposition_lines(text)
+            assert "noema_metric" in result
+
+    def test_fallback_on_general_exception(self):
+        text = "noema_metric 42.0"
+        with patch(
+            "prometheus_client.parser.text_string_to_metric_families",
+            side_effect=Exception("parse error"),
+        ):
+            result = parse_exposition(text)
+            assert "noema_metric" in result
+
+
+class TestGetRedisFromUrl:
+    async def test_get_redis_creates_from_url_when_none(self):
+        mock_redis = AsyncMock()
+        with patch("redis.asyncio.Redis.from_url", return_value=mock_redis) as mock_from_url:
+            dashboard = GridDashboard(redis_url="redis://localhost:6379")
+            redis = await dashboard._get_redis()
+            assert redis is mock_redis
+            mock_from_url.assert_called_once_with("redis://localhost:6379", decode_responses=True)
+            await dashboard.aclose()
+
+    async def test_get_redis_returns_existing(self):
+        existing_redis = AsyncMock()
+        dashboard = GridDashboard(redis=existing_redis)
+        redis = await dashboard._get_redis()
+        assert redis is existing_redis
+        await dashboard.aclose()
