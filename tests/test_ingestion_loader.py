@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
+import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-from noema.ingestion.loader import KnowledgeLoader
+from noema.ingestion.loader import KnowledgeLoader, _is_public_ip, _public_only_connector
 
 # 65 chars: clears the 30-char general-knowledge threshold and contains no
 # prescriptive marker, so extraction outcomes are deterministic.
@@ -53,6 +55,7 @@ class Url:
     def factory(self, timeout=None, **kwargs):
         self.sessions_created += 1
         self.timeouts.append(timeout)
+        self.session_kwargs = kwargs
         return self
 
     async def __aenter__(self):
@@ -501,6 +504,109 @@ class TestIngestUrlFetch:
             "http://example.com/guide", headers={"User-Agent": "Noema/1.0"}
         )
         assert url.timeouts[0].total == 15
+
+    @pytest.mark.asyncio
+    async def test_session_uses_public_only_connector(self, dns, session):
+        """The fetch must go through the DNS-rebinding-hardened connector."""
+        _use(session, Url(f"<p>{MUST_FACT}</p>"))
+
+        await KnowledgeLoader().ingest_url("http://example.com/guide")
+
+        connector = session["url"].session_kwargs["connector"]
+        assert type(connector).__name__ == "PublicOnlyConnector"
+
+
+class TestPublicOnlyConnector:
+    """Connect-time revalidation: closes the DNS-rebinding window."""
+
+    @staticmethod
+    def _resolve_result(host: str):
+        import aiohttp
+
+        return aiohttp.abc.ResolveResult(
+            hostname="example.com", host=host, port=80, family=2, proto=6, flags=0
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_public_addresses(self, monkeypatch):
+        import aiohttp
+
+        make = self._resolve_result
+
+        async def base(self, host, port, traces=None):
+            return [make(PUBLIC_IP)]
+
+        monkeypatch.setattr(aiohttp.TCPConnector, "_resolve_host", base)
+        connector = _public_only_connector(aiohttp)
+        try:
+            infos = await connector._resolve_host("example.com", 80)
+            assert [i["host"] for i in infos] == [PUBLIC_IP]
+        finally:
+            await connector.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "ip", ["127.0.0.1", "10.0.0.5", "169.254.169.254", "224.0.0.1", "::1", "fe80::1"]
+    )
+    async def test_refuses_non_public_at_connect_time(self, ip, monkeypatch):
+        """A rebinding answer swapped in after the pre-check must still be refused."""
+        import aiohttp
+
+        make = self._resolve_result
+
+        async def base(self, host, port, traces=None):
+            return [make(ip)]
+
+        monkeypatch.setattr(aiohttp.TCPConnector, "_resolve_host", base)
+        connector = _public_only_connector(aiohttp)
+        try:
+            with pytest.raises(ValueError, match=f"Refusing non-public address: {re.escape(ip)}"):
+                await connector._resolve_host("example.com", 80)
+        finally:
+            await connector.close()
+
+    @pytest.mark.asyncio
+    async def test_refuses_when_any_address_is_private(self, monkeypatch):
+        import aiohttp
+
+        make = self._resolve_result
+
+        async def base(self, host, port, traces=None):
+            return [make(PUBLIC_IP), make("10.0.0.5")]
+
+        monkeypatch.setattr(aiohttp.TCPConnector, "_resolve_host", base)
+        connector = _public_only_connector(aiohttp)
+        try:
+            with pytest.raises(ValueError, match="Refusing non-public address: 10.0.0.5"):
+                await connector._resolve_host("example.com", 80)
+        finally:
+            await connector.close()
+
+
+class TestIsPublicIp:
+    @pytest.mark.parametrize(
+        "ip",
+        [
+            "127.0.0.1",
+            "10.0.0.5",
+            "172.16.0.9",
+            "192.168.1.1",
+            "169.254.169.254",
+            "224.0.0.1",
+            "240.0.0.1",
+            "::1",
+            "fe80::1",
+            "fc00::1",
+            "0.0.0.0",
+            "::",
+        ],
+    )
+    def test_non_public(self, ip):
+        assert not _is_public_ip(ipaddress.ip_address(ip))
+
+    @pytest.mark.parametrize("ip", ["93.184.216.34", "8.8.8.8", "2606:4700:4700::1111"])
+    def test_public(self, ip):
+        assert _is_public_ip(ipaddress.ip_address(ip))
 
     @pytest.mark.asyncio
     async def test_blank_pages_report_no_content(self, dns, session):

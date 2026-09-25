@@ -145,3 +145,16 @@ packages = ["noema"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["noema"]
+omit = [
+    "noema/grpc/*_pb2.py",
+    "noema/grpc/*_pb2_grpc.py",
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "@overload",
+]

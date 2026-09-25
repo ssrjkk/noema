@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import re
 import uuid
 from pathlib import Path
@@ -18,6 +19,43 @@ class IngestionResult(BaseModel):
     entries_skipped: int = 0
     errors: list[str] = Field(default_factory=list)
     topics_extracted: list[str] = Field(default_factory=list)
+
+
+def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """True only for globally routable addresses (no loopback/private/etc.)."""
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def _public_only_connector(aiohttp_module):
+    """Build a TCPConnector that re-validates resolved IPs at connect time.
+
+    ``ingest_url`` resolves and checks the hostname up front, but aiohttp would
+    otherwise resolve it again when opening the connection — a DNS-rebinding
+    window in which a public answer could be swapped for a private one.
+    Validating every address the connector actually dials closes that window.
+    """
+    tcp_connector = aiohttp_module.TCPConnector
+
+    class PublicOnlyConnector(tcp_connector):
+        async def _resolve_host(self, host, port, traces=None):
+            infos = await super()._resolve_host(host, port, traces)
+            for info in infos:
+                # ResolveResult is a TypedDict in aiohttp>=3.14; older releases
+                # used namedtuples, so support both attribute and item access.
+                addr_str = info["host"] if isinstance(info, dict) else info.host
+                addr = ipaddress.ip_address(addr_str)
+                if not _is_public_ip(addr):
+                    raise ValueError(f"Refusing non-public address: {addr}")
+            return infos
+
+    return PublicOnlyConnector()
 
 
 class KnowledgeLoader:
@@ -123,15 +161,16 @@ class KnowledgeLoader:
     async def ingest_url(self, url: str, tags: list[str] | None = None) -> IngestionResult:
         """Ingest content from a URL.
 
-        SSRF-guarded: only ``http``/``https`` targets resolving to public
-        addresses are fetched; private/loopback/link-local ranges are refused.
-        The fetch is async (never blocks the event loop) with a hard timeout.
+        SSRF-guarded in depth: only ``http``/``https`` targets resolving to
+        public addresses are fetched. The hostname is resolved and checked up
+        front, and the aiohttp connector re-validates every resolved address at
+        connect time, so a DNS-rebinding answer cannot sneak a private address
+        past the pre-check. The fetch is async with a hard timeout.
         """
         result = IngestionResult(source=url, source_type="url")
 
         try:
             import asyncio
-            import ipaddress
             from html.parser import HTMLParser
 
             import aiohttp
@@ -150,13 +189,7 @@ class KnowledgeLoader:
                 return result
             for info in infos:
                 ip = ipaddress.ip_address(info[4][0])
-                if (
-                    ip.is_private
-                    or ip.is_loopback
-                    or ip.is_link_local
-                    or ip.is_reserved
-                    or ip.is_multicast
-                ):
+                if not _is_public_ip(ip):
                     result.errors.append(f"Refusing non-public address: {ip}")
                     return result
 
@@ -180,7 +213,9 @@ class KnowledgeLoader:
 
             timeout = aiohttp.ClientTimeout(total=15)
             async with (
-                aiohttp.ClientSession(timeout=timeout) as session,
+                aiohttp.ClientSession(
+                    timeout=timeout, connector=_public_only_connector(aiohttp)
+                ) as session,
                 session.get(url, headers={"User-Agent": "Noema/1.0"}) as resp,
             ):
                 html = await resp.text(encoding="utf-8", errors="ignore")
