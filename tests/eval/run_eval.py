@@ -17,7 +17,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from noema.core.engine import NoemaEngine
-from noema.core.types import Task, TaskComplexity
+from noema.core.types import Requirement, Task, TaskComplexity
 from noema.judge import evaluate_solution
 
 
@@ -32,7 +32,7 @@ async def run_single_eval(
         complexity=TaskComplexity(task_data.get("complexity", "moderate")),
     )
     task.requirements = [
-        {"description": r, "category": "eval", "priority": 5}
+        Requirement(description=r, category="eval", priority=5)
         for r in task_data.get("key_requirements", [])
     ]
 
