@@ -7,8 +7,15 @@ console the default locale codec would fail to decode the output.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
 
 
 def _run_help() -> subprocess.CompletedProcess[str]:
@@ -26,14 +33,15 @@ def test_python_m_noema_help() -> None:
     """``python -m noema --help`` must surface the CLI without an environment."""
     proc = _run_help()
     assert proc.returncode == 0
-    assert "Usage: python -m noema" in proc.stdout
-    assert "COMMAND" in proc.stdout
+    stdout = _strip_ansi(proc.stdout)
+    assert "Usage: python -m noema" in stdout
+    assert "COMMAND" in stdout
 
 
 def test_python_m_noema_commands_listed() -> None:
     """The CLI help must advertise the core command groups."""
     proc = _run_help()
     assert proc.returncode == 0
-    lowered = proc.stdout.lower()
+    lowered = _strip_ansi(proc.stdout).lower()
     for command in ("think", "serve", "pipeline", "knowledge", "grid", "arq"):
         assert command in lowered
