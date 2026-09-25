@@ -110,7 +110,7 @@ jobs:
         run: bandit -r noema/ -ll -f json -o bandit-report.json
 
       - name: Safety check
-        run: safety check --json --output safety-report.json
+        run: safety check --json > safety-report.json
 
       - name: pip-audit
         run: pip-audit --format=json --output=pip-audit-report.json
