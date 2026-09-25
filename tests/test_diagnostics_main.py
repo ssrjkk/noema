@@ -122,9 +122,7 @@ class TestDiagnosticsEndpoint:
             async def aclose(self):
                 pass
 
-        monkeypatch.setattr(
-            "redis.asyncio.from_url", MagicMock(return_value=BrokenRedis())
-        )
+        monkeypatch.setattr("redis.asyncio.from_url", MagicMock(return_value=BrokenRedis()))
         report = await diagnostics(MagicMock())
         assert report["healthy"] is False
         redis_check = next(c for c in report["checks"] if c["component"] == "redis")
