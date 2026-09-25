@@ -55,7 +55,7 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
             body = b""
             async for chunk in body_iterator:
                 body += chunk
-            etag = hashlib.md5(body).hexdigest()
+            etag = hashlib.md5(body).hexdigest()  # nosec B324 - content fingerprinting, not security
 
             # Check If-None-Match
             if_none_match = request.headers.get("If-None-Match", "")

@@ -80,7 +80,7 @@ class KnowledgeLoader:
             result.errors.append(f"Read error: {e}")
             return result
 
-        content_hash = hashlib.md5(content.encode()).hexdigest()
+        content_hash = hashlib.md5(content.encode()).hexdigest()  # nosec B324 - dedup fingerprint
         if content_hash in self._ingested_hashes:
             result.entries_skipped = 1
             return result
@@ -135,7 +135,7 @@ class KnowledgeLoader:
         """Ingest raw text as knowledge."""
         result = IngestionResult(source=source_name, source_type="text")
 
-        content_hash = hashlib.md5(text.encode()).hexdigest()
+        content_hash = hashlib.md5(text.encode()).hexdigest()  # nosec B324 - dedup fingerprint
         if content_hash in self._ingested_hashes:
             result.entries_skipped = 1
             return result

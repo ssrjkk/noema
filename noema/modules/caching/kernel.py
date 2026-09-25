@@ -218,7 +218,7 @@ class CacheKeyBuilder:
     def for_api(method: str, path: str, params: dict[str, Any] | None = None) -> str:
         param_hash = ""
         if params:
-            param_hash = hashlib.md5(
+            param_hash = hashlib.md5(  # nosec B324 - cache key, not security
                 json.dumps(params, sort_keys=True, default=str).encode()
             ).hexdigest()[:8]
         return f"api:{method.lower()}:{path}:{param_hash}"
