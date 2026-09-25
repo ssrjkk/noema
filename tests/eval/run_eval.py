@@ -85,9 +85,9 @@ async def main() -> None:
     with open(tasks_path) as f:
         golden_tasks = json.load(f)
 
-    print(f"Golden Eval Pipeline — {len(golden_tasks)} tasks")
+    print(f"Golden Eval Pipeline - {len(golden_tasks)} tasks")
     print(f"LLM: {args.provider or 'default'} / {args.model or 'default'}")
-    print("─" * 60)
+    print("-" * 60)
 
     noema = NoemaEngine(
         llm_provider=args.provider,
@@ -104,7 +104,7 @@ async def main() -> None:
         results.append(result)
         status = "PASS" if result["passed"] else "FAIL"
         print(
-            f"    → {status} | judge: {result['judge_overall']:.2f} | "
+            f"    -> {status} | judge: {result['judge_overall']:.2f} | "
             f"red_flags: {len(result['red_flags_found'])}/{len(task_data.get('red_flags', []))} | "
             f"{result['duration_sec']}s"
         )
@@ -131,7 +131,7 @@ async def main() -> None:
     with open(output_path, "w") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
-    print("─" * 60)
+    print("-" * 60)
     print(f"Results: {passed}/{len(golden_tasks)} passed (rate={summary['pass_rate']:.1%})")
     print(f"Avg judge score: {summary['avg_judge_score']:.3f}")
     print(f"Avg duration: {summary['avg_duration_sec']}s")

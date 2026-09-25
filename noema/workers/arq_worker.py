@@ -94,20 +94,17 @@ class NodeHeartbeat:
         if self._redis is None:
             return
         r: Redis = self._redis
-        await cast(
-            "Awaitable[int]",
-            r.hset(
-                self._key(),
-                mapping={
-                    "node_id": self.node_id,
-                    "hostname": socket.gethostname(),
-                    "pid": str(os.getpid()),
-                    "started_at": str(self.started_at),
-                    "last_heartbeat": str(int(time.time())),
-                    "draining": "1" if self.draining else "0",
-                    "metrics_port": str(self.metrics_port),
-                },
-            ),
+        await r.hset(
+            self._key(),
+            mapping={
+                "node_id": self.node_id,
+                "hostname": socket.gethostname(),
+                "pid": str(os.getpid()),
+                "started_at": str(self.started_at),
+                "last_heartbeat": str(int(time.time())),
+                "draining": "1" if self.draining else "0",
+                "metrics_port": str(self.metrics_port),
+            },
         )
         await r.expire(self._key(), HEARTBEAT_TTL)
 
