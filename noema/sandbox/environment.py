@@ -274,7 +274,7 @@ class LocalEnvironment(Environment):
             "--dev",
             "/dev",
             "--tmpfs",
-            "/tmp",
+            "/tmp",  # nosec B108 - bubblewrap sandbox tmpfs mount
             "--bind",
             str(tmp_dir),
             "/sandbox",

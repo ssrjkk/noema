@@ -182,7 +182,7 @@ class APIKeyBinding(BaseModel):
 class APISettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NOEMA_API_")
 
-    host: str = Field(default="0.0.0.0")
+    host: str = Field(default="0.0.0.0")  # nosec B104 - configurable via env
     port: int = Field(default=8000, ge=1, le=65535)
     reload: bool = Field(default=False)
 

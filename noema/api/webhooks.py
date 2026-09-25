@@ -51,7 +51,7 @@ def _validate_webhook_url(url: str) -> None:
     if not hostname:
         raise ValueError("URL must have a hostname")
 
-    blocked_hostnames = {"localhost", "0.0.0.0", "127.0.0.1", "::1", "metadata.google.internal"}
+    blocked_hostnames = {"localhost", "0.0.0.0", "127.0.0.1", "::1", "metadata.google.internal"}  # nosec B104 - SSRF blocklist
     if hostname.lower() in blocked_hostnames:
         raise ValueError(f"Blocked hostname: {hostname}")
 

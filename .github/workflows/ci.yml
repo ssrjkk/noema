@@ -67,6 +67,7 @@ jobs:
       - name: Run tests
         env:
           NOEMA_API_RATE_LIMIT_ENABLED: "false"
+        shell: bash
         run: |
           python -m pytest tests/ -v --tb=short --timeout=120 \
             --junitxml=results.xml \

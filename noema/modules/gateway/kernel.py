@@ -219,7 +219,7 @@ class GatewayConfig:
                 "listeners": [
                     {
                         "name": "gateway_listener",
-                        "address": {"socket_address": {"address": "0.0.0.0", "port_value": 8080}},
+                        "address": {"socket_address": {"address": "0.0.0.0", "port_value": 8080}},  # nosec B104 - Envoy listener config
                         "filter_chains": [
                             {
                                 "filters": [

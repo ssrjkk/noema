@@ -279,7 +279,7 @@ class DataPipeline:
 
         for src in sources:
             lines.append("WITH source AS (")
-            lines.append(f"    SELECT * FROM {{{{ source('{src}') }}}}")
+            lines.append(f"    SELECT * FROM {{{{ source('{src}') }}}}")  # nosec B608 - dbt/SQLMesh template syntax
             lines.append("),")
             lines.append("")
 

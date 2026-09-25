@@ -14,7 +14,7 @@ grpc_app = typer.Typer(help="gRPC server commands", rich_markup_mode="rich")
 
 @grpc_app.command()
 def serve(
-    host: str = typer.Option("0.0.0.0", "--host"),
+    host: str = typer.Option("0.0.0.0", "--host"),  # nosec B104 - configurable via CLI
     port: int = typer.Option(50051, "--port"),
 ) -> None:
     """Start the gRPC server with a live NoemaEngine."""

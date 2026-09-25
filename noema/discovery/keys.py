@@ -189,7 +189,7 @@ class KeyDiscovery:
                 "http://metadata.google.internal/computeMetadata/v1/project/project-id",
                 headers={"Metadata-Flavor": "Google"},
             )
-            resp = urllib.request.urlopen(req, timeout=2)
+            resp = urllib.request.urlopen(req, timeout=2)  # nosec B310 - GCP metadata endpoint
             project_id = resp.read().decode().strip()
             if project_id:
                 found.append(
@@ -268,7 +268,7 @@ class KeyDiscovery:
         try:
             import urllib.request
 
-            urllib.request.urlopen("https://api.openai.com", timeout=3)
+            urllib.request.urlopen("https://api.openai.com", timeout=3)  # nosec B310 - connectivity check
             details["internet"] = True
         except Exception:
             details["internet"] = False
