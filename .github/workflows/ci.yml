@@ -145,6 +145,7 @@ jobs:
       - name: Run golden eval
         env:
           NOEMA_API_RATE_LIMIT_ENABLED: "false"
+          NOEMA_LLM__PROVIDER: "fallback"
         run: |
           python -m tests.eval.run_eval \
             --tasks tests/eval/golden_tasks.json \
