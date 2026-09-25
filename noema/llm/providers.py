@@ -295,7 +295,7 @@ class OpenAIProvider(BaseLLMProvider):
             tokens_input=response.usage.prompt_tokens if response.usage else 0,
             tokens_output=response.usage.completion_tokens if response.usage else 0,
             latency_ms=(time.monotonic() - t0) * 1000,
-            finish_reason=choice.finish_reason or "",  # type: ignore[unreachable]
+            finish_reason=choice.finish_reason or "",
         )
 
 

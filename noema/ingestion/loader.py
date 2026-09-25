@@ -43,7 +43,7 @@ def _public_only_connector(aiohttp_module):
     """
     tcp_connector = aiohttp_module.TCPConnector
 
-    class PublicOnlyConnector(tcp_connector):
+    class PublicOnlyConnector(tcp_connector):  # type: ignore[valid-type, misc]
         async def _resolve_host(self, host, port, traces=None):
             infos = await super()._resolve_host(host, port, traces)
             for info in infos:
