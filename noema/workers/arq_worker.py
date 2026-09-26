@@ -94,7 +94,7 @@ class NodeHeartbeat:
         if self._redis is None:
             return
         r: Redis = self._redis
-        await r.hset(
+        await r.hset(  # type: ignore[misc]
             self._key(),
             mapping={
                 "node_id": self.node_id,
