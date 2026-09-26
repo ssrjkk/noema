@@ -39,8 +39,9 @@ def test_mcp_list_tools_prints_schemas():
         }
     ]
 
-    with patch("noema.mcp.server.MCP_SERVER_INFO", mock_info), patch(
-        "noema.mcp.server.TOOL_SCHEMAS", mock_schemas
+    with (
+        patch("noema.mcp.server.MCP_SERVER_INFO", mock_info),
+        patch("noema.mcp.server.TOOL_SCHEMAS", mock_schemas),
     ):
         result = runner.invoke(mcp_app, ["list-tools"])
 
