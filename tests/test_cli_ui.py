@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import patch
-
 import pytest
 
 from noema.cli.ui import (
     BULLET,
-    STATUS_DOT,
     STATUS_ERR,
     STATUS_OK,
     STATUS_WARN,

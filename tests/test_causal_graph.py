@@ -256,7 +256,6 @@ def test_from_requirements():
         {"category": "perf", "description": "fast response", "priority": 8},
         {"category": "security", "description": "auth required", "priority": 9},
     ]
-    deps = [("perf_security", "security_autho", 0.5)]
     cg = CausalGraph.from_requirements(reqs)
     assert cg.node_count == 2
     assert cg.validate_dag()

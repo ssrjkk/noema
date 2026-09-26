@@ -10,10 +10,8 @@ from noema.core.types import (
     SolutionQuality,
     Task,
     TaskComplexity,
-    TechStack,
     ThoughtProcess,
 )
-
 
 # ── _parse_memory_mb ──────────────────────────────────────────────────────────
 

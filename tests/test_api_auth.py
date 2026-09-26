@@ -5,9 +5,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
-from noema.api.auth import APIKeyAuthMiddleware, _PUBLIC_PATHS
+from noema.api.auth import _PUBLIC_PATHS, APIKeyAuthMiddleware
 
 
 def _make_request(path: str = "/api/tasks", headers: dict | None = None) -> MagicMock:
@@ -58,10 +58,12 @@ async def test_single_master_key_valid(call_next):
     mw = APIKeyAuthMiddleware(MagicMock())
     req = _make_request("/api/data", {"X-API-Key": "secret-key-123"})
 
-    with patch("noema.api.auth.get_settings", return_value=settings):
-        with patch("noema.api.auth.set_tenant_id", return_value="token"):
-            with patch("noema.api.auth.reset_tenant_id"):
-                resp = await mw.dispatch(req, call_next)
+    with (
+        patch("noema.api.auth.get_settings", return_value=settings),
+        patch("noema.api.auth.set_tenant_id", return_value="token"),
+        patch("noema.api.auth.reset_tenant_id"),
+    ):
+        resp = await mw.dispatch(req, call_next)
     assert resp.status_code == 200
 
 
@@ -111,10 +113,12 @@ async def test_multi_tenant_valid_key(call_next):
     mw = APIKeyAuthMiddleware(MagicMock())
     req = _make_request("/api/data", {"X-API-Key": "tenant-key-A"})
 
-    with patch("noema.api.auth.get_settings", return_value=settings):
-        with patch("noema.api.auth.set_tenant_id", return_value="token") as mock_set:
-            with patch("noema.api.auth.reset_tenant_id") as mock_reset:
-                resp = await mw.dispatch(req, call_next)
+    with (
+        patch("noema.api.auth.get_settings", return_value=settings),
+        patch("noema.api.auth.set_tenant_id", return_value="token") as mock_set,
+        patch("noema.api.auth.reset_tenant_id") as mock_reset,
+    ):
+        resp = await mw.dispatch(req, call_next)
     assert resp.status_code == 200
     mock_set.assert_called_once_with("tenant-A")
     mock_reset.assert_called_once()
@@ -171,9 +175,11 @@ async def test_multi_tenant_tenant_context_restored_on_error():
     mw = APIKeyAuthMiddleware(MagicMock())
     req = _make_request("/api/data", {"X-API-Key": "tenant-key-A"})
 
-    with patch("noema.api.auth.get_settings", return_value=settings):
-        with patch("noema.api.auth.set_tenant_id", return_value="token"):
-            with patch("noema.api.auth.reset_tenant_id") as mock_reset:
-                with pytest.raises(RuntimeError, match="boom"):
-                    await mw.dispatch(req, failing_call_next)
+    with (
+        patch("noema.api.auth.get_settings", return_value=settings),
+        patch("noema.api.auth.set_tenant_id", return_value="token"),
+        patch("noema.api.auth.reset_tenant_id") as mock_reset,
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        await mw.dispatch(req, failing_call_next)
     mock_reset.assert_called_once_with("token")

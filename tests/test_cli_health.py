@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 from typer.testing import CliRunner
 
@@ -92,8 +92,9 @@ def test_check_llm_error():
         mock_settings.return_value.llm.ollama_model = "llama2"
 
         with patch("noema.llm.providers.create_llm_provider", side_effect=Exception("Bad provider")):
-            from noema.cli.health import _check_llm
             import asyncio
+
+            from noema.cli.health import _check_llm
 
             result = asyncio.run(_check_llm())
 
@@ -104,8 +105,9 @@ def test_check_llm_error():
 def test_check_db_error():
     """_check_db() should handle errors gracefully."""
     with patch("noema.db.engine.get_db", side_effect=Exception("DB not configured")):
-        from noema.cli.health import _check_db
         import asyncio
+
+        from noema.cli.health import _check_db
 
         result = asyncio.run(_check_db())
 
@@ -119,8 +121,9 @@ def test_check_redis_skipped():
         mock_settings.return_value.redis.url = "redis://localhost:6379/0"
 
         with patch.dict("sys.modules", {"redis.asyncio": None}):
-            from noema.cli.health import _check_redis
             import asyncio
+
+            from noema.cli.health import _check_redis
 
             result = asyncio.run(_check_redis())
 
@@ -132,8 +135,9 @@ def test_check_sandbox_error():
     with patch(
         "noema.sandbox.engine.SandboxEngine", side_effect=Exception("Sandbox init failed")
     ):
-        from noema.cli.health import _check_sandbox
         import asyncio
+
+        from noema.cli.health import _check_sandbox
 
         result = asyncio.run(_check_sandbox())
 

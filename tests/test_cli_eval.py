@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
 from typer.testing import CliRunner
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 from noema.cli.eval import eval_app
-from noema.eval.leaderboard import LeaderboardRow
 
 runner = CliRunner()
 

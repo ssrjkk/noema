@@ -4,14 +4,6 @@
 
 Noema — это не ещё один генератор кода. Это **инженерный разум**: система, которая не просто выдаёт решение, а проверяет его формальной верификацией, выполняет в изолированной песочнице, ведёт аудируемый трейл каждой мысли и сама открывает pull-request'ы на свои же инциденты.
 
-<p align="center">
-<img src="https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white" alt="Python 3.11+ (recommended 3.12)">
-<img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
-<img src="https://img.shields.io/badge/tests-1659-blue?label=unit%20tests" alt="1659 unit tests">
-<img src="https://img.shields.io/badge/version-1.4.0-brightgreen" alt="v1.4.0">
-<img src="https://img.shields.io/badge/domains-22-orange" alt="22 domain modules">
-</p>
-
 ---
 
 ## ⚡ Quick Start — 30 секунд
@@ -255,7 +247,7 @@ CI-джоба `.github/workflows/experiments.yml` гоняет smoke-бенчм�
 
 ## Как мы проверяем то, что строим
 
-- **1659 unit-тестов** (pytest + hypothesis + pytest-benchmark), включая гейты: автономия, reasoning-trace round-trip, статический вердикт, извлечение контрактов из требований, доменные знания.
+- **2678 unit-тестов** (pytest + hypothesis + pytest-benchmark), включая гейты: автономия, reasoning-trace round-trip, статический вердикт, извлечение контрактов из требований, доменные знания.
 - **Ruff + mypy** в CI, **pre-commit** хуки.
 - **Проверка кодировки и mojibake-гейт** — сломанные юникод-строки не проходят CI.
 - **Security-сканеры** (bandit, safety, pip-audit) в пайплайне.

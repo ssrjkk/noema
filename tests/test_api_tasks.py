@@ -18,23 +18,25 @@ def app():
 
 @pytest.mark.asyncio
 async def test_enqueue_task(app):
-    with patch("noema.api.tasks.enqueue_think", new_callable=AsyncMock, return_value="job-123"):
-        with patch("noema.api.tasks.get_settings") as mock_settings:
-            settings = MagicMock()
-            settings.redis.url = "redis://localhost:6379/0"
-            mock_settings.return_value = settings
+    with (
+        patch("noema.api.tasks.enqueue_think", new_callable=AsyncMock, return_value="job-123"),
+        patch("noema.api.tasks.get_settings") as mock_settings,
+    ):
+        settings = MagicMock()
+        settings.redis.url = "redis://localhost:6379/0"
+        mock_settings.return_value = settings
 
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
-                resp = await client.post(
-                    "/tasks/enqueue",
-                    json={
-                        "title": "Build API",
-                        "description": "REST API with auth",
-                        "complexity": "moderate",
-                        "tags": ["python", "fastapi"],
-                    },
-                )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/tasks/enqueue",
+                json={
+                    "title": "Build API",
+                    "description": "REST API with auth",
+                    "complexity": "moderate",
+                    "tags": ["python", "fastapi"],
+                },
+            )
     assert resp.status_code == 200
     data = resp.json()
     assert data["job_id"] == "job-123"
@@ -43,14 +45,16 @@ async def test_enqueue_task(app):
 
 @pytest.mark.asyncio
 async def test_enqueue_task_minimal(app):
-    with patch("noema.api.tasks.enqueue_think", new_callable=AsyncMock, return_value="job-456"):
-        with patch("noema.api.tasks.get_settings") as mock_settings:
-            settings = MagicMock()
-            settings.redis.url = "redis://localhost:6379/0"
-            mock_settings.return_value = settings
+    with (
+        patch("noema.api.tasks.enqueue_think", new_callable=AsyncMock, return_value="job-456"),
+        patch("noema.api.tasks.get_settings") as mock_settings,
+    ):
+        settings = MagicMock()
+        settings.redis.url = "redis://localhost:6379/0"
+        mock_settings.return_value = settings
 
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
                 resp = await client.post(
                     "/tasks/enqueue",
                     json={"title": "Simple task"},
@@ -81,18 +85,20 @@ async def test_enqueue_task_invalid_complexity(app):
 
 @pytest.mark.asyncio
 async def test_enqueue_task_redis_down(app):
-    with patch("noema.api.tasks.enqueue_think", new_callable=AsyncMock, side_effect=ConnectionError("redis down")):
-        with patch("noema.api.tasks.get_settings") as mock_settings:
-            settings = MagicMock()
-            settings.redis.url = "redis://localhost:6379/0"
-            mock_settings.return_value = settings
+    with (
+        patch("noema.api.tasks.enqueue_think", new_callable=AsyncMock, side_effect=ConnectionError("redis down")),
+        patch("noema.api.tasks.get_settings") as mock_settings,
+    ):
+        settings = MagicMock()
+        settings.redis.url = "redis://localhost:6379/0"
+        mock_settings.return_value = settings
 
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
-                resp = await client.post(
-                    "/tasks/enqueue",
-                    json={"title": "Task"},
-                )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                "/tasks/enqueue",
+                json={"title": "Task"},
+            )
     assert resp.status_code == 503
     assert "Failed to enqueue" in resp.json()["detail"]
 

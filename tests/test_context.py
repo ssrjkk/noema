@@ -37,7 +37,7 @@ def test_get_session_id_default():
 
 
 def test_set_and_get_session_id():
-    token = set_session_id("session-123")
+    set_session_id("session-123")
     try:
         assert get_session_id() == "session-123"
     finally:
@@ -49,7 +49,7 @@ def test_get_request_id_default():
 
 
 def test_set_and_get_request_id():
-    token = set_request_id("req-456")
+    set_request_id("req-456")
     try:
         assert get_request_id() == "req-456"
     finally:

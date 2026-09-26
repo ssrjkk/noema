@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 from noema.causal.engine import CausalEngine
-from noema.causal.graph import CausalGraph, CausalNode, VariableType
+from noema.causal.graph import CausalGraph
 
 
 def _simple_engine_and_graph():

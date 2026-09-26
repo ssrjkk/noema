@@ -73,7 +73,6 @@ def test_admin_metrics_returns_stats(client, app, mock_noema):
 
 def test_admin_metrics_caches_result(client, app, mock_noema):
     """Metrics endpoint should cache results for 5 seconds."""
-    from noema.api.admin import _metrics_cache_at
 
     import noema.api.admin as admin_module
 
