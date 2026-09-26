@@ -97,6 +97,11 @@ def test_admin_metrics_caches_result(client, app, mock_noema):
 
 def test_admin_metrics_no_noema_returns_503(client, app):
     """GET /admin/metrics should return 503 if noema not initialized."""
+    import noema.api.admin as admin_module
+
+    admin_module._metrics_cache = {}
+    admin_module._metrics_cache_at = 0.0
+
     app.state.noema = None
     response = client.get("/admin/metrics")
     assert response.status_code == 503

@@ -105,8 +105,11 @@ def _reset_state():
     srv._cancellation_mgr = CancellationManager()
     srv._noema = None
     srv._start_time = 1000.0
+    import noema.api.admin as admin_mod
     import noema.api.webhooks as wh
 
+    admin_mod._metrics_cache = {}
+    admin_mod._metrics_cache_at = 0.0
     wh._dispatcher = None
     app.state.noema = _make_noema_mock()
     app.state.audit_logger = AsyncMock()
