@@ -140,7 +140,12 @@ async def test_assemble_solution(task):
         "deployment": {"target": "docker"},
     }
     code_blocks = [
-        {"filename": "main.py", "language": "python", "content": "print('hi')", "description": "entry"},
+        {
+            "filename": "main.py",
+            "language": "python",
+            "content": "print('hi')",
+            "description": "entry",
+        },
     ]
     optimizations = {
         "strategies": [{"category": "cache", "strategy": "redis", "description": "cache layer"}],
@@ -149,7 +154,9 @@ async def test_assemble_solution(task):
         "checks": [{"severity": "high", "check": "auth", "description": "add RBAC"}],
     }
 
-    result = await orch.assemble_solution(task, stack, architecture, code_blocks, optimizations, security_notes)
+    result = await orch.assemble_solution(
+        task, stack, architecture, code_blocks, optimizations, security_notes
+    )
     assert isinstance(result, Solution)
     assert result.task_id == task.id
     assert result.architecture is not None
@@ -182,7 +189,12 @@ async def test_assemble_solution_skips_code_without_filename(task):
     stack = TechStack(languages=["Python"])
 
     result = await orch.assemble_solution(
-        task, stack, {}, [{"content": "no filename"}, {"filename": "ok.py", "content": "x = 1"}], {}, {}
+        task,
+        stack,
+        {},
+        [{"content": "no filename"}, {"filename": "ok.py", "content": "x = 1"}],
+        {},
+        {},
     )
     assert len(result.code_blocks) == 1
     assert result.code_blocks[0].filename == "ok.py"

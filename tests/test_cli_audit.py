@@ -101,8 +101,9 @@ def test_audit_verify_valid_proof(tmp_path):
     proof_file = tmp_path / "proof.json"
     proof_file.write_text(json.dumps(proof_data))
 
-    with patch("noema.cli.audit.InclusionProof") as mock_inclusion, patch(
-        "noema.cli.audit.verify_inclusion_proof", return_value=True
+    with (
+        patch("noema.cli.audit.InclusionProof") as mock_inclusion,
+        patch("noema.cli.audit.verify_inclusion_proof", return_value=True),
     ):
         mock_inclusion.from_dict.return_value = mock_proof
         result = runner.invoke(audit_app, ["verify", str(proof_file)])
@@ -146,9 +147,7 @@ def test_audit_chain_append_with_event():
         mock_chain_obj.append.return_value = mock_block
         mock_chain.return_value = mock_chain_obj
 
-        result = runner.invoke(
-            audit_app, ["chain", "append", "--event", '{"action": "test"}']
-        )
+        result = runner.invoke(audit_app, ["chain", "append", "--event", '{"action": "test"}'])
 
     assert result.exit_code == 0
     assert "Block appended" in result.stdout

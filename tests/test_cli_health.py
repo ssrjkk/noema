@@ -91,7 +91,9 @@ def test_check_llm_error():
         mock_settings.return_value.llm.provider = "invalid"
         mock_settings.return_value.llm.ollama_model = "llama2"
 
-        with patch("noema.llm.providers.create_llm_provider", side_effect=Exception("Bad provider")):
+        with patch(
+            "noema.llm.providers.create_llm_provider", side_effect=Exception("Bad provider")
+        ):
             import asyncio
 
             from noema.cli.health import _check_llm
@@ -132,9 +134,7 @@ def test_check_redis_skipped():
 
 def test_check_sandbox_error():
     """_check_sandbox() should handle errors gracefully."""
-    with patch(
-        "noema.sandbox.engine.SandboxEngine", side_effect=Exception("Sandbox init failed")
-    ):
+    with patch("noema.sandbox.engine.SandboxEngine", side_effect=Exception("Sandbox init failed")):
         import asyncio
 
         from noema.cli.health import _check_sandbox

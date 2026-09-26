@@ -14,7 +14,9 @@ def _make_request(path: str = "/api/tasks", headers: dict | None = None) -> Magi
     req = MagicMock()
     req.url.path = path
     req.headers = MagicMock()
-    req.headers.get = MagicMock(side_effect=lambda key, default="": (headers or {}).get(key, default))
+    req.headers.get = MagicMock(
+        side_effect=lambda key, default="": (headers or {}).get(key, default)
+    )
     return req
 
 

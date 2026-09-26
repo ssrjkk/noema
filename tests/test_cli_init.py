@@ -83,8 +83,9 @@ def test_init_handles_migration_failure(tmp_path, monkeypatch):
     """init() should warn but not fail if migrations fail."""
     monkeypatch.chdir(tmp_path)
 
-    with patch("noema.cli.init_cmd.NoemaSettings") as mock_settings_cls, patch(
-        "alembic.command.upgrade", side_effect=Exception("Migration failed")
+    with (
+        patch("noema.cli.init_cmd.NoemaSettings") as mock_settings_cls,
+        patch("alembic.command.upgrade", side_effect=Exception("Migration failed")),
     ):
         mock_settings = MagicMock()
         mock_settings.db = MagicMock()

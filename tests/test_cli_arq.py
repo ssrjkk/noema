@@ -13,7 +13,9 @@ runner = CliRunner()
 
 
 def test_enqueue():
-    with patch("noema.workers.arq_worker.enqueue_think", new_callable=AsyncMock, return_value="job-abc-123"):
+    with patch(
+        "noema.workers.arq_worker.enqueue_think", new_callable=AsyncMock, return_value="job-abc-123"
+    ):
         result = runner.invoke(
             arq_app,
             ["enqueue", "Build a REST API", "--description", "with auth", "--complexity", "simple"],
@@ -27,7 +29,9 @@ def test_enqueue():
 
 
 def test_enqueue_default_complexity():
-    with patch("noema.workers.arq_worker.enqueue_think", new_callable=AsyncMock, return_value="job-xyz"):
+    with patch(
+        "noema.workers.arq_worker.enqueue_think", new_callable=AsyncMock, return_value="job-xyz"
+    ):
         result = runner.invoke(arq_app, ["enqueue", "Simple task"])
         assert result.exit_code == 0
         assert "job-xyz" in result.stdout
@@ -51,7 +55,9 @@ def test_workers_list():
         },
     ]
 
-    with patch("noema.workers.arq_worker.list_active_workers", new_callable=AsyncMock, return_value=fleet):
+    with patch(
+        "noema.workers.arq_worker.list_active_workers", new_callable=AsyncMock, return_value=fleet
+    ):
         result = runner.invoke(arq_app, ["workers"])
         assert result.exit_code == 0
         output = result.stdout
@@ -64,7 +70,9 @@ def test_workers_list():
 
 
 def test_workers_empty():
-    with patch("noema.workers.arq_worker.list_active_workers", new_callable=AsyncMock, return_value=[]):
+    with patch(
+        "noema.workers.arq_worker.list_active_workers", new_callable=AsyncMock, return_value=[]
+    ):
         result = runner.invoke(arq_app, ["workers"])
         assert result.exit_code == 0
         lines = result.stdout.strip().split("\n")
@@ -99,9 +107,7 @@ def test_ledger_with_task_filter(tmp_path):
     mock_ledger.entries_for.return_value = [{"task_id": "t1", "value": 50}]
 
     with patch("noema.billing.ledger.ContributionLedger", return_value=mock_ledger):
-        result = runner.invoke(
-            arq_app, ["ledger", str(ledger_file), "--task-id", "t1"]
-        )
+        result = runner.invoke(arq_app, ["ledger", str(ledger_file), "--task-id", "t1"])
         assert result.exit_code == 0
         mock_ledger.entries_for.assert_called_once_with("t1")
         mock_ledger.per_node.assert_called_once_with(task_id="t1")

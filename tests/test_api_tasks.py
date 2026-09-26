@@ -55,10 +55,10 @@ async def test_enqueue_task_minimal(app):
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-                resp = await client.post(
-                    "/tasks/enqueue",
-                    json={"title": "Simple task"},
-                )
+            resp = await client.post(
+                "/tasks/enqueue",
+                json={"title": "Simple task"},
+            )
     assert resp.status_code == 200
     data = resp.json()
     assert data["job_id"] == "job-456"
@@ -86,7 +86,11 @@ async def test_enqueue_task_invalid_complexity(app):
 @pytest.mark.asyncio
 async def test_enqueue_task_redis_down(app):
     with (
-        patch("noema.api.tasks.enqueue_think", new_callable=AsyncMock, side_effect=ConnectionError("redis down")),
+        patch(
+            "noema.api.tasks.enqueue_think",
+            new_callable=AsyncMock,
+            side_effect=ConnectionError("redis down"),
+        ),
         patch("noema.api.tasks.get_settings") as mock_settings,
     ):
         settings = MagicMock()

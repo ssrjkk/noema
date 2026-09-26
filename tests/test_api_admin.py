@@ -51,9 +51,10 @@ def test_admin_metrics_returns_stats(client, app, mock_noema):
     """GET /admin/metrics should return aggregated metrics."""
     app.state.noema = mock_noema
 
-    with patch("noema.api.server._start_time", 1000.0), patch(
-        "noema.api.admin.get_settings"
-    ) as mock_settings:
+    with (
+        patch("noema.api.server._start_time", 1000.0),
+        patch("noema.api.admin.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.llm.provider = "openai"
         with patch("time.monotonic", return_value=1100.0):
             response = client.get("/admin/metrics")
@@ -81,9 +82,10 @@ def test_admin_metrics_caches_result(client, app, mock_noema):
 
     app.state.noema = mock_noema
 
-    with patch("noema.api.server._start_time", 1000.0), patch(
-        "noema.api.admin.get_settings"
-    ) as mock_settings:
+    with (
+        patch("noema.api.server._start_time", 1000.0),
+        patch("noema.api.admin.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.llm.provider = "openai"
         with patch("time.monotonic", return_value=1100.0):
             response1 = client.get("/admin/metrics")
@@ -160,7 +162,9 @@ def test_admin_task_history_all_tenants_early_break(client, app, tmp_path):
     mock_audit = AsyncMock()
     mock_audit._fallback_dir = str(tmp_path)
     mock_audit.query = AsyncMock(
-        return_value=[{"task_id": f"t{i}", "timestamp": f"2026-01-0{i}T00:00:00"} for i in range(1, 6)]
+        return_value=[
+            {"task_id": f"t{i}", "timestamp": f"2026-01-0{i}T00:00:00"} for i in range(1, 6)
+        ]
     )
 
     (tmp_path / "tenant1.jsonl").write_text("")
@@ -323,8 +327,9 @@ def test_admin_audit_verify_valid(client, app):
     mock_proof.block_index = 5
     mock_proof.root_hash = b"\x00\x01\x02\x03"
 
-    with patch("noema.audit.merkle_proof.InclusionProof") as mock_inclusion, patch(
-        "noema.audit.merkle_proof.verify_inclusion_proof", return_value=True
+    with (
+        patch("noema.audit.merkle_proof.InclusionProof") as mock_inclusion,
+        patch("noema.audit.merkle_proof.verify_inclusion_proof", return_value=True),
     ):
         mock_inclusion.from_dict.return_value = mock_proof
 
