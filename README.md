@@ -290,6 +290,7 @@ noema/
 
 ## Documentation
 
+- [Usage Guide](docs/usage-guide.md) — complete CLI, API, and library reference with examples
 - [Whitepaper](docs/WHITEPAPER.md) — vision and design principles
 - [Roadmap](docs/ROADMAP.md) — three phases: Architect → Autopoietic Enterprise → Global Noema Grid
 - [Configuration](docs/configuration.md) — all env vars and YAML options
