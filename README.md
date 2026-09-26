@@ -309,6 +309,12 @@ noema/
 | **2** | **The Autopoietic Enterprise** — incident → PR, merge gate, evolution with auto-apply, benchmark service | **In progress** |
 | **3** | **Global Noema Grid** — multi-node pool, gRPC federation, token/ledger economics, live dashboard | **In progress** |
 
+## Author
+
+**ssrjkk** — [GitHub](https://github.com/ssrjkk)
+
+Project repository: [github.com/ssrjkk/noema](https://github.com/ssrjkk/noema)
+
 ## License
 
 MIT. Open development — ideas, issues, and PRs welcome.
