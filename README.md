@@ -1,217 +1,178 @@
-# Noema — Engineering Mind
+# Noema
 
-> Фреймворк генерации мощных технических решений на любом стеке, который **сам проверяет то, что сгенерировал** — и учится чинить себя без человека.
+**The engineering mind that verifies what it generates.**
 
-Noema — это не ещё один генератор кода. Это **инженерный разум**: система, которая не просто выдаёт решение, а проверяет его формальной верификацией, выполняет в изолированной песочнице, ведёт аудируемый трейл каждой мысли и сама открывает pull-request'ы на свои же инциденты.
+Noema is not another code generator. It is a neurosymbolic system that proposes solutions with LLMs, verifies them against formal contracts with Z3, validates them in a sandboxed runtime, and maintains a fully auditable trail of every reasoning step — then fixes its own incidents end-to-end.
+
+> [!NOTE]
+> **Phase 1 — The Architect** is production-ready. Phase 2 (autonomous self-healing) and Phase 3 (multi-node grid federation) are in active development.
 
 ---
 
-## ⚡ Quick Start — 30 секунд
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#features">Features</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#documentation">Docs</a> •
+  <a href="README.ru.md">Русский</a>
+</p>
 
-Не хочется читать? Запусти это:
+---
+
+## Quick Start
 
 ```bash
 git clone https://github.com/ssrjkk/noema && cd noema
 pip install -e .
-python demo.py      # запускает 12 живых демо: security, quality, DB schema, Docker, Terraform, RBAC, GraphQL и т.д.
+python demo.py        # 12 live demos — no API keys required
 ```
 
-Если `python demo.py` вывел `=== ALL DEMOS COMPLETE ===` — всё работает. Дальше:
+If you see `=== ALL DEMOS COMPLETE ===` — you're good. Then:
 
 ```bash
-noema --help                                       # или: python -m noema --help
 noema think "Auth service on FastAPI" --tags "python,fastapi,auth"
 ```
 
----
+## The Problem
 
-## Проблема, которую решает Noema
+LLMs are great at generation. Everything else they do poorly:
 
-Большие языковые модели хороши в одном — в генерации. Всё остальное они делают плохо:
-
-- **Говорят уверенно, но ошибаются.** Решение выглядит идеально, а по факту — синтаксическая ошибка, несуществующий импорт, дыра в безопасности.
-- **Никто не проверяет результат.** Сгенерированный код летит в репозиторий без единой формальной проверки.
-- **Нельзя переиграть.** Если результат плохой — непонятно, где именно система ошиблась и почему.
-- **Память короткая.** Каждая задача решается с нуля: прошлые решения, ошибки и инциденты не учитываются.
-- **Нет экономики.** Токены жгутся без контроля, стоимости каждой сгенерированной строки никто не знает.
-- **Ручное сопровождение.** Исправление багов, ревью, гейты — всё руками.
-
-Noema превращает генерацию из одноразовой ставки в **инженерный процесс с чекпоинтами, верификацией и аудитом**.
-
-## Идея в одной строке
-
-> Нейронная сторона **предлагает**, символьная — **распоряжается**, и весь обмен между ними записывается в аудируемый артефакт.
-
-LLM генерирует гипотезу. Символьный движок (Z3) проверяет её против формального контракта. AST-анализатор проверяет код до запуска. Песочница выполняет его под ограничениями. Если что-то не сходится — система рефайнится, а не выдаёт непроверенный мусор. **Ни один непроверенный результат не принимается.**
-
-## Что умеет Noema
-
-| Возможность | Что даёт |
+| Problem | What happens |
 |---|---|
-| **Генерация решений** | `noema think "Real-time Chat App"` — полное решение: архитектура, стек, код, оптимизации, безопасность |
-| **Формальная верификация (Z3)** | Каждая гипотеза проверяется против извлечённого символического контракта. Solver недоступен → решение не принимается (fail-closed) |
-| **Статический анализ до запуска** | Чистый AST-проход: синтаксис, гигиена импортов, неопределённые имена — вердикт ещё до запуска непроверенного кода |
-| **Изолированная песочница** | Docker-запуск без сети, с лимитами CPU/памяти/времени; статический вердикт короткозамыкает запуск |
-| **Аудит рассуждений** | Каждый шаг мысли, вердикт Z3 и AST фиксируются в reasoning-trace — старый вердикт перепроверяется детерминированно, без LLM; трейсы персистентны на диске (`trace_dir`, по умолчанию `.noema/traces`), OTLP-экспорт зарезервирован (`NOEMA_OBS__TRACING_ENDPOINT`)
-| **Автономность** | Инцидент из Sentry/webhook → фикс → ветка → PR с прошедшей валидацией. Merge-гейт по judge-оценке в CI |
-| **Самоэволюция под доказательствами** | Мутации применяются только когда проходят тесты (`evolution_test_before_apply`) |
-| **22 доменных модуля** | auth, database, gateway, graphql, ml_ops, mobile, terraform, websocket и другие — работают автономно и вместе |
-| **Ядра и агенты** | Архитектор, кодер, security, devops, DBA, AI-engineer; пайплайны fullstack/quick/security/arch-review |
-| **Память и знания** | Эпизодическая, семантическая и процедурная память + доменная база знаний |
-| **Экономика токенов** | Каждый вызов LLM трассируется, атрибутируется и конвертируется в денежную оценку; бюджеты и circuit breakers |
-| **Воспроизводимые бенчмарки** | Одна матрица задач по провайдерам/моделям → `results.json` + CSV-сводки, в т.ч. пофайловое разложение токенов/стоимости каждой сгенерированной строки |
-| **API для продакшена** | FastAPI: rate limiting, API-ключи, квоты по тенантам, request-timeout guard (504 + exempt-пути), RFC 7807, метрики Prometheus, streaming |
-| **Grid-федерация** | `noema grid federate`: подзадачи делегируются пирам по gRPC с circuit breaker и ретраями, при недоступности пиров — локальный фолбэк; вклад каждой ноды пишется в аудируемый ledger |
-| **Дашборд грида** | `GET /grid` и `noema grid status`: живое состояние флота воркеров — латентность, токены, ошибки по каждой ноде + итоги по кластеру |
+| **Confident but wrong** | Solutions look perfect, then fail on import errors, security holes, or logic bugs |
+| **Nobody verifies** | Generated code goes straight to production without a single formal check |
+| **No replay** | Bad output? No way to trace where the system went wrong |
+| **Amnesia** | Every task starts from scratch — past solutions and incidents are forgotten |
+| **No economics** | Tokens burn without accounting — cost per generated line is unknown |
+| **Manual everything** | Bug fixes, reviews, gates — all human-operated |
 
-## Архитектура в одном взгляде
+Noema turns generation from a one-shot bet into an **engineering process with checkpoints, verification, and audit**.
+
+## Features
+
+### Core Loop
 
 ```
-            ┌──────────────────────────────────────────────────┐
-            │                   NoemaEngine                     │
-            │   ChainOfThought (DAG)  ·  NeuroSymbolicEngine     │
-            └───────┬───────────────────────┬───────────────────┘
-                    │ propose               │ verify
-        ┌───────────▼──────────┐   ┌────────▼────────────────────────┐
-        │ NeuralInterface (LLM)│   │ SymbolicEngine (Z3) · static.py │
-        └───────────┬──────────┘   └────────┬────────────────────────┘
-                    │ hypothesis            │ verdict (fail-closed)
-                    └───────► refine loop ◄─┘
-                        ┌─────────────┼──────────────┐
-                        │ trace       │ sandbox       │ memory / knowledge
-                        │ replay      │ static+run    │ (episodic, domain)
+         ┌──────────────────────────────────────────────────┐
+         │                   NoemaEngine                     │
+         │   ChainOfThought (DAG)  ·  NeuroSymbolicEngine     │
+         └───────┬───────────────────────┬───────────────────┘
+                 │ propose               │ verify
+     ┌───────────▼──────────┐   ┌────────▼────────────────────────┐
+     │ NeuralInterface (LLM)│   │ SymbolicEngine (Z3) · static.py │
+     └───────────┬──────────┘   └────────┬────────────────────────┘
+                 │ hypothesis            │ verdict (fail-closed)
+                 └───────► refine loop ◄─┘
+                     ┌─────────────┼──────────────┐
+                     │ trace       │ sandbox       │ memory / knowledge
+                     │ replay      │ static+run    │ (episodic, domain)
 ```
 
-Цикл рассуждения ограничен `max_refinement_attempts`: задача → символьный граф → гипотеза → верификация → рефайн → успех или исчерпание попыток.
+The neural side **proposes**, the symbolic side **adjudicates**, and every exchange is recorded in an auditable artifact. No unverified result is ever accepted.
 
-## Установка
+### What You Get
+
+| Capability | Description |
+|---|---|
+| **Solution generation** | `noema think "Real-time Chat"` — full architecture, stack, code, optimizations, security |
+| **Formal verification (Z3)** | Every hypothesis is checked against a symbolic contract extracted from requirements. Solver unavailable → solution rejected (fail-closed) |
+| **Pre-run static analysis** | Pure AST pass: syntax, import hygiene, undefined names — verdict before untrusted code ever runs |
+| **Sandboxed execution** | Docker isolation: no network, CPU/memory/time limits. Static verdict short-circuits execution |
+| **Reasoning audit** | Every thought step, Z3 verdict, and AST check is recorded. Old verdicts are re-verified deterministically — no LLM needed |
+| **Autonomous self-healing** | Incident (Sentry/webhook) → fix → branch → PR with passing validation. Merge gate blocks if judge score is below threshold |
+| **Self-evolution** | Prompt/strategy mutations apply only when tests pass (`evolution_test_before_apply`) |
+| **22 domain modules** | auth, database, gateway, graphql, ml_ops, mobile, terraform, websocket, and more — work independently and together |
+| **Specialized kernels & agents** | Architect, Coder, Security, DevOps, DBA, AI Engineer. Pipelines: fullstack, quick, security, arch-review |
+| **Memory & knowledge** | Episodic, semantic, and procedural memory + domain knowledge base |
+| **Token economics** | Every LLM call is traced, attributed, and converted to cost. Budgets and circuit breakers included |
+| **Reproducible benchmarks** | One task matrix across providers/models → `results.json` + CSV summaries with per-file token/cost breakdown |
+| **Production API** | FastAPI: rate limiting, API keys, per-tenant quotas, request timeout guard (504 + exempt paths), RFC 7807, Prometheus metrics, SSE streaming |
+| **Grid federation** | `noema grid federate`: subtasks delegated to peers via gRPC with circuit breaker and retry. Local fallback when peers are down. Every node's contribution recorded in an auditable ledger |
+| **Grid dashboard** | `GET /grid` and `noema grid status`: live fleet state — latency, tokens, errors per node + cluster totals |
+
+## Installation
 
 ```bash
-# Минимальный набор
+# Minimal
 pip install -e .
 
-# Полный (верификация Z3, векторный поиск, провайдеры LLM)
+# Full (Z3 verification, vector search, LLM providers)
 pip install -e ".[full]"
 
-# Всё, включая dev-инструменты, БД, gRPC, vault
+# Everything (dev tools, DB, gRPC, vault)
 pip install -e ".[dev,full,db,grpc,vault]"
 ```
 
-Python **3.11+** (рекомендуется 3.12 — основная разработка и CI идут на 3.12).
-Провайдеры LLM: `openai`, `anthropic`, `ollama` + встроенный **fallback-провайдер** (работает без ключей, для демо и CI — просто ставь и запускай).
-Управление через env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+**Python 3.11+** (3.12 recommended — primary development and CI target).
 
-### Проверка установки
+**LLM providers:** `openai`, `anthropic`, `ollama` + built-in **fallback provider** (works without API keys — for demos and CI).
+
+Configure via env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+
+### Verify Installation
 
 ```bash
-# Убедиться, что всё поставилось:
-noema --help                  # вариант 1 — CLI скрипт
-python -m noema --help        # вариант 2 — модуль Python (надёжнее на Windows)
+noema --help                  # CLI entry point
+python -m noema --help        # Module entry (more reliable on Windows)
 
-# Запустить 12 живых демо без единого API-ключа:
-python demo.py
-# Должно вывестись === ALL DEMOS COMPLETE ===
+python demo.py                # 12 live demos, zero API keys
+# Expected: === ALL DEMOS COMPLETE ===
 ```
 
-## Production Setup — важные настройки по умолчанию
-
-**По умолчанию Noema настроен для разработки и демо, а не для продакшена.** Перед деплоем обязательно настройте:
-
-### Обязательные настройки
-
-1. **LLM-провайдер** — по умолчанию `fallback` (шаблонные ответы, не LLM)
-   ```bash
-   export NOEMA_LLM__PROVIDER=openai  # или anthropic, ollama
-   export OPENAI_API_KEY=sk-...
-   ```
-
-2. **API-ключ** — по умолчанию auth выключен (пустой ключ)
-   ```bash
-   export NOEMA_API__API_KEY=your-secret-key-here
-   ```
-
-3. **Neurosymbolic verification** — по умолчанию выключена (`NOEMA_NS__ENABLED=false`)
-   ```bash
-   export NOEMA_NS__ENABLED=true
-   pip install -e ".[full]"  # нужен Z3
-   ```
-
-4. **Webhook secret** — по умолчанию HMAC-верификация выключена
-   ```bash
-   export NOEMA_API__WEBHOOK_SECRET=your-webhook-secret
-   ```
-
-5. **Database** — для персистентности, аудита и billing
-   ```bash
-   export NOEMA_DB__URL=postgresql+asyncpg://user:pass@localhost/noema
-   pip install -e ".[db]"
-   ```
-
-### Опциональные, но рекомендуемые
-
-- **Redis** — для rate limiting в multi-worker deployments
-- **Sentry** — для мониторинга ошибок (`NOEMA_OBS__SENTRY_DSN`)
-- **Trusted proxies** — если за reverse proxy (`NOEMA_API__TRUSTED_PROXIES`)
-
-### Fail-closed поведение
-
-Noema следует принципу **fail-closed**: если компонент недоступен, система отказывает безопасно, а не фабрикуют ответ:
-- LLM недоступен → `RuntimeError`, а не шаблонный ответ
-- Webhook secret пустой → запрос отклоняется
-- Z3 solver недоступен → верификация не проходит
-
-## Быстрый старт
+## Usage
 
 ### CLI
 
 ```bash
-# Везде, где написано `noema ...`, можно писать `python -m noema ...`
-# (полезно на Windows, где CLI-скрипт иногда не попадает в PATH)
-
+# Think — full solution generation
 noema think "Real-time Chat App" --tags "python,websocket,redis" --complexity complex --output full
 
-# Экспорт в структуру проекта на диск
+# Scaffold to disk
 noema think "Auth service" --scaffold --scaffold-dir ./out
 
-# Пайплайны ядер
+# Kernel pipelines
 noema pipeline fullstack --title "My Project"
 noema pipeline security --title "API audit"
 
-# Знания, память, граф
+# Knowledge, memory, graph
 noema knowledge search -q "database optimization"
 noema memory stats
 noema graph suggest --tags "python,fastapi,redis"
 
-# Автономия и самоэволюция
+# Autonomy & evolution
 noema evolve
 noema agents
 noema modules list
+
+# Grid federation
+noema grid federate --peer localhost:50051
+noema grid status
 ```
 
-### API-сервер
+### API Server
 
 ```bash
 noema serve
-# или
-python -m noema serve
 # http://localhost:8000
 ```
 
-Все эндпоинты доступны и в корне (`/think`), и под версионированным префиксом `/api/v1/think`.
+All endpoints available at root (`/think`) and versioned prefix (`/api/v1/think`).
 
-| Метод | Эндпоинт | Назначение |
+| Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/think` | Полное решение по задаче |
-| POST | `/think/detail` | Решение + ход мыслей |
-| POST | `/think/stream` | SSE-поток шагов рассуждения |
-| DELETE | `/think/{task_id}` | Отмена задачи |
-| POST | `/tasks/enqueue` | Асинхронная задача через Redis/arq |
-| POST | `/experiments` | Бенчмарк-матрица как сервис |
-| POST | `/webhooks/incident` | Инцидент → автономный фикс → PR |
-| GET | `/health`, `/ready`, `/diagnostics`, `/features` | Ops |
-| GET | `/kernels`, `/agents`, `/knowledge/stats`, `/knowledge/search` | Разведка |
-
-Пример:
+| POST | `/think` | Full solution for a task |
+| POST | `/think/detail` | Solution + reasoning trace |
+| POST | `/think/stream` | SSE stream of reasoning steps |
+| DELETE | `/think/{task_id}` | Cancel a running task |
+| POST | `/tasks/enqueue` | Async task via Redis/arq |
+| POST | `/experiments` | Benchmark matrix as a service |
+| POST | `/webhooks/incident` | Incident → autonomous fix → PR |
+| GET | `/health`, `/ready`, `/diagnostics`, `/features` | Ops endpoints |
+| GET | `/kernels`, `/agents`, `/knowledge/stats`, `/knowledge/search` | Discovery |
+| GET | `/grid` | Live grid fleet state |
+| GET | `/admin/metrics` | Prometheus-style metrics |
 
 ```bash
 curl -X POST http://localhost:8000/think \
@@ -219,78 +180,135 @@ curl -X POST http://localhost:8000/think \
   -d '{"title": "Event bus on RabbitMQ", "complexity": "complex", "tags": ["python", "rabbitmq"]}'
 ```
 
-## Автономность: система чинит себя сама
+## Production Setup
 
-1. **Инцидент** — Sentry-алерт или `POST /webhooks/incident` нормализуется в `Incident`.
-2. **Фикс** — задача прогоняется через `NoemaEngine`, результат валидируется тестами (`validate_solution(run_tests=True)`). Без `all_valid` PR не создаётся.
-3. **PR** — httpx-клиент GitHub (без PyGithub) открывает ветку и pull-request.
-4. **Merge-гейт** — CI-джоба (`gate` в `.github/workflows/ci.yml`) блокирует мёрж, если `judge_score` ниже порога или песочница упала.
-5. **Эволюция** — кандидаты промптов/мутаций применяются только при зелёных тестах.
+**Default configuration is for development and demos, not production.** Before deploying:
 
-Настроить: `NOEMA_AUTONOMY__GITHUB_TOKEN`, `NOEMA_AUTONOMY__GITHUB_REPO`, `NOEMA_AUTONOMY__GITHUB_BASE_BRANCH`.
+### Required
 
-## Эксперименты и бенчмарки
+1. **LLM provider** — default is `fallback` (template responses, not LLM)
+   ```bash
+   export NOEMA_LLM__PROVIDER=openai
+   export OPENAI_API_KEY=sk-...
+   ```
 
-Воспроизводимый раннер: одна и та же матрица задач по провайдерам и моделям, сбор wall-time, токенов, judge-оценки, стоимости и (опционально) валидации песочницы в `results/`.
+2. **API key** — default is empty (auth disabled)
+   ```bash
+   export NOEMA_API__API_KEY=your-secret-key
+   ```
+
+3. **Neurosymbolic verification** — default is disabled
+   ```bash
+   export NOEMA_NS__ENABLED=true
+   pip install -e ".[full]"   # requires Z3
+   ```
+
+4. **Webhook secret** — default HMAC verification is disabled
+   ```bash
+   export NOEMA_API__WEBHOOK_SECRET=your-webhook-secret
+   ```
+
+5. **Database** — for persistence, audit, and billing
+   ```bash
+   export NOEMA_DB__URL=postgresql+asyncpg://user:pass@localhost/noema
+   pip install -e ".[db]"
+   ```
+
+### Recommended
+
+- **Redis** — for rate limiting in multi-worker deployments
+- **Sentry** — error monitoring (`NOEMA_OBS__SENTRY_DSN`)
+- **Trusted proxies** — if behind reverse proxy (`NOEMA_API__TRUSTED_PROXIES`)
+
+### Fail-Closed Behavior
+
+Noema follows **fail-closed** principles: if a component is unavailable, the system refuses safely rather than fabricating an answer:
+
+- LLM unavailable → `RuntimeError`, not a template response
+- Webhook secret empty → request rejected
+- Z3 solver unavailable → verification does not pass
+
+## Autonomous Self-Healing
+
+1. **Incident** — Sentry alert or `POST /webhooks/incident` normalized into `Incident`
+2. **Fix** — task runs through `NoemaEngine`, result validated with tests (`validate_solution(run_tests=True)`). No PR without `all_valid`
+3. **PR** — GitHub httpx client (no PyGithub) opens a branch and pull request
+4. **Merge gate** — CI job blocks merge if `judge_score` is below threshold or sandbox fails
+5. **Evolution** — prompt/strategy candidates apply only when tests pass
+
+Configure: `NOEMA_AUTONOMY__GITHUB_TOKEN`, `NOEMA_AUTONOMY__GITHUB_REPO`, `NOEMA_AUTONOMY__GITHUB_BASE_BRANCH`.
+
+## Experiments & Benchmarks
+
+Reproducible runner: same task matrix across providers and models, collecting wall-time, tokens, judge scores, cost, and optional sandbox validation into `results/`.
 
 ```bash
-# Демо без ключей (fallback-провайдер)
+# Demo without API keys (fallback provider)
 python -m noema.experiments.runner experiments/experiments.yaml --out results
 
-# Реальные модели: укажите провайдера в experiments.yaml и экспортируйте ключ
-# results/<experiment>/<run_id>/results.json — по записи на (task, provider, model, repetition)
-# results/<experiment>/<run_id>/runs.csv      — то же в CSV
-# results/<experiment>/<run_id>/summary.csv   — агрегаты по (provider, model)
+# Real models: set provider in experiments.yaml and export keys
+# results/<experiment>/<run_id>/results.json — one record per (task, provider, model, repetition)
+# results/<experiment>/<run_id>/runs.csv      — same in CSV
+# results/<experiment>/<run_id>/summary.csv   — aggregates by (provider, model)
 ```
 
-CI-джоба `.github/workflows/experiments.yml` гоняет smoke-бенчмарк ночью на fallback-провайдере и заливает артефакты. Тот же раннер доступен как сервис: `POST /experiments`.
+CI runs a smoke benchmark nightly on the fallback provider and uploads artifacts. The same runner is available as a service: `POST /experiments`.
 
-## Как мы проверяем то, что строим
-
-- **2678 unit-тестов** (pytest + hypothesis + pytest-benchmark), включая гейты: автономия, reasoning-trace round-trip, статический вердикт, извлечение контрактов из требований, доменные знания.
-- **Ruff + mypy** в CI, **pre-commit** хуки.
-- **Проверка кодировки и mojibake-гейт** — сломанные юникод-строки не проходят CI.
-- **Security-сканеры** (bandit, safety, pip-audit) в пайплайне.
-
-## Структура проекта
+## Project Structure
 
 ```
 noema/
-  autonomy/        # инциденты → фиксы → PR
-  neurosymbolic/   # Z3-верификация + AST-анализ в одном пайплайне
-  sandbox/         # Docker-песочница + статические проверки до запуска
-  tracing/         # reasoning-trace: перепроверка вердиктов без LLM
-  experiments/     # воспроизводимый бенчмарк-раннер + merge-gate
-  knowledge/       # база знаний + доменные модули (22 шт)
-  memory/          # эпизодическая / семантическая / процедурная память
+  autonomy/        # incidents → fixes → PRs
+  neurosymbolic/   # Z3 verification + AST analysis pipeline
+  sandbox/         # Docker sandbox + pre-run static checks
+  tracing/         # reasoning trace: deterministic verdict replay
+  experiments/     # reproducible benchmark runner + merge gate
+  knowledge/       # knowledge base + 22 domain modules
+  memory/          # episodic / semantic / procedural memory
   api/             # FastAPI: think, webhooks, experiments, admin, rate limits
-  workers/         # arq-воркеры, иерархия задач, пул
-  modules/         # pluggable доменные модули
-  kernels/ agents/ # специализированные ядра и агенты
-  llm/             # провайдеры: openai, anthropic, ollama, fallback
-  billing/ budget/ # экономика токенов, квоты, бюджеты
-  security/        # валидация, схемы, тенант-изоляция
-  grpc/            # gRPC сервер/клиент + protos
-  observability/   # Prometheus-метрики, Sentry
-  vault/ audit/    # секреты, аудит-трейл
+  workers/         # arq workers, task hierarchy, pool
+  modules/         # pluggable domain modules
+  kernels/ agents/ # specialized kernels and agents
+  llm/             # providers: openai, anthropic, ollama, fallback
+  billing/ budget/ # token economics, quotas, budgets
+  security/        # validation, schemas, tenant isolation
+  grpc/            # gRPC server/client + protos
+  observability/   # Prometheus metrics, Sentry
+  vault/ audit/    # secrets, audit trail
 ```
 
-## Документация
+## Quality & Testing
 
-- **Whitepaper** — видение и дизайн-принципы: почему аудируемая нейросимвольная композиция важна → [docs/WHITEPAPER.md](docs/WHITEPAPER.md)
-- **Roadmap** — три фазы: Architect → Autopoietic Enterprise → Global Noema Grid → [docs/ROADMAP.md](docs/ROADMAP.md)
-- **Configuration** — все env-переменные и YAML → [docs/configuration.md](docs/configuration.md)
-- **Deployment** — Docker/Compose/K8s/Helm/Terraform → [docs/deployment.md](docs/deployment.md)
-- **Getting started / API examples** — [docs/getting-started.md](docs/getting-started.md), [docs/api-examples.md](docs/api-examples.md)
-- **Operations** — production checklist, мониторинг, перформанс, troubleshooting → [docs/production-checklist.md](docs/production-checklist.md), [docs/monitoring-setup.md](docs/monitoring-setup.md), [docs/performance-tuning.md](docs/performance-tuning.md), [docs/troubleshooting.md](docs/troubleshooting.md)
-- MkDocs-сайт с API-справочником — `mkdocs serve`
+| Metric | Value |
+|---|---|
+| **Tests** | 2,681 (pytest + hypothesis + pytest-benchmark) |
+| **Source files** | 219 Python modules |
+| **Lines of code** | ~40,000+ |
+| **CI** | Ruff lint + format, mypy, bandit, safety, pip-audit |
+| **Platforms** | Ubuntu + Windows, Python 3.12 + 3.13 |
+| **Encoding** | Unicode mojibake gate — broken strings fail CI |
 
-## Статус и дорога
+## Documentation
 
-- **Phase 1 — The Architect (сейчас):** генерация + верификация + песочница + бенчмарки + доменные знания + reasoning-trace. Готово.
-- **Phase 2 — The Autopoietic Enterprise:** инцидент → PR, merge-гейт, эволюция с авто-апплаем, бенчмарк-сервис. Почти готово (остался точный учёт стоимости на строку кода).
-- **Phase 3 — Global Noema Grid:** многоузловой пул, gRPC-федерация, token/ledger-экономика, живой дашборд. В работе.
+- [Whitepaper](docs/WHITEPAPER.md) — vision and design principles
+- [Roadmap](docs/ROADMAP.md) — three phases: Architect → Autopoietic Enterprise → Global Noema Grid
+- [Configuration](docs/configuration.md) — all env vars and YAML options
+- [Deployment](docs/deployment.md) — Docker / Compose / K8s / Helm / Terraform
+- [Getting Started](docs/getting-started.md) — tutorial and walkthrough
+- [API Examples](docs/api-examples.md) — request/response examples
+- [Production Checklist](docs/production-checklist.md) — deploy readiness
+- [Monitoring](docs/monitoring-setup.md) — observability setup
+- [Performance Tuning](docs/performance-tuning.md) — optimization guide
+- [Troubleshooting](docs/troubleshooting.md) — common issues and fixes
 
-## Лицензия
+## Roadmap
 
-MIT. Открытая разработка — идеи, инциденты и PR'ы приветствуются.
+| Phase | Name | Status |
+|---|---|---|
+| **1** | **The Architect** — generation + verification + sandbox + benchmarks + knowledge + reasoning trace | **Done** |
+| **2** | **The Autopoietic Enterprise** — incident → PR, merge gate, evolution with auto-apply, benchmark service | **In progress** |
+| **3** | **Global Noema Grid** — multi-node pool, gRPC federation, token/ledger economics, live dashboard | **In progress** |
+
+## License
+
+MIT. Open development — ideas, issues, and PRs welcome.
