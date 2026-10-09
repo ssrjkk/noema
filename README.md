@@ -1,5 +1,11 @@
 # Noema
 
+[![CI](https://github.com/ssrjkk/noema/actions/workflows/ci.yml/badge.svg)](https://github.com/ssrjkk/noema/actions/workflows/ci.yml)
+[![python-3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+
+
 **The engineering mind that verifies what it generates.**
 
 Noema is not another code generator. It is a neurosymbolic system that proposes solutions with LLMs, verifies them against formal contracts with Z3, validates them in a sandboxed runtime, and maintains a fully auditable trail of every reasoning step — then fixes its own incidents end-to-end.
@@ -26,7 +32,7 @@ Noema is not another code generator. It is a neurosymbolic system that proposes 
 ```bash
 git clone https://github.com/ssrjkk/noema && cd noema
 pip install -e .
-python demo.py        # 12 live demos — no API keys required
+python scripts/demo.py        # 12 live demos — no API keys required
 ```
 
 If you see `=== ALL DEMOS COMPLETE ===` — you're good. Then:
@@ -117,7 +123,7 @@ Configure via env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI
 noema --help                  # CLI entry point
 python -m noema --help        # Module entry (more reliable on Windows)
 
-python demo.py                # 12 live demos, zero API keys
+python scripts/demo.py                # 12 live demos, zero API keys
 # Expected: === ALL DEMOS COMPLETE ===
 ```
 

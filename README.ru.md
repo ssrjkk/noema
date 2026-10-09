@@ -26,7 +26,7 @@ Noema — это не очередной генератор кода. Это н�
 ```bash
 git clone https://github.com/ssrjkk/noema && cd noema
 pip install -e .
-python demo.py        # 12 живых демо — API-ключи не нужны
+python scripts/demo.py        # 12 живых демо — API-ключи не нужны
 ```
 
 Если видишь `=== ALL DEMOS COMPLETE ===` — всё работает. Дальше:
@@ -117,7 +117,7 @@ pip install -e ".[dev,full,db,grpc,vault]"
 noema --help                  # CLI
 python -m noema --help        # Модуль (надёжнее на Windows)
 
-python demo.py                # 12 живых демо, ноль API-ключей
+python scripts/demo.py                # 12 живых демо, ноль API-ключей
 # Ожидай: === ALL DEMOS COMPLETE ===
 ```
 
