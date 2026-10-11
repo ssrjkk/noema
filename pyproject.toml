@@ -13,7 +13,7 @@ authors = [{ name = "Noema" }]
 
 dependencies = [
     # Core
-    "pydantic>=2.13.5",
+    "pydantic>=2.14.0",
     "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
 
