@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Builder — install dependencies and compile
 # =============================================================================
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -27,7 +27,7 @@ RUN pip install --upgrade pip && \
 # =============================================================================
 # Stage 2: Runtime — minimal image
 # =============================================================================
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -44,7 +44,7 @@ RUN groupadd -r noema && useradd -r -g noema -d /app -s /sbin/nologin noema && \
 WORKDIR /app
 
 # Copy only runtime deps from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/local/lib/python3.14/site-packages/ /usr/local/lib/python3.14/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --from=builder /build/noema/ noema/
 COPY --from=builder /build/pyproject.toml .
