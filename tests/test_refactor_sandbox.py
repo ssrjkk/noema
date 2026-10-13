@@ -316,3 +316,35 @@ async def test_lint_direct_captures_syntax_errors() -> None:
     assert vr.lint_passed is False
     assert vr.lint_errors
     assert any("invalid-syntax" in line or "E999" in line for line in vr.lint_errors)
+
+
+def test_pick_env_falls_back_when_image_missing(monkeypatch):
+    """Daemon up but image absent (CI runners) must not route into docker."""
+    import subprocess
+
+    from noema.sandbox.environment import LocalEnvironment
+
+    engine = SandboxEngine()
+    engine._has_docker = True
+
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, args[0])
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert isinstance(engine._pick_env(), LocalEnvironment)
+
+
+def test_pick_env_uses_docker_when_image_present(monkeypatch):
+    """Daemon up and image present keeps the docker route."""
+    import subprocess
+
+    from noema.sandbox.environment import DockerEnvironment
+
+    engine = SandboxEngine()
+    engine._has_docker = True
+
+    class _Proc:
+        returncode = 0
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc())
+    assert isinstance(engine._pick_env(), DockerEnvironment)

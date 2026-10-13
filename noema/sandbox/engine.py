@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import subprocess
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -94,9 +95,28 @@ class SandboxEngine:
         if self._has_docker is None:
             self._detect_capabilities()
 
+    def _docker_image_available(self) -> bool:
+        """Check that the sandbox image exists locally (never pulls)."""
+        try:
+            proc = subprocess.run(
+                ["docker", "image", "inspect", self.config.docker_image],
+                capture_output=True,
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return proc.returncode == 0
+
     def _pick_env(self) -> Environment:
-        """Best available environment for the next stage."""
-        if self._has_docker:
+        """Best available environment for the next stage.
+
+        Docker is used only when the daemon responds *and* the sandbox
+        image is present locally. A running daemon without the image
+        (e.g. CI runners) used to route every stage into ``docker run``
+        calls that fail with a pull error; fall back to direct
+        subprocess instead.
+        """
+        if self._has_docker and self._docker_image_available():
             return self._docker
         if not self._warned_local_fallback:
             log.warning(
