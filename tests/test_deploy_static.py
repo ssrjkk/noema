@@ -18,17 +18,13 @@ def test_dockerfile_python_versions_match():
     from_stages = [line for line in d.splitlines() if line.startswith("FROM python:")]
     assert len(from_stages) == 2
     versions = {line.split()[1] for line in from_stages}
-    assert versions == {"python:3.14-slim"}, (
-        f"stage versions must match, got {versions}"
-    )
+    assert versions == {"python:3.14-slim"}, f"stage versions must match, got {versions}"  # noqa: E501
     assert "/usr/local/lib/python3.14/site-packages/" in d
 
 
 def test_dockerfile_install_is_not_editable():
     d = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert "-e " not in d, (
-        "editable installs leave .pth files pointing at the builder dir"
-    )
+    assert "-e " not in d, "editable installs leave .pth files pointing at the builder dir"  # noqa: E501
     assert 'pip install ".[db,full,sentry]"' in d
 
 
@@ -58,13 +54,9 @@ def test_compose_env_is_gitignored():
 def test_helm_no_plaintext_default_passwords():
     values = (ROOT / "deploy/helm/noema/values.yaml").read_text(encoding="utf-8")
     assert "password: noema" not in values
-    assert 'password: ""' in values, (
-        "sub-chart passwords must default empty (auto-generate)"
-    )
+    assert 'password: ""' in values, "sub-chart passwords must default empty (auto-generate)"  # noqa: E501
 
 
 def test_helm_secrets_via_secret_not_configmap():
-    dep = (ROOT / "deploy/helm/noema/templates/deployment.yaml").read_text(
-        encoding="utf-8"
-    )
+    dep = (ROOT / "deploy/helm/noema/templates/deployment.yaml").read_text(encoding="utf-8")  # noqa: E501
     assert "secretKeyRef" in dep
