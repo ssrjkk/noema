@@ -44,7 +44,7 @@ RUN groupadd -r noema && useradd -r -g noema -d /app -s /sbin/nologin noema && \
 WORKDIR /app
 
 # Copy only runtime deps from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/local/lib/python3.14/site-packages/ /usr/local/lib/python3.14/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --from=builder /build/noema/ noema/
 COPY --from=builder /build/pyproject.toml .

@@ -18,8 +18,8 @@ def test_dockerfile_python_versions_match():
     from_stages = [line for line in d.splitlines() if line.startswith("FROM python:")]
     assert len(from_stages) == 2
     versions = {line.split()[1] for line in from_stages}
-    assert versions == {"python:3.12-slim"}, f"stage versions must match, got {versions}"
-    assert "/usr/local/lib/python3.12/site-packages/" in d
+    assert versions == {"python:3.14-slim"}, f"stage versions must match, got {versions}"
+    assert "/usr/local/lib/python3.14/site-packages/" in d
 
 
 def test_dockerfile_install_is_not_editable():
