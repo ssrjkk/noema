@@ -10,6 +10,11 @@ updates:
     labels:
       - "dependencies"
       - "pip"
+    ignore:
+      # arq 0.28.0 (последний релиз) требует redis[hiredis]<6 — redis 8 невозможно
+      # поставить, не убрав очередь arq. Возобновить, когда arq отпустит верхнюю границу.
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore"
       prefix-development: "chore"
