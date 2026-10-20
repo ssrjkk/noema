@@ -627,16 +627,16 @@ class TestWriteFallbackErrors:
         Path(readonly_dir).mkdir()
         logger = AuditLogger(pg_pool=None, fallback_dir=readonly_dir)
         await logger.initialize()
-        # Make directory read-only
+        # Make directory read-only (владелец + только чтение, без доступа остальным)
         import os
 
-        os.chmod(readonly_dir, 0o444)
+        os.chmod(readonly_dir, 0o500)
         try:
             ev = _make_event()
             # Should not raise (error is logged)
             await logger.log(ev)
         finally:
-            os.chmod(readonly_dir, 0o755)
+            os.chmod(readonly_dir, 0o700)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

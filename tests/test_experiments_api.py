@@ -52,12 +52,21 @@ def client() -> TestClient:
 
 @pytest.fixture(scope="module")
 def out_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return tmp_path_factory.mktemp("experiments")
+    """Корень артефактов сервера: клиент сам его не выбирает (см. _artifacts_root).
+
+    Поэтому тест задаёт каталог через переменную окружения, а в запросе передаёт
+    только относительное имя — ровно то, что разрешено API.
+    """
+    root = tmp_path_factory.mktemp("experiments")
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv("NOEMA_RESULTS_DIR", str(root))
+    yield root
+    monkeypatch.undo()
 
 
 def _post(client: TestClient, out_dir: Path, body: str) -> Any:
     return client.post(
-        f"/experiments?out_dir={out_dir}",
+        "/experiments?out_dir=.",
         content=body,
         headers={"Content-Type": "text/yaml"},
     )
@@ -114,7 +123,7 @@ def test_post_rejects_invalid_config(client: TestClient, out_dir: Path) -> None:
 
 def test_post_rejects_non_utf8(client: TestClient, out_dir: Path) -> None:
     resp = client.post(
-        f"/experiments?out_dir={out_dir}",
+        "/experiments?out_dir=.",
         content=b"\xff\xfe\x00",
         headers={
             "Content-Type": "text/plain",
@@ -129,7 +138,7 @@ def test_post_rejects_non_utf8(client: TestClient, out_dir: Path) -> None:
 def test_get_run_returns_records_and_summary(
     client: TestClient, out_dir: Path, run_result: dict
 ) -> None:
-    resp = client.get(f"/experiments/api-smoke/runs/{run_result['run_id']}?out_dir={out_dir}")
+    resp = client.get(f"/experiments/api-smoke/runs/{run_result['run_id']}?out_dir=.")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["experiment_id"] == "api-smoke"
@@ -141,7 +150,7 @@ def test_get_run_returns_records_and_summary(
 
 
 def test_list_runs_contains_posted_run(client: TestClient, out_dir: Path, run_result: dict) -> None:
-    resp = client.get(f"/experiments/api-smoke/runs?out_dir={out_dir}")
+    resp = client.get("/experiments/api-smoke/runs?out_dir=.")
     assert resp.status_code == 200, resp.text
     runs = resp.json()
     assert any(r["run_id"] == run_result["run_id"] for r in runs)
@@ -151,21 +160,33 @@ def test_list_runs_contains_posted_run(client: TestClient, out_dir: Path, run_re
 def test_list_experiments_contains_posted_experiment(
     client: TestClient, out_dir: Path, run_result: dict
 ) -> None:
-    resp = client.get(f"/experiments?out_dir={out_dir}")
+    resp = client.get("/experiments?out_dir=.")
     assert resp.status_code == 200, resp.text
     assert any(e["experiment_id"] == "api-smoke" and e["n_runs"] >= 1 for e in resp.json())
 
 
 def test_unknown_run_is_404(client: TestClient, out_dir: Path) -> None:
-    resp = client.get(f"/experiments/api-smoke/runs/does-not-exist?out_dir={out_dir}")
+    resp = client.get("/experiments/api-smoke/runs/does-not-exist?out_dir=.")
     assert resp.status_code == 404
 
 
 def test_unknown_experiment_is_404(client: TestClient, out_dir: Path) -> None:
-    resp = client.get(f"/experiments/nope/runs?out_dir={out_dir}")
+    resp = client.get("/experiments/nope/runs?out_dir=.")
     assert resp.status_code == 404
 
 
 def test_path_traversal_rejected(client: TestClient, out_dir: Path) -> None:
-    resp = client.get(f"/experiments/..%2F..%2F/runs?out_dir={out_dir}")
+    resp = client.get("/experiments/..%2F..%2F/runs?out_dir=.")
     assert resp.status_code == 404
+
+
+def test_out_dir_cannot_escape_the_artifacts_root(client: TestClient, out_dir: Path) -> None:
+    """Клиент не выбирает, куда сервер пишет и откуда читает.
+
+    Абсолютный путь и выход за корень через ``..`` должны отбиваться до
+    обращения к файловой системе — иначе эндпоинт артефактов превращается в
+    произвольное чтение диска.
+    """
+    for bad in (str(out_dir.parent), "../../etc", "..%2F..%2Fetc"):
+        resp = client.get(f"/experiments?out_dir={bad}")
+        assert resp.status_code == 400, f"{bad}: принято {resp.status_code}"

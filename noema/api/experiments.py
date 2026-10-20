@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,26 @@ def _require_segment(value: str, kind: str) -> None:
         raise HTTPException(status_code=404, detail=f"{kind} not found")
 
 
+def _artifacts_root(raw: str) -> Path:
+    """Корень артефактов, внутри которого разрешено работать вызову.
+
+    Раньше `out_dir` был путём, который выбирал сам клиент, и запрос с
+    абсолютным путём заставлял сервер читать и писать в любую директорию машины.
+    Теперь базовый каталог задаёт сервер (``NOEMA_RESULTS_DIR``, по умолчанию
+    ``results``), а клиенту доступен только подкаталог внутри него: абсолютный
+    путь и выход за пределы корня через ``..`` отсекаются до обращения к ФС.
+    """
+    root = Path(os.environ.get("NOEMA_RESULTS_DIR", DEFAULT_OUT_DIR)).resolve()
+    rel = (raw or DEFAULT_OUT_DIR).strip()
+    candidate = Path(rel)
+    if candidate.is_absolute():
+        raise HTTPException(status_code=400, detail="out_dir must stay inside the artifacts root")
+    resolved = (root / rel).resolve()
+    if resolved != root and root not in resolved.parents:
+        raise HTTPException(status_code=400, detail="out_dir must stay inside the artifacts root")
+    return resolved
+
+
 def _experiment_dir(out_dir: str, experiment_id: str) -> Path:
     _require_segment(experiment_id, "Experiment")
     return Path(out_dir) / experiment_id
@@ -80,6 +101,7 @@ async def create_experiment(
     run_id: str | None = Query(None, description="Optional explicit run id"),
 ) -> dict[str, Any]:
     """Run an experiment matrix and land its artifacts under ``out_dir``."""
+    out_dir = str(_artifacts_root(out_dir))
     text = await _read_body_async(request)
     try:
         cfg = parse_experiment(text)
@@ -116,7 +138,7 @@ async def list_experiments(
     out_dir: str = Query(DEFAULT_OUT_DIR, description="Artifact root directory"),
 ) -> list[dict[str, Any]]:
     """List experiments persisted under ``out_dir``."""
-    root = Path(out_dir)
+    root = _artifacts_root(out_dir)
     if not root.is_dir():
         return []
     experiments: list[dict[str, Any]] = []
@@ -132,7 +154,7 @@ async def list_runs(
     out_dir: str = Query(DEFAULT_OUT_DIR, description="Artifact root directory"),
 ) -> list[dict[str, Any]]:
     """List runs of an experiment, each merged with its ``summary.json``."""
-    exp_dir = _experiment_dir(out_dir, experiment_id)
+    exp_dir = _experiment_dir(str(_artifacts_root(out_dir)), experiment_id)
     if not exp_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"Experiment not found: {experiment_id}")
 
@@ -155,7 +177,7 @@ async def get_run(
     out_dir: str = Query(DEFAULT_OUT_DIR, description="Artifact root directory"),
 ) -> dict[str, Any]:
     """Return the run's records + summary (the existing runner schema)."""
-    run_dir = _run_dir(out_dir, experiment_id, run_id)
+    run_dir = _run_dir(str(_artifacts_root(out_dir)), experiment_id, run_id)
     if not run_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"Run not found: {experiment_id}/{run_id}")
     return {

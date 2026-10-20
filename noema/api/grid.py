@@ -57,5 +57,7 @@ async def grid_snapshot() -> dict[str, Any]:
                 "llm_tokens": 0,
                 "llm_calls": 0,
             },
-            "error": f"{type(e).__name__}: {e}",
+            # Текст исключения остаётся в журнале: наружу он ушёл бы как
+            # свободный ответ сервиса, а он публичный и без аутентификации.
+            "error": "snapshot_unavailable",
         }

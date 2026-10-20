@@ -224,8 +224,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """
         api_key = request.headers.get(self._key_header, "")
         if api_key:
-            # Hash key to avoid storing raw secrets in memory
-            return "k:" + hashlib.sha256(api_key.encode()).hexdigest()[:16]
+            # Hash key to avoid storing raw secrets in memory. Полный дайест,
+            # не усечённый: два разных ключа не должны попасть в один счётчик
+            # из-за обрезки, иначе лимит одного клиента становится лимитом
+            # другого. Это не хранение пароля — дайест только метка бакета.
+            return "k:" + hashlib.sha256(api_key.encode()).hexdigest()
         peer = request.client.host if request.client else ""
         forwarded = request.headers.get("X-Forwarded-For", "")
         if forwarded and peer and _ip_in_trusted(peer, self._trusted_proxies):

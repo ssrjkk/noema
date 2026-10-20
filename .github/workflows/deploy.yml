@@ -57,6 +57,9 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     environment: production
+    # Деплой читает репозиторий и секреты окружения; прав на запись в код ему не нужно.
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v7
