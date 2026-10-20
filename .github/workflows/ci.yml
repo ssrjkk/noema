@@ -9,6 +9,11 @@ on:
 env:
   PYTHON_VERSION: "3.12"
 
+# CI только читает репозиторий: права объявлены явно, иначе job с умолчанию
+# write-all получает запись в репозиторий «на всякий случай».
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint & Type Check
@@ -76,7 +81,7 @@ jobs:
             --cov-report=html
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
