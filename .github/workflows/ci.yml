@@ -104,16 +104,19 @@ jobs:
 
       - name: Install tools
         run: |
-          pip install bandit safety pip-audit
+          pip install bandit pip-audit
 
       - name: Bandit security scan
         run: bandit -r noema/ -ll -f json -o bandit-report.json
 
-      - name: Safety check
-        run: safety check --json > safety-report.json || true
-
-      - name: pip-audit
-        run: pip-audit --format=json --output=pip-audit-report.json || true
+      # safety давал `|| true` и не мог найти ничего (плюс тянул nltk с
+      # непропатченной CVE) — убран. pip-audit читает собранное окружение и
+      # падает на любой известной уязвимости; --exclude-editable снимает сам
+      # пакет noema, который не на PyPI и потому не аудируется.
+      - name: Pip audit
+        run: |
+          pip freeze --exclude-editable > requirements-audit.txt
+          python -m pip_audit --strict --no-deps -r requirements-audit.txt
 
       - name: Upload reports
         uses: actions/upload-artifact@v7
@@ -122,7 +125,7 @@ jobs:
           name: security-reports
           path: |
             bandit-report.json
-            safety-report.json
+            requirements-audit.txt
             pip-audit-report.json
 
   golden-eval:
