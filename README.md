@@ -325,3 +325,7 @@ Project repository: [github.com/ssrjkk/noema](https://github.com/ssrjkk/noema)
 ## License
 
 MIT. Open development — ideas, issues, and PRs welcome.
+
+---
+
+**SSRJKK** — [GitHub](https://github.com/ssrjkk) · [Telegram](https://t.me/ssrjkk) · [Projects hub](https://ssrjkk.github.io/) · [Bot catalogue](https://t.me/ssrjkk_bot)
