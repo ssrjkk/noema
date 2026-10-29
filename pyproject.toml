@@ -46,7 +46,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.1.1",
+    # 9.2 removed Function._nodeid, which pytest-benchmark 5.x still reads
+    "pytest>=9.1.1,<9.2",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
