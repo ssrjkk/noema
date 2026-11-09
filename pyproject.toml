@@ -55,7 +55,7 @@ dev = [
     "hypothesis>=6.170.8,<6.171",
     "httpx>=0.28.1",
     "fakeredis>=2.37.1",
-    "ruff==0.17.3",
+    "ruff==0.17.4",
     "mypy==2.4.1",
     "pre-commit>=4.6.2",
 ]
