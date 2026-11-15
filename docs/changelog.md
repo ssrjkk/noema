@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.4.1 (2026-11-16)
+### Maintenance
+- CI-матрица дополнена Python 3.14 — Docker-образ больше не обгоняет тесты.
+- README-метрики синхронизированы с реальным прогоном (2 622 теста, версии Python).
+- mkdocs: включён strict-режим; исправлены 12 битых якорей в usage-guide.md;
+  витрина index.html исключена из сборки (exclude_docs), чтобы не конфликтовать
+  с index.md.
+- docs: удалён завершённый HEALING_PLAN.md; usage-guide добавлен в навигацию.
+- SECURITY.md: канал репорта перенесён на GitHub Private Vulnerability
+  Reporting (включён на репо) и email владельца.
+
 ## v1.4.0 (2026-09-21)
 
 ### Features
