@@ -3,317 +3,368 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Noema — инженерия, которая доказывает — SSRJKK</title>
-<meta name="description" content="Noema — нейросимвольная инженерия: LLM предлагает решение, Z3 доказывает его контрпримерами, инциденты чинятся через pull requests. Python · Z3 · gRPC."
+<title>Noema — нейросимвольная инженерия, которая доказывает</title>
+<meta name="description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально. FastAPI, gRPC-федерация, MCP, memory и knowledge graph. 2 622 теста, Python 3.14.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="SSRJKK">
 <meta property="og:title" content="Noema — нейросимвольная инженерия, которая доказывает">
-<meta property="og:description" content="Noema — нейросимвольная инженерия: LLM предлагает решение, Z3 доказывает его контрпримерами, инциденты чинятся через pull requests. Python · Z3 · gRPC.">
+<meta property="og:description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально. FastAPI, gRPC-федерация, MCP, memory и knowledge graph. 2 622 теста, Python 3.14.">
 <meta property="og:url" content="https://ssrjkk.github.io/noema/">
 <meta property="og:locale" content="ru_RU">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Noema — нейросимвольная инженерия, которая доказывает">
-<meta name="twitter:description" content="Noema — нейросимвольная инженерия: LLM предлагает решение, Z3 доказывает его контрпримерами, инциденты чинятся через pull requests. Python · Z3 · gRPC.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='#0d0b12'/%3E%3Ctext x='32' y='42' font-family='Arial' font-size='34' font-weight='bold' fill='#f0eef5' text-anchor='middle'%3EN%3C/text%3E%3C/svg%3E">
-<link rel="canonical" href="https://ssrjkk.github.io/noema/">
+<meta name="twitter:description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально. FastAPI, gRPC-федерация, MCP, memory и knowledge graph. 2 622 теста, Python 3.14.">
+<meta name="twitter:image" content="https://ssrjkk.github.io/noema/og-card.png">
 <meta property="og:image" content="https://ssrjkk.github.io/noema/og-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta name="twitter:image" content="https://ssrjkk.github.io/noema/og-card.png">
-
->
-<meta name="theme-color" content="#0d0b12">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d0b12'/%3E%3Ctext x='32' y='42' font-family='Arial' font-size='34' font-weight='bold' fill='%23f0eef5' text-anchor='middle'%3EN%3C/text%3E%3C/svg%3E">
+<link rel="canonical" href="https://ssrjkk.github.io/noema/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0d0b12;--ink:#f2f0f7;--muted:#9d97ad;--faint:#5f5a72;
-  --panel:#151221;--panel2:#181428;--line:rgba(167,139,250,.16);
-  --violet:#7c5cff;--violet-soft:rgba(124,92,255,.14);
-  --green:#4ade80;--peach:#f0b37e;--lilac:#a78bfa;
-  --serif:'IBM Plex Serif',Georgia,serif;--sans:Inter,-apple-system,'Segoe UI',sans-serif;
-  --mono:'JetBrains Mono',Consolas,monospace;
-  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .04 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  --bg:#0b0812; --bg2:#120d1c; --syn:#8f7bff; --syn2:#4fd8c8;
+  --ink:#efeaf7; --soft:#9d93b8; --line:rgba(143,123,255,.22);
+  --display:'Unbounded',sans-serif; --text:'Manrope',sans-serif; --mono:'JetBrains Mono',monospace;
 }
-*{box-sizing:border-box}
+*{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip}
-body:after{content:'';position:fixed;inset:0;background-image:var(--grain);pointer-events:none;z-index:60;mix-blend-mode:overlay}
-a{color:inherit;text-decoration:none}
-a:focus-visible,button:focus-visible{outline:2px solid var(--lilac);outline-offset:3px;border-radius:6px}
-.wrap{max-width:1200px;margin:auto;padding:0 28px}
-/* ── topbar ── */
-.top{display:flex;align-items:center;justify-content:space-between;height:76px;max-width:1200px;margin:auto;padding:0 28px;position:relative;z-index:5}
-.mark{display:flex;align-items:center;gap:11px;font:500 16px var(--sans)}
-.mark i{width:20px;height:20px;border-radius:50%;border:2px solid var(--lilac);position:relative}
-.mark i:after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--violet-soft);border:1px solid var(--line)}
-.top nav{display:flex;gap:6px}
-.top nav a{padding:7px 14px;border-radius:8px;font-size:14.5px;color:var(--muted)}
-.top nav a:hover{color:var(--ink);background:rgba(167,139,250,.08)}
-.gh{border:1px solid var(--line);border-radius:9px;padding:9px 16px;font:500 13.5px var(--sans);color:var(--ink)}
-.gh:hover{border-color:var(--lilac);background:var(--violet-soft)}
-/* ── hero ── */
-.hero{position:relative;padding:84px 0 0}
-.mesh{position:absolute;inset:0;pointer-events:none;background:
-  radial-gradient(52% 44% at 14% 8%,rgba(124,92,255,.16),transparent 62%),
-  radial-gradient(44% 38% at 88% 4%,rgba(74,222,128,.07),transparent 60%),
-  radial-gradient(40% 46% at 62% 42%,rgba(167,139,250,.07),transparent 64%)}
-.hero .wrap{position:relative;display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:start}
-.kicker{display:inline-flex;align-items:center;gap:9px;font:500 12.5px var(--mono);letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);margin-bottom:30px}
-.kicker b{color:var(--lilac);font-weight:500}
-h1{font:500 clamp(46px,5vw,72px)/1.06 var(--serif);letter-spacing:-2.2px;margin:0 0 26px}
-h1 em{font-style:italic;color:var(--lilac)}
-.lede{font:400 17.5px/1.65 var(--sans);color:var(--muted);margin:0 0 34px;max-width:460px}
-.lede b{color:var(--ink);font-weight:500}
-.cta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
-.btn{display:inline-flex;align-items:center;gap:9px;height:52px;padding:0 24px;border-radius:11px;font:600 15px var(--sans)}
-.btn-p{background:var(--violet);color:#fff;border:1px solid rgba(167,139,250,.35)}
-.btn-p:hover{filter:brightness(1.15)}
-.btn-g{border:1px solid var(--line);color:var(--ink)}
-.btn-g:hover{background:var(--violet-soft);border-color:var(--lilac)}
-.stack-line{font:400 13px var(--mono);color:var(--faint)}
-.stack-line b{color:var(--muted);font-weight:500}
-/* ── verification window mockup ── */
-.vwin{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.55)}
-.vbar{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);background:rgba(124,92,255,.05)}
-.dot{width:10px;height:10px;border-radius:50%;background:var(--faint);opacity:.5}
-.vbar .path{margin-left:8px;font:400 12px var(--mono);color:var(--faint)}
-.vbar .live{margin-left:auto;font:500 11px var(--mono);color:var(--green);display:flex;align-items:center;gap:6px}
-.vbar .live:before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
-@keyframes pulse{50%{opacity:.35}}
-.vbody{padding:18px 20px;font:400 13px/1.85 var(--mono);min-height:238px}
-.vbody .r{display:flex;gap:10px;white-space:pre-wrap}
-.vbody .p{color:var(--faint);flex:none}
-.vbody .c-g{color:var(--green)}.vbody .c-l{color:var(--lilac)}.vbody .c-d{color:var(--muted)}.vbody .c-f{color:var(--ink)}
-.cursor{display:inline-block;width:7px;height:15px;background:var(--lilac);vertical-align:-2px;animation:blink 1s steps(2) infinite}
-@keyframes blink{50%{opacity:0}}
-/* ── marquee ── */
-.marq{border-block:1px solid var(--line);padding:14px 0;margin-top:72px;overflow:hidden}
-.marq-in{display:flex;gap:0;width:max-content;animation:marq 36s linear infinite}
-.marq:hover .marq-in{animation-play-state:paused}
-.mq{display:flex;align-items:center;gap:10px;padding:0 26px;font:500 12.5px var(--mono);letter-spacing:.4px;color:var(--muted);white-space:nowrap}
-.mq i{width:6px;height:6px;border-radius:50%;background:var(--green);flex:none}
-@keyframes marq{to{transform:translateX(-50%)}}
-/* ── bento ── */
-.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:84px auto 0;max-width:1200px;padding:0 28px}
-.bx{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;position:relative;overflow:hidden;transition:border-color .25s,transform .25s}
-.bx:hover{border-color:rgba(167,139,250,.4);transform:translateY(-3px)}
-.bx.w2{grid-column:span 2}
-.bx h3{font:500 20px var(--serif);margin:0 0 10px;letter-spacing:-.3px}
-.bx p{margin:0;font:400 14px/1.6 var(--sans);color:var(--muted)}
-.bx .glyph{position:absolute;top:22px;right:22px;width:38px;height:38px;border-radius:10px;background:var(--violet-soft);display:grid;place-items:center}
-.bx .glyph svg{width:19px;height:19px;stroke:var(--lilac);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.bx .big{font:500 44px var(--serif);letter-spacing:-1px;color:var(--ink)}
-.bx .cap{font:500 12px var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--faint);margin-top:8px}
-.bx .mono-line{font:400 12.5px/1.9 var(--mono);color:var(--muted)}
-.bx .mono-line b{color:var(--green);font-weight:400}
-/* ── stats count-up ── */
-.stats{display:flex;gap:0;max-width:1200px;margin:84px auto 0;border-block:1px solid var(--line)}
-.stat{flex:1;padding:34px 28px;border-right:1px solid var(--line)}
-.stat:last-child{border-right:0}
-.stat b{display:block;font:500 clamp(34px,3.6vw,52px)/1 var(--serif);letter-spacing:-1px}
-.stat span{display:block;margin-top:12px;font:500 12.5px var(--mono);letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
-/* ── process rail ── */
-.railsec{max-width:1200px;margin:96px auto 0;padding:0 28px}
-.railsec .rt{font:500 13px var(--mono);letter-spacing:1.8px;text-transform:uppercase;color:var(--faint);margin-bottom:34px}
-.railsec .rt b{color:var(--lilac);font-weight:500}
-.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.step{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;position:relative}
-.step .n{position:absolute;top:-11px;left:22px;font:500 12px var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:4px 10px;color:var(--lilac)}
-.step h4{font:500 18px var(--serif);margin:6px 0 10px}
-.step p{margin:0;font:400 13.5px/1.6 var(--sans);color:var(--muted)}
-/* ── CTA ── */
-.fin{margin:110px auto 0;max-width:1200px;padding:0 28px;text-align:center;position:relative}
-.fin .mesh2{position:absolute;inset:-40px;background:radial-gradient(46% 60% at 50% 50%,rgba(124,92,255,.16),transparent 70%);pointer-events:none}
-.fin h2{position:relative;font:500 clamp(40px,4.6vw,64px)/1.1 var(--serif);letter-spacing:-1.8px;margin:0 0 18px}
-.fin h2 em{font-style:italic;color:var(--lilac)}
-.fin p{position:relative;font:400 17px var(--sans);color:var(--muted);margin:0 auto 40px;max-width:520px}
-.fin .cta{justify-content:center;margin-bottom:8px}
-.fin .note{position:relative;font:400 12.5px var(--mono);color:var(--faint);margin-top:16px}
-footer{max-width:1200px;margin:110px auto 0;padding:30px 28px 48px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:13.5px;color:var(--faint)}
-footer a{color:var(--muted)}footer a:hover{color:var(--ink)}
-@media(max-width:960px){
-  .hero .wrap{grid-template-columns:1fr;gap:40px}
-  .top nav{display:none}
-  h1{font-size:clamp(38px,9vw,52px);letter-spacing:-1.4px}
-  .bento{grid-template-columns:1fr 1fr}
-  .bx.w2{grid-column:span 2}
-  .stats{flex-wrap:wrap}
-  .stat{min-width:46%}
-  .steps{grid-template-columns:1fr 1fr}
-  .vbody{min-height:210px}
+body{
+  background:var(--bg); color:var(--ink); font:15px/1.75 var(--text);
+  overflow-x:hidden; -webkit-font-smoothing:antialiased;
 }
-@media(max-width:600px){
-  .bento{grid-template-columns:1fr}
-  .steps{grid-template-columns:1fr}
-  .stats{flex-direction:column}
-  .stat{border-right:0;border-bottom:1px solid var(--line)}
+body::before{ /* нейрофон */
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(900px 500px at 80% 8%, rgba(79,216,200,.10), transparent 60%),
+    radial-gradient(1000px 600px at 10% 70%, rgba(143,123,255,.12), transparent 62%),
+    var(--bg);
+}
+canvas.neuro{position:fixed;inset:0;z-index:0;opacity:.55;pointer-events:none}
+/* ── шапка ───────────────────────────────────── */
+header{
+  position:fixed;top:0;left:0;right:0;z-index:20;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:18px 30px;
+  background:linear-gradient(180deg, rgba(11,8,18,.92), rgba(11,8,18,.6) 70%, transparent);
+  backdrop-filter:blur(8px);
+}
+.logo{font:700 17px var(--display);color:var(--ink);text-decoration:none;letter-spacing:.04em}
+.logo b{color:var(--syn2)}
+.topnav{display:flex;gap:22px;font:13px var(--text)}
+.topnav a{color:var(--soft);text-decoration:none}
+.topnav a:hover{color:var(--syn2)}
+.gh{padding:9px 18px;border-radius:8px;border:1px solid var(--line);color:var(--ink);
+  text-decoration:none;font:600 13px var(--text)}
+.gh:hover{border-color:var(--syn2);color:var(--syn2)}
+/* ── нейрокарта-минимапа ─────────────────────── */
+.map{
+  position:fixed;right:26px;top:50%;transform:translateY(-50%);z-index:15;
+  width:180px;text-align:center;pointer-events:none;
+}
+.map svg{width:100%;display:block}
+.map .label{
+  font:600 10.5px var(--mono);letter-spacing:.14em;color:var(--soft);
+  text-transform:uppercase;margin-top:8px;display:block;
+}
+.region{fill:rgba(143,123,255,.10);stroke:rgba(143,123,255,.35);stroke-width:1;transition:.4s}
+.region.lit{fill:rgba(79,216,200,.28);stroke:var(--syn2);filter:drop-shadow(0 0 8px rgba(79,216,200,.7))}
+.map .track{fill:none;stroke:rgba(143,123,255,.35);stroke-width:1.4;stroke-dasharray:4 5}
+/* ── хиро ────────────────────────────────────── */
+.hero{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;
+  justify-content:center;max-width:1080px;margin:0 auto;padding:130px 30px 60px}
+.hero .tag{font:600 12px var(--mono);letter-spacing:.3em;color:var(--syn2);text-transform:uppercase}
+h1{font:700 clamp(38px,6vw,72px)/1.12 var(--display);margin:22px 0 20px;max-width:18ch}
+h1 em{font-style:normal;color:var(--syn)}
+.hero p{color:var(--soft);font-size:17px;max-width:60ch;margin-bottom:34px}
+.cta{display:flex;gap:14px;flex-wrap:wrap}
+.btn{padding:15px 28px;border-radius:10px;text-decoration:none;font:600 14px var(--text);
+  border:1px solid var(--line);color:var(--ink)}
+.btn.solid{background:linear-gradient(120deg,var(--syn),#6b5ae0);border-color:transparent;color:#fff;
+  box-shadow:0 14px 40px rgba(143,123,255,.35)}
+.btn:hover{transform:translateY(-2px);transition:.2s}
+.scrollhint{position:absolute;bottom:34px;left:30px;font:600 11px var(--mono);
+  letter-spacing:.22em;color:var(--soft);text-transform:uppercase;display:flex;gap:10px;align-items:center}
+.scrollhint::before{content:"";width:1px;height:34px;background:linear-gradient(var(--syn2),transparent);
+  animation:drop 1.6s ease-in-out infinite}
+@keyframes drop{0%{transform:scaleY(.2);transform-origin:top}55%{transform:scaleY(1)}100%{transform:scaleY(.2);transform-origin:top;opacity:.4}}
+/* ── отделы мозга ────────────────────────────── */
+.depart{position:relative;z-index:2;max-width:1080px;margin:0 auto;padding:150px 30px 40px;
+  display:grid;grid-template-columns:110px 1fr;gap:26px}
+.depart .badge{position:sticky;top:150px;align-self:start;height:max-content}
+.depart .badge .r{font:600 12px var(--mono);color:var(--soft);display:block}
+.depart .badge .n{font:700 52px/1 var(--display);color:transparent;
+  -webkit-text-stroke:1.4px var(--syn);opacity:.85}
+.depart.lit .badge .n{color:var(--syn);-webkit-text-stroke:0;opacity:1;
+  text-shadow:0 0 26px rgba(143,123,255,.55)}
+.depart h2{font:700 clamp(26px,3.6vw,40px)/1.2 var(--display);margin-bottom:8px}
+.depart .lat{font:600 12px var(--mono);letter-spacing:.18em;color:var(--syn2);
+  text-transform:uppercase;display:block;margin-bottom:16px}
+.depart p{color:var(--soft);max-width:62ch;margin-bottom:14px}
+.depart ul{list-style:none;margin:10px 0 0}
+.depart li{padding:5px 0 5px 22px;position:relative;color:var(--ink);font-size:14.5px}
+.depart li::before{content:"";position:absolute;left:0;top:13px;width:8px;height:8px;
+  border-radius:50%;background:var(--syn2);box-shadow:0 0 10px rgba(79,216,200,.8)}
+.depart .code{
+  margin-top:18px;padding:16px 20px;border-radius:12px;background:rgba(120,90,255,.07);
+  border:1px solid var(--line);font:13px/1.8 var(--mono);color:#c9c0e8;
+  max-width:60ch;overflow-wrap:anywhere;
+}
+.depart .code b{color:var(--syn2);font-weight:600}
+/* ── статистика между отделами ───────────────── */
+.stats{position:relative;z-index:2;max-width:1080px;margin:0 auto;padding:30px 30px;
+  display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.stat{padding:18px 30px;border-radius:12px;border:1px solid var(--line);
+  background:rgba(120,90,255,.06);text-align:center;min-width:150px}
+.stat b{display:block;font:700 30px var(--display);color:var(--ink)}
+.stat span{font:12px var(--mono);color:var(--soft);letter-spacing:.08em}
+/* ── подвал ──────────────────────────────────── */
+footer{position:relative;z-index:2;max-width:1080px;margin:60px auto 0;padding:34px 30px 50px;
+  border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:14px;
+  flex-wrap:wrap;font-size:13px;color:var(--soft)}
+footer a{color:var(--syn2);text-decoration:none}
+@media(max-width:980px){
+  .map{position:fixed;right:10px;top:auto;bottom:10px;transform:none;width:110px;opacity:.85}
+  .depart{grid-template-columns:1fr;padding-top:110px}
+  .depart .badge{position:static;display:flex;gap:12px;align-items:baseline}
+  .scrollhint{display:none}
 }
 @media(prefers-reduced-motion:reduce){
-  *,*:before,*:after{animation:none!important;transition:none!important}
+  *{animation:none!important;transition:none!important}
   html{scroll-behavior:auto}
+  canvas.neuro{display:none}
 }
 </style>
 </head>
 <body>
 
-<header class="top">
-  <a class="mark" href="./"><i aria-hidden="true"></i>Noema</a>
-  <nav aria-label="Разделы"><a href="#proof">Доказательства</a><a href="#system">Система</a><a href="#start">Запуск</a></nav>
+<canvas class="neuro" id="neuro"></canvas>
+
+<header>
+  <a class="logo" href="#">NOEMA<b>.</b></a>
+  <nav class="topnav">
+    <a href="#prefrontal">решение</a>
+    <a href="#hippocampus">память</a>
+    <a href="#cerebellum">навыки</a>
+    <a href="#brainstem">ствол</a>
+    <a href="#corpus">связь</a>
+    <a href="#meninges">иммунитет</a>
+  </nav>
   <a class="gh" href="https://github.com/ssrjkk/noema">GitHub ↗</a>
 </header>
 
-<section class="hero">
-  <div class="mesh" aria-hidden="true"></div>
-  <div class="wrap">
-    <div>
-      <p class="kicker">нейросимвольная инженерия · <b>Z3 внутри</b></p>
-      <h1>Она предлагает.<br><em>Z3 доказывает.</em><br>Инцидент чинит PR.</h1>
-      <p class="lede">Noema — инженерное мышление, у которого каждое решение проходит формальную проверку. <b>Доказательства вместо обещаний</b> — и каждый шаг оставляет аудируемый след.</p>
-      <div class="cta">
-        <a class="btn btn-p" href="https://github.com/ssrjkk/noema">Открыть репозиторий →</a>
-        <a class="btn btn-g" href="https://github.com/ssrjkk/noema#readme">Как это работает</a>
-      </div>
-      <p class="stack-line"><b>Стек:</b> Python · Z3 · gRPC · FastAPI</p>
-    </div>
-    <div class="vwin" role="img" aria-label="Окно формальной верификации гипотезы">
-      <div class="vbar">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        <span class="path">noema · verify · budget.zh3</span>
-        <span class="live">Z3 · online</span>
-      </div>
-      <div class="vbody">
-        <div class="r"><span class="p">$</span><span class="c-f">noema verify --contract budget.zh3</span></div>
-        <div class="r"><span class="p">›</span><span class="c-d">гипотеза: бюджет списаний ≤ 100 USDC за эпоху</span></div>
-        <div class="r"><span class="p">›</span><span class="c-g">Z3: SAT — контрпримеров не найдено (18 мс)</span></div>
-        <div class="r"><span class="p">›</span><span class="c-d">sandbox: кандидат изолирован · audit trail записан</span></div>
-        <div class="r"><span class="p">›</span><span class="c-l">допущено к публикации · демо 01/12</span><span class="cursor"></span></div>
-      </div>
-    </div>
+<!-- нейрокарта: сагиттальный силуэт + 6 отделов -->
+<aside class="map" aria-hidden="true">
+  <svg viewBox="0 0 200 220">
+    <path class="track" d="M60 190 C 40 150, 34 96, 58 62 C 84 26, 138 22, 162 54 C 182 82, 176 118, 158 138 C 148 148, 140 152, 138 162 L 132 186"/>
+    <circle class="region" id="r-prefrontal"  cx="150" cy="62"  r="26"/>
+    <circle class="region" id="r-hippocampus" cx="96"  cy="92"  r="20"/>
+    <circle class="region" id="r-cerebellum"  cx="120" cy="158" r="24"/>
+    <circle class="region" id="r-brainstem"   cx="134" cy="186" r="14"/>
+    <circle class="region" id="r-corpus"      cx="112" cy="52"  r="15"/>
+    <circle class="region" id="r-meninges"    cx="88"  cy="150" r="22"/>
+    <path d="M132 186 L136 204" stroke="rgba(143,123,255,.5)" stroke-width="4" stroke-linecap="round"/>
+  </svg>
+  <span class="label">нейрокарта noema</span>
+</aside>
+
+<div class="hero">
+  <span class="tag">neurosymbolic reasoning engine</span>
+  <h1>Мозг, который <em>доказывает</em>, а не угадывает.</h1>
+  <p>Noema — нейросимвольный движок: LLM предлагает решение, Z3 проверяет его
+  формально. Листайте — пройдём по отделам мозга, и в каждом вы увидите,
+  как устроена его часть Noema.</p>
+  <div class="cta">
+    <a class="btn solid" href="https://github.com/ssrjkk/noema">Открыть репозиторий →</a>
+    <a class="btn" href="https://github.com/ssrjkk/noema#readme">Документация</a>
+  </div>
+  <div class="scrollhint">листайте по отделам</div>
+</div>
+
+<!-- 1. префронтальная кора — решение -->
+<section class="depart" id="prefrontal" data-region="r-prefrontal" data-name="префронтальная кора">
+  <div class="badge"><span class="r">отдел</span><span class="n">01</span></div>
+  <div>
+    <h2>Здесь рождается решение</h2>
+    <span class="lat">prefrontal cortex · /think</span>
+    <p>Префронтальная кора у человека отвечает за рассуждение и планирование.
+    У Noema это точка входа <code>/think</code>: языковая модель предлагает гипотезу,
+    а решатель Z3 обязан доказать её формально — иначе ответ не засчитывается.</p>
+    <ul>
+      <li>LLM-провайдеры: OpenAI, Anthropic, Ollama</li>
+      <li>формальная верификация через Z3 до отдачи ответа</li>
+      <li>chain-of-thought с наблюдаемыми шагами рассуждения</li>
+      <li>Fallback-провайдер без ключей — демо и CI работают из коробки</li>
+    </ul>
+    <div class="code">POST /think → <b>гипотеза LLM</b> → <b>Z3 proof</b> → ответ с доказательством</div>
   </div>
 </section>
 
-<div class="marq" aria-hidden="true">
-  <div class="marq-in">
-    <span class="mq"><i></i>audit trail на каждый шаг</span><span class="mq"><i></i>контрпримеры вместо «что-то не так»</span><span class="mq"><i></i>sandbox-рантайм</span><span class="mq"><i></i>сам чинит свои инциденты через PR</span><span class="mq"><i></i>Z3 · формальные контракты</span><span class="mq"><i></i>12 демо без API-ключей</span>
-    <span class="mq"><i></i>audit trail на каждый шаг</span><span class="mq"><i></i>контрпримеры вместо «что-то не так»</span><span class="mq"><i></i>sandbox-рантайм</span><span class="mq"><i></i>сам чинит свои инциденты через PR</span><span class="mq"><i></i>Z3 · формальные контракты</span><span class="mq"><i></i>12 демо без API-ключей</span>
+<!-- 2. гиппокамп — память -->
+<section class="depart" id="hippocampus" data-region="r-hippocampus" data-name="гиппокамп">
+  <div class="badge"><span class="r">отдел</span><span class="n">02</span></div>
+  <div>
+    <h2>Здесь живёт память</h2>
+    <span class="lat">hippocampus · memory & knowledge</span>
+    <p>Гиппокамп переводит опыт в долгосрочную память. Noema хранит эпизоды
+    рассуждений и наращивает knowledge graph: движок помнит свои выводы и
+    опирается на них в следующих сессиях.</p>
+    <ul>
+      <li>эпизодическая память: запросы и их исходы</li>
+      <li>knowledge graph: сущности и связи между ними</li>
+      <li>поиск по прошлым доказательствам вместо повторного вывода</li>
+    </ul>
+    <div class="code">CLI: <b>memory</b> — эпизоды · <b>knowledge</b> — граф · <b>graph</b> — операции</div>
   </div>
-</div>
+</section>
 
-<section class="bento" id="proof">
-  <div class="bx w2">
-    <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 4 7v10l8 5 8-5V7z"/><path d="M12 22V12"/><path d="m4 7 8 5 8-5"/></svg></span>
-    <h3>Доказательства вместо обещаний</h3>
-    <p>Ответ языковой модели — это гипотеза. Прежде чем стать результатом, она проходит через solver Z3 против формальных контрактов: контрпримеров нет — гипотеза допущена. Контрпример есть — система называет точные условия, при которых обещание ложно.</p>
+<!-- 3. мозжечок — навыки -->
+<section class="depart" id="cerebellum" data-region="r-cerebellum" data-name="мозжечок">
+  <div class="badge"><span class="r">отдел</span><span class="n">03</span></div>
+  <div>
+    <h2>Здесь оттачиваются навыки</h2>
+    <span class="lat">cerebellum · kernels & pipeline</span>
+    <p>Мозжечок доводит движения до автоматизма. У Noema это ядра (kernels) —
+    упакованные умения, которые собираются в pipeline: шаг за шагом,
+    каждый со своей зоной ответственности.</p>
+    <ul>
+      <li>kernels: генерация кода, работа с знаниями, доменные модули</li>
+      <li>pipeline: композиция ядер в маршрут рассуждения</li>
+      <li>«<code>evolve</code>» — самоцикл улучшения навыков</li>
+    </ul>
+    <div class="code">CLI: <b>pipeline</b> — маршрут ядер · <b>evolve</b> — цикл самосовершенствования</div>
   </div>
-  <div class="bx">
-    <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m22 4-10 10-3-3"/></svg></span>
-    <h3>Sandbox-рантайм</h3>
-    <p>Кандидат исполняется в изоляции. Побочный эффект — не инцидент, а запись в журнале.</p>
-  </div>
-  <div class="bx">
-    <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76-3.76z"/></svg></span>
-    <h3>Сам чинит свои инциденты</h3>
-    <p>Находит причину, готовит исправление, открывает pull request с доказательством.</p>
-  </div>
-  <div class="bx w2">
-    <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 16v-6a6 6 0 0 1 12 0v6"/><path d="M2 20h20"/></svg></span>
-    <h3>Формальные контракты вместо туманных ТЗ</h3>
-    <p>Бюджеты, пороги, границы действий — числовые поля контракта. Изменение требования = новый ревьюируемый коммит, а не сообщение в чате.</p>
-  </div>
-  <div class="bx">
-    <span class="big">12</span>
-    <div class="cap">живых демо</div>
-    <p style="margin-top:14px">Полный цикл — без API-ключей и учётных данных.</p>
-  </div>
-  <div class="bx">
-    <span class="big">0</span>
-    <div class="cap">доверия к модели</div>
-    <p style="margin-top:14px">Ответ LLM — кандидат. Право считаться результатом даёт только solver.</p>
-  </div>
-  <div class="bx w2">
-    <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z"/><path d="M9 12l2 2 4-4"/></svg></span>
-    <h3>Audit trail — по умолчанию</h3>
-    <p class="mono-line">гипотеза · <b>записана</b> · контракт · <b>проверен</b> · sandbox · <b>исполнен</b> · решение · <b>подписано</b></p>
+</section>
+
+<!-- 4. ствол мозга — стержень -->
+<section class="depart" id="brainstem" data-region="r-brainstem" data-name="ствол мозга">
+  <div class="badge"><span class="r">отдел</span><span class="n">04</span></div>
+  <div>
+    <h2>Здесь пульсируют жизненные функции</h2>
+    <span class="lat">brainstem · gateway & providers</span>
+    <p>Ствол мозга держит дыхание и сердцебиение. Ствол Noema — gateway:
+    маршрутизация к провайдерам, отслеживание переезда кредов, doctor-диагностика,
+    встроенный fallback, который дышит даже без внешних ключей.</p>
+    <ul>
+      <li>единая резолюция «какой провайдер обслужит эту модель»</li>
+      <li>doctor-CLI: диагностика окружения и конфигурации</li>
+      <li>fallback-провайдер — демо и CI поднимаются без ключей</li>
+    </ul>
+    <div class="code">CLI: <b>serve</b> — API на :8000 · <b>doctor</b> — проверка здоровья · <b>health</b> — самочувствие</div>
   </div>
 </section>
 
 <div class="stats">
-  <div class="stat"><b data-count="12">0</b><span>живых демо без ключей</span></div>
-  <div class="stat"><b data-count="6">0</b><span>слоёв проверки</span></div>
-  <div class="stat"><b data-count="100">0</b><span>% решений с audit trail</span></div>
-  <div class="stat"><b data-count="0">0</b><span>доверия к ответу LLM</span></div>
+  <div class="stat"><b>2 622</b><span>теста · pytest + hypothesis</span></div>
+  <div class="stat"><b>219</b><span>python-модулей</span></div>
+  <div class="stat"><b>3.14</b><span>python в docker-образе</span></div>
+  <div class="stat"><b>6</b><span>отделов — как у этого сайта</span></div>
 </div>
 
-<section class="railsec" id="system">
-  <p class="rt">маршрут решения · <b>четыре остановки</b></p>
-  <div class="steps">
-    <div class="step"><span class="n">СТОП 01</span><h4>Требование</h4><p>Фиксируется формальным контрактом: бюджеты, пороги, границы действий.</p></div>
-    <div class="step"><span class="n">СТОП 02</span><h4>Гипотеза LLM</h4><p>Модель предлагает решение. Оно сохраняется и воспроизводится.</p></div>
-    <div class="step"><span class="n">СТОП 03</span><h4>Контракт Z3</h4><p>Solver доказывает или находит контрпример — с точными условиями.</p></div>
-    <div class="step"><span class="n">СТОП 04</span><h4>Результат</h4><p>Допущенное к публикации решение с полным аудируемым следом.</p></div>
+<!-- 5. мозолистое тело — связь -->
+<section class="depart" id="corpus" data-region="r-corpus" data-name="мозолистое тело">
+  <div class="badge"><span class="r">отдел</span><span class="n">05</span></div>
+  <div>
+    <h2>Здесь полушария говорят друг с другом</h2>
+    <span class="lat">corpus callosum · grid federation</span>
+    <p>Мозолистое тело соединяет два полушария. У Noema это gRPC-федерация:
+    инстансы объединяются в grid и делятся знаниями и вычислениями.</p>
+    <ul>
+      <li><code>grid federate</code> — соединение узлов в распределённый мозг</li>
+      <li>общий knowledge между инстансами</li>
+      <li>gRPC-транспорт поверх FastAPI-сервиса</li>
+    </ul>
+    <div class="code">noema grid federate --peer localhost:50051</div>
   </div>
 </section>
 
-<section class="fin" id="start">
-  <div class="mesh2" aria-hidden="true"></div>
-  <h2>Инженерия, которая<br><em>доказывает сама себя.</em></h2>
-  <p>Склонируй, запусти верификацию, посмотри audit trail. Демо — без ключей и учётных данных.</p>
-  <div class="cta">
-    <a class="btn btn-p" href="https://github.com/ssrjkk/noema">git clone →</a>
-    <a class="btn btn-g" href="https://github.com/ssrjkk/noema#readme">Документация</a>
+<!-- 6. оболочки — иммунитет -->
+<section class="depart" id="meninges" data-region="r-meninges" data-name="оболочки мозга">
+  <div class="badge"><span class="r">отдел</span><span class="n">06</span></div>
+  <div>
+    <h2>Здесь стоят защитные оболочки</h2>
+    <span class="lat">meninges · security & observability</span>
+    <p>Мозг защищён тремя оболочками. У Noema это периметр безопасности:
+    rate limiting, API-ключи с per-tenant квотами, tool_policy для MCP,
+    RFC 7807 для ошибок и Prometheus-метрики поверх всего.</p>
+    <ul>
+      <li>rate limiting и API-ключи на каждом запросе</li>
+      <li>MCP-транспорты http/SSE с политикой инструментов</li>
+      <li>request timeout guard + Prometheus /health/metrics</li>
+      <li>Unicode mojibake gate — сломанный юникод не проходит CI</li>
+    </ul>
+    <div class="code">GET /health/metrics → <b>Prometheus</b> · ошибки → <b>RFC 7807</b></div>
   </div>
-  <p class="note">12 демо · Python · Z3 · gRPC · MIT</p>
 </section>
 
 <footer>
-  <div>Проект SSRJKK · Noema — нейросимвольная инженерия</div>
-  <div><a href="https://github.com/ssrjkk/noema">Исходники ↗</a> · <a href="https://ssrjkk.github.io/">Все проекты ↗</a></div>
+  <span>Noema · нейросимвольная инженерия, которая доказывает</span>
+  <span><a href="https://github.com/ssrjkk/noema">GitHub ↗</a> · <a href="https://ssrjkk.github.io/">все проекты ↗</a></span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
 <script>
-(function () {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  if (!window.gsap || !window.ScrollTrigger) return;
-  gsap.registerPlugin(ScrollTrigger);
+(function(){
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /* печать вывода верификации — циклом */
-  var lines = document.querySelectorAll(".vbody .r");
-  lines.forEach(function (l) { l.style.opacity = "0"; });
-  var li = 0;
-  function typeLine() {
-    if (li >= lines.length) { setTimeout(function () { li = 0; lines.forEach(function (l) { l.style.opacity = "0"; }); typeLine(); }, 3200); return; }
-    gsap.to(lines[li], { opacity: 1, duration: 0.25, onComplete: function () { li++; setTimeout(typeLine, li === lines.length ? 1400 : 480); } });
+  /* нейрофон: точки-нейроны и вспышки сигналов */
+  var cv = document.getElementById("neuro"), ctx = cv.getContext("2d"), dots = [];
+  function size(){ cv.width = innerWidth; cv.height = innerHeight; }
+  size(); addEventListener("resize", size);
+  for (var i = 0; i < 70; i++){
+    dots.push({x:Math.random()*innerWidth, y:Math.random()*innerHeight,
+      r:Math.random()*2.2+0.6, vx:(Math.random()-.5)*.25, vy:(Math.random()-.5)*.25,
+      p:Math.random()*Math.PI*2});
   }
-  setTimeout(typeLine, 700);
-
-  /* вход хиро */
-  gsap.set([".kicker", "h1", ".lede", ".cta", ".stack-line"], { autoAlpha: 0, y: 24 });
-  gsap.to([".kicker", "h1", ".lede", ".cta", ".stack-line"], { autoAlpha: 1, y: 0, duration: 1, stagger: 0.1, ease: "power3.out", delay: 0.2 });
-  gsap.from(".vwin", { autoAlpha: 0, y: 36, duration: 1.1, ease: "power3.out", delay: 0.55 });
-
-  /* bento-ревилы */
-  gsap.set(".bx, .step, .stat", { autoAlpha: 0, y: 30 });
-  ScrollTrigger.batch(".bx, .step, .stat", {
-    start: "top 90%",
-    once: true,
-    onEnter: function (b) { gsap.to(b, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.09, ease: "power2.out", overwrite: true }); }
-  });
-
-  /* count-up */
-  document.querySelectorAll("[data-count]").forEach(function (el) {
-    var target = +el.getAttribute("data-count");
-    ScrollTrigger.create({
-      trigger: el, start: "top 92%", once: true,
-      onEnter: function () {
-        var o = { v: 0 };
-        gsap.to(o, { v: target, duration: 1.6, ease: "power2.out", onUpdate: function () { el.textContent = Math.round(o.v); } });
+  function frame(t){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    dots.forEach(function(d,i){
+      d.x += d.vx; d.y += d.vy;
+      if (d.x<0||d.x>cv.width) d.vx*=-1;
+      if (d.y<0||d.y>cv.height) d.vy*=-1;
+      var glow = .5 + .5*Math.sin(t/900 + d.p);
+      ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 7);
+      ctx.fillStyle = "rgba(143,123,255," + (.25 + .4*glow) + ")"; ctx.fill();
+      for (var j = i+1; j < dots.length; j++){
+        var o = dots[j], dx = d.x-o.x, dy = d.y-o.y, dist = dx*dx+dy*dy;
+        if (dist < 34000){
+          ctx.beginPath(); ctx.moveTo(d.x,d.y); ctx.lineTo(o.x,o.y);
+          ctx.strokeStyle = "rgba(143,123,255," + (0.05*(1-dist/34000)) + ")";
+          ctx.lineWidth = 1; ctx.stroke();
+        }
       }
     });
+    requestAnimationFrame(frame);
+  }
+  if (!reduced) requestAnimationFrame(frame);
+
+  /* хиро */
+  gsap.from("header, .hero .tag, .hero h1, .hero p, .cta, .scrollhint", {
+    duration:.9, y:24, opacity:0, stagger:.1, ease:"power2.out"
   });
+
+  /* отделы: подсветка нейрокарты + вход контента */
+  gsap.utils.toArray(".depart").forEach(function(sec){
+    var region = document.getElementById(sec.dataset.region);
+    ScrollTrigger.create({
+      trigger:sec, start:"top 55%", end:"bottom 45%",
+      onToggle:function(self){
+        sec.classList.toggle("lit", self.isActive);
+        if (region) region.classList.toggle("lit", self.isActive);
+        if (self.isActive) gsap.fromTo(region, {scale:1}, {scale:1.18, transformOrigin:"center", duration:.4, yoyo:true, repeat:1, ease:"power2.out"});
+      }
+    });
+    gsap.from(sec.querySelectorAll("h2, .lat, p, li, .code"), {
+      duration:.75, y:22, opacity:0, stagger:.07, ease:"power2.out",
+      scrollTrigger:{trigger:sec, start:"top 68%", once:true}
+    });
+  });
+
+  gsap.from(".stat", {duration:.8, y:24, opacity:0, stagger:.1, ease:"power2.out",
+    scrollTrigger:{trigger:".stats", start:"top 78%", once:true}});
 })();
 </script>
 </body>
