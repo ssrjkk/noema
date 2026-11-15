@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please report it by emailing security@ezoffer.ru
+Report vulnerabilities through GitHub **Private vulnerability reporting** (Security tab → Report a vulnerability) or by emailing ray013lefe@gmail.com
 
 Do NOT open a public issue for security vulnerabilities.
 
