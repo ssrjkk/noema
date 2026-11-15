@@ -105,7 +105,7 @@ pip install -e ".[full]"
 pip install -e ".[dev,full,db,grpc,vault]"
 ```
 
-**Python 3.11+** (рекомендуется 3.12 — основная разработка и CI).
+**Python 3.11+** (CI гоняет 3.12 и 3.13; Docker-образ собирается на 3.14).
 
 **LLM-провайдеры:** `openai`, `anthropic`, `ollama` + встроенный **fallback-провайдер** (работает без ключей — для демо и CI).
 
@@ -281,11 +281,11 @@ noema/
 
 | Метрика | Значение |
 |---|---|
-| **Тесты** | 2 681 (pytest + hypothesis + pytest-benchmark) |
+| **Тесты** | 2 622 (pytest + hypothesis + pytest-benchmark) |
 | **Исходные файлы** | 219 Python-модулей |
 | **Строки кода** | ~40 000+ |
 | **CI** | Ruff lint + format, mypy, bandit, safety, pip-audit |
-| **Платформы** | Ubuntu + Windows, Python 3.12 + 3.13 |
+| **Платформы** | Ubuntu + Windows, Python 3.12 + 3.13 + 3.14 |
 | **Кодировка** | Mojibake-гейт — сломанные юникод-строки не проходят CI |
 
 ## Документация

@@ -111,7 +111,7 @@ pip install -e ".[full]"
 pip install -e ".[dev,full,db,grpc,vault]"
 ```
 
-**Python 3.11+** (3.12 recommended — primary development and CI target).
+**Python 3.11+** (CI covers 3.12 + 3.13; the Docker image ships 3.14).
 
 **LLM providers:** `openai`, `anthropic`, `ollama` + built-in **fallback provider** (works without API keys — for demos and CI).
 
@@ -287,11 +287,11 @@ noema/
 
 | Metric | Value |
 |---|---|
-| **Tests** | 2,681 (pytest + hypothesis + pytest-benchmark) |
+| **Tests** | 2,622 (pytest + hypothesis + pytest-benchmark) |
 | **Source files** | 219 Python modules |
 | **Lines of code** | ~40,000+ |
 | **CI** | Ruff lint + format, mypy, bandit, safety, pip-audit |
-| **Platforms** | Ubuntu + Windows, Python 3.12 + 3.13 |
+| **Platforms** | Ubuntu + Windows, Python 3.12 + 3.13 + 3.14 |
 | **Encoding** | Unicode mojibake gate — broken strings fail CI |
 
 ## Documentation
