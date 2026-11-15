@@ -4,224 +4,400 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Noema — нейросимвольная инженерия — SSRJKK</title>
-<meta name="description" content="LLM предлагает решение. Z3 проверяет его по контрактам. Проверяемый инженерный процесс: требование, гипотеза, контракт, результат.">
+<meta name="description" content="LLM предлагает решение, Z3 проверяет его по контрактам, инциденты чинятся через pull requests. Audit trail каждого шага, sandbox-рантайм, 12 живых демо без API-ключей.">
 <meta name="theme-color" content="#13111c">
+<meta name="color-scheme" content="dark">
+<!--
+  Стиль: railway-станция на тёмном фиолетово-чёрном холсте #13111c, IBM Plex Serif для заголовков,
+  JetBrains Mono для терминальных данных, Inter для текста. Dark Mode OLED по умолчанию.
+  ШРИФТЫ (проверка кириллицы в Google Fonts, subset cyrillic): IBM Plex Serif ✓, Inter ✓,
+  JetBrains Mono ✓ — все три содержат cyrillic-блоки.
+  Усиление продающей версии: CSS-мокап окна верификации (контракт + Z3-вердикт + audit trail),
+  метрики-табло (12 демо · Z3 · 100% audit trail · PR), маршрут «как это работает»
+  (Требование → Гипотеза → Контракт → Результат), финальный CTA с командой клона.
+  Все поверхности плоские: ни одного фиолетового градиента и glow.
+-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
   --canvas:#13111c;--ink:#f7f7f8;--muted:#a1a0ab;
   --navy:#1b2132;--pine:#1f2b2e;--plum:#251823;--console:#0b0b0f;--carriage:#1c1a28;
-  --violet:#553f83;--lilac:#a78bfa;--green:#42946e;--peach:#eab38a;--track:#6b7280;
+  --violet:#553f83;--lilac:#a78bfa;--green:#42946e;--peach:#eab38a;--track:#8a90a0;
   --serif:'IBM Plex Serif',Georgia,Cambria,serif;--sans:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --mono:'JetBrains Mono',SFMono-Regular,SF Mono,Consolas,Liberation Mono,Menlo,monospace;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
+html,body{overflow-x:clip}
 body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
+a{color:inherit;text-decoration:none;cursor:pointer}
+button{cursor:pointer;font:inherit}
 a:focus-visible,button:focus-visible{outline:2px solid var(--lilac);outline-offset:3px}
+::selection{background:rgba(167,139,250,.35)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip{position:fixed;left:16px;top:-52px;z-index:50;background:var(--lilac);color:#13111c;padding:10px 16px;border-radius:6px;font:500 14px var(--sans);transition:top .2s ease-in-out}
+.skip:focus{top:12px}
+
+/* ── Топбар ── */
 .topbar{height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;max-width:1192px;margin:auto}
 .roundel{display:flex;align-items:center;gap:10px;font:600 15px var(--sans);letter-spacing:.2px}
 .roundel i{width:18px;height:18px;border:2.5px solid var(--lilac);border-radius:50%;display:inline-block}
 .topnav{display:flex;gap:4px}
 .topnav a{padding:6px 12px;border-radius:6px;font-size:16px;color:var(--ink)}
 .topnav a:hover{background:rgba(255,255,255,.06)}
-.topbar .auth{display:flex;gap:6px}
 .topbar .auth a{display:inline-flex;align-items:center;height:40px;padding:0 12px;font-size:14px;font-weight:500;color:var(--muted)}
 .topbar .auth a:hover{color:var(--ink)}
-.wrap{max-width:1160px;margin:0 auto;padding:0 16px}
+
+/* ── Хиро-перрон ── */
 .hero{margin:8px 16px 0;border-radius:16px;overflow:hidden;position:relative;
-  background:radial-gradient(120% 90% at 50% 0%,#2a2140 0%,#1a1730 38%,#13111c 78%),
-             radial-gradient(60% 40% at 18% 20%,rgba(167,139,250,.14),transparent 60%),
-             radial-gradient(50% 34% at 84% 12%,rgba(66,148,110,.12),transparent 60%)}
+  background:radial-gradient(120% 90% at 50% 0%,#221c33 0%,#181528 40%,#13111c 80%)}
 .hero-stars{position:absolute;inset:0;background-image:radial-gradient(1px 1px at 12% 22%,rgba(247,247,248,.7),transparent 60%),radial-gradient(1px 1px at 34% 8%,rgba(247,247,248,.5),transparent 60%),radial-gradient(1.5px 1.5px at 58% 30%,rgba(247,247,248,.55),transparent 60%),radial-gradient(1px 1px at 77% 14%,rgba(247,247,248,.65),transparent 60%),radial-gradient(1px 1px at 91% 34%,rgba(247,247,248,.4),transparent 60%),radial-gradient(1px 1px at 8% 55%,rgba(247,247,248,.35),transparent 60%)}
-.hero-inner{position:relative;padding:96px 48px 0;text-align:center}
-.hero h1{font:500 54px/1.12 var(--serif);letter-spacing:-1.96px;margin:0 0 24px}
-.hero .sub{font:400 20px/1.4 var(--sans);color:var(--muted);max-width:640px;margin:0 auto 36px}
+.hero-inner{position:relative;padding:92px 48px 0;text-align:center}
+.tag{display:inline-block;font:500 14px/1.43 var(--sans);letter-spacing:-.07px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,.1);margin-bottom:16px}
+.tag.lilac{color:var(--lilac);background:rgba(167,139,250,.1)}
+.tag.green{color:var(--green);background:rgba(66,148,110,.1)}
+.hero h1{font:500 54px/1.12 var(--serif);letter-spacing:-1.96px;margin:0 0 22px}
+.hero .sub{font:400 20px/1.4 var(--sans);color:var(--muted);max-width:680px;margin:0 auto 36px}
 .btnrow{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;gap:8px;height:58px;padding:0 24px;border-radius:8px;font:500 20px/1.6 var(--sans);letter-spacing:-.2px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:54px;padding:0 24px;border-radius:8px;font:500 18px/1.6 var(--sans);letter-spacing:-.2px}
 .btn-violet{background:var(--violet);color:var(--ink);border:1px solid rgba(255,255,255,.15)}
-.btn-violet:hover{filter:brightness(1.12)}
+.btn-violet:hover{filter:brightness(1.14)}
 .btn-glass{background:rgba(0,0,0,.35);color:var(--ink);border:1px solid rgba(255,255,255,.25)}
 .btn-glass:hover{background:rgba(0,0,0,.5)}
-.console{margin:56px auto 0;max-width:1064px;background:var(--console);border:1px solid rgba(255,255,255,.1);border-radius:10px 10px 0 0;text-align:left;box-shadow:0 24px 64px rgba(0,0,0,.5)}
-.console-head{display:flex;gap:2px;padding:10px 12px 0;border-bottom:1px solid rgba(255,255,255,.08)}
-.console-head span{font:400 12px var(--sans);color:var(--track);padding:6px 12px;border-radius:6px 6px 0 0}
-.console-head .on{color:var(--ink);background:var(--carriage)}
-.console-body{padding:20px;font:400 13px/1.9 var(--mono)}
-.console-body .ln{display:flex;gap:12px}
-.console-body .prompt{color:var(--track);user-select:none}
-.console-body .ok{color:var(--green)}
-.console-body .dim{color:var(--muted)}
-.console-body .lilac{color:var(--lilac)}
-.dock{max-width:1064px;margin:0 auto;display:flex;background:#0d0c14;border:1px solid rgba(255,255,255,.1);border-top:0;border-radius:0 0 10px 10px;overflow-x:auto}
-.dock a{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:32px;font:400 14px var(--sans);color:var(--track);border-right:1px solid rgba(255,255,255,.08);min-width:120px}
+.hero .stack{margin-top:26px;font:400 14px var(--sans);color:var(--muted)}
+
+/* ── Мокап продукта: окно верификации ── */
+.verifier{position:relative;margin:52px auto 0;max-width:1000px;background:var(--console);border:1px solid rgba(255,255,255,.1);border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.5);text-align:left;overflow:hidden}
+.vhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.vtabs{display:flex;gap:2px}
+.vtabs span{font:400 12px var(--mono);color:var(--track);padding:5px 10px;border-radius:6px}
+.vtabs .on{color:var(--ink);background:var(--carriage)}
+.vstatus{display:flex;align-items:center;gap:8px;font:400 12px var(--mono);color:var(--green);white-space:nowrap}
+.vstatus i{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.vbody{display:grid;grid-template-columns:5fr 7fr}
+.vpane{padding:18px 20px}
+.vpane+.vpane{border-left:1px solid rgba(255,255,255,.08)}
+.vlabel{display:flex;align-items:center;gap:8px;font:500 11px var(--sans);letter-spacing:1.4px;text-transform:uppercase;color:var(--track);margin-bottom:12px}
+.vlabel i{width:8px;height:8px;background:var(--green);display:inline-block}
+.vpane+.vpane .vlabel i{background:var(--lilac)}
+.code{font:400 12.5px/1.9 var(--mono)}
+.cl{display:flex;gap:14px;white-space:nowrap}
+.cl em{font-style:normal;color:var(--track);width:2ch;text-align:right;user-select:none}
+.cl .k{font-style:normal;color:var(--lilac)}
+.cl .n{font-style:normal;color:var(--peach)}
+.vrow{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:7px 0;border-bottom:1px dashed rgba(255,255,255,.09);font:400 12.5px/1.6 var(--mono)}
+.vrow b{color:var(--track);font-weight:400}
+.c-lilac{color:var(--lilac)}
+.c-green{color:var(--green)}
+.c-dim{color:var(--muted)}
+.vverdict{display:inline-flex;align-items:center;gap:9px;margin-top:14px;padding:8px 13px;border:1px solid rgba(66,148,110,.5);border-radius:6px;background:rgba(66,148,110,.09);color:var(--green);font:500 12px var(--mono)}
+.vverdict svg{flex:0 0 auto}
+.vaudit{display:flex;align-items:stretch;border-top:1px solid rgba(255,255,255,.08);background:#0d0c14;overflow-x:auto}
+.alabel{display:flex;align-items:center;padding:0 16px;font:500 11px var(--sans);letter-spacing:1.4px;text-transform:uppercase;color:var(--track);border-right:1px solid rgba(255,255,255,.06);white-space:nowrap}
+.vtick{flex:1;min-width:150px;padding:10px 14px;border-right:1px solid rgba(255,255,255,.06);font:400 11px/1.7 var(--mono);color:var(--muted);white-space:nowrap}
+.vtick b{display:block;color:var(--track);font-weight:400}
+
+/* ── Станционный док: остановки процесса ── */
+.dock{position:relative;max-width:1000px;margin:0 auto;display:flex;background:#0d0c14;border:1px solid rgba(255,255,255,.1);border-top:0;border-radius:0 0 12px 12px;overflow-x:auto}
+.dock a{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:36px;font:400 14px var(--sans);color:var(--track);border-right:1px solid rgba(255,255,255,.08);min-width:130px}
 .dock a:last-child{border-right:0}
 .dock a.active{background:rgba(85,63,131,.35);color:var(--lilac);border-radius:8px;border:0}
 .dock a:hover{color:var(--ink)}
-.stats{display:flex;gap:8px;max-width:1064px;margin:24px auto 0;padding:0 16px;flex-wrap:wrap}
+
+/* ── Метрики-табло ── */
+.stats{position:relative;display:flex;gap:8px;max-width:1000px;margin:24px auto 0;padding:0 16px 64px;flex-wrap:wrap}
 .flap{flex:1;min-width:180px;background:var(--console);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:18px 20px 14px;text-align:center}
 .flap b{display:block;font:400 40px/1.4 var(--mono);letter-spacing:2px}
 .flap span{font:500 11px var(--sans);letter-spacing:1.5px;color:var(--track);text-transform:uppercase}
-.chapters{max-width:1160px;margin:96px auto;padding:0 16px;display:grid;gap:96px}
-.chapter{display:grid;grid-template-columns:56px 1fr;gap:28px;position:relative}
-.rail{position:relative;display:flex;flex-direction:column;align-items:center}
-.rail .ring{width:14px;height:14px;border:2px solid var(--green);border-radius:50%;background:var(--canvas);margin-top:4px}
-.rail .line{position:absolute;top:18px;bottom:-96px;width:2px;background:linear-gradient(var(--green),rgba(66,148,110,.15))}
-.chapter:last-child .rail .line{display:none}
-.chapter.plum .rail .ring,.chapter.plum .rail .line{border-color:var(--peach);background:linear-gradient(var(--peach),rgba(234,179,138,.15))}
-.chapter.pine .rail .ring,.chapter.pine .rail .line{border-color:var(--lilac);background:linear-gradient(var(--lilac),rgba(167,139,250,.15))}
-.tag{display:inline-block;font:500 14px/1.43 var(--sans);letter-spacing:-.07px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,.1);margin-bottom:16px}
-.tag.green{color:var(--green);background:rgba(66,148,110,.1)}
-.tag.peach{color:var(--peach);background:rgba(237,133,47,.12)}
-.tag.lilac{color:var(--lilac);background:rgba(167,139,250,.1)}
-.chapter h2{font:400 36px/1.33 var(--serif);letter-spacing:-.72px;margin:0 0 16px}
-.chapter p{font:500 18px/1.6 var(--sans);color:var(--muted);margin:0 0 24px;max-width:720px}
-.frosted{display:inline-flex;align-items:center;height:44px;padding:0 16px;border-radius:6px;background:rgba(255,255,255,.1);font:400 16px var(--sans)}
-.frosted:hover{background:rgba(255,255,255,.16)}
-.triad{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px}
-.triad .cell{background:var(--carriage);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:24px}
-.triad b{display:block;font:600 16px var(--sans);margin-bottom:8px}
-.triad p{font:400 14px/1.5 var(--sans);color:var(--muted);margin:0}
-.boarding{margin:96px 16px;border-radius:16px;background:var(--navy);text-align:center;padding:88px 32px;position:relative;overflow:hidden}
-.boarding:before{content:'';position:absolute;inset:0;background:radial-gradient(70% 120% at 50% 110%,rgba(85,63,131,.4),transparent 60%)}
-.boarding h2{position:relative;font:600 40px/1.2 var(--sans);letter-spacing:-.6px;margin:0 0 12px}
-.boarding p{position:relative;font:400 18px var(--sans);color:var(--muted);margin:0 0 36px}
-.aboard{position:relative;display:inline-flex;align-items:center;gap:10px;height:56px;padding:0 32px;border-radius:28px;color:#fff;font:500 20px var(--sans);background:radial-gradient(73% 138% at 50% 0%,#aa0aaa 50%,#6d1dbd 75%,#381dbd 100%)}
-.aboard:hover{filter:brightness(1.15)}
+
+/* ── Секции ── */
+main{max-width:1160px;margin:0 auto;padding:16px 16px 0;display:grid;gap:112px}
+.shead{max-width:720px;margin-bottom:44px}
+.shead .tag{margin-bottom:14px}
+.shead h2{font:400 36px/1.33 var(--serif);letter-spacing:-.72px;margin:0 0 14px}
+.shead p{font:400 18px/1.6 var(--sans);color:var(--muted);margin:0}
+
+/* Возможности: SVG-иконки, не emoji */
+.cells{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.cell{background:var(--carriage);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:24px}
+.cell .ic{display:block;width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;margin-bottom:16px}
+.ic-lilac{color:var(--lilac)}
+.ic-green{color:var(--green)}
+.ic-peach{color:var(--peach)}
+.cell b{display:block;font:600 16px var(--sans);margin-bottom:8px}
+.cell p{font:400 14px/1.55 var(--sans);color:var(--muted);margin:0}
+
+/* Как это работает: маршрут с остановками */
+.route{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;position:relative}
+.route:before{content:'';position:absolute;top:6px;left:7px;right:calc(25% - 7px);height:2px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.22) 0 10px,transparent 10px 18px)}
+.station{position:relative;padding-top:36px}
+.station .ring{position:absolute;top:0;left:0;width:14px;height:14px;border:2px solid var(--green);border-radius:50%;background:var(--canvas)}
+.station:nth-child(2) .ring{border-color:var(--lilac)}
+.station:nth-child(3) .ring{border-color:var(--peach)}
+.station:nth-child(4) .ring{border-color:var(--green)}
+.station .step{font:400 12px var(--mono);color:var(--track);display:block;margin:0 0 10px}
+.station h3{font:400 24px/1.3 var(--serif);letter-spacing:-.4px;margin:0 0 10px}
+.station>p{font:400 15px/1.6 var(--sans);color:var(--muted);margin:0}
+.facts{display:flex;flex-direction:column;gap:6px;margin:16px 0 0;padding:0;list-style:none}
+.facts span{font:400 12.5px/1.5 var(--mono);color:var(--track)}
+.facts span:before{content:'— ';color:var(--track)}
+
+/* ── Финальный CTA: платформа отправления ── */
+.boarding{margin:112px 16px 0;border-radius:16px;background:var(--navy);text-align:center;padding:88px 32px;position:relative;overflow:hidden}
+.boarding .orn{display:block;margin:0 auto 26px}
+.boarding h2{font:500 40px/1.2 var(--serif);letter-spacing:-.8px;margin:0 0 12px}
+.boarding>p{font:400 18px/1.5 var(--sans);color:var(--muted);margin:0 auto 34px;max-width:560px}
+.clone{display:flex;align-items:center;gap:12px;max-width:640px;margin:0 auto 30px;background:var(--console);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:8px 8px 8px 18px;text-align:left}
+.clone code{font:400 14px var(--mono);color:var(--ink);flex:1;overflow-x:auto;white-space:nowrap}
+.btn-copy{background:rgba(167,139,250,.14);color:var(--lilac);border:1px solid rgba(167,139,250,.32);height:40px;padding:0 14px;border-radius:6px;font:500 13px var(--sans);white-space:nowrap;transition:background .2s ease-in-out}
+.btn-copy:hover{background:rgba(167,139,250,.26)}
+.boarding .btnrow{margin-bottom:0}
+.aboard{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 30px;border-radius:28px;color:#fff;font:500 18px var(--sans);background:var(--violet);border:1px solid rgba(255,255,255,.16)}
+.aboard:hover{filter:brightness(1.16)}
+
+/* ── Футер ── */
 footer{max-width:1160px;margin:0 auto;padding:32px 16px 48px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--track)}
 footer a{color:var(--muted)}
 footer a:hover{color:var(--ink)}
+
+/* ── Адаптив ── */
+@media(max-width:1080px){
+  .route{grid-template-columns:1fr;gap:44px}
+  .route:before{display:none}
+  .station{padding-top:0;padding-left:36px}
+  .station:before{content:'';position:absolute;left:6px;top:24px;bottom:-44px;width:2px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.22) 0 8px,transparent 8px 14px)}
+  .station:last-child:before{display:none}
+  .cells{grid-template-columns:1fr 1fr}
+}
 @media(max-width:880px){
   .topnav{display:none}
-  .hero-inner{padding:64px 24px 0}
+  .hero-inner{padding:60px 24px 0}
   .hero h1{font-size:38px;letter-spacing:-1.2px}
-  .chapters{gap:64px;margin:64px auto}
-  .chapter{grid-template-columns:36px 1fr;gap:16px}
-  .triad{grid-template-columns:1fr}
+  .hero .sub{font-size:17px}
+  main{gap:72px;padding-top:8px}
+  .shead h2{font-size:28px}
+  .boarding{margin-top:72px;padding:64px 24px}
   .boarding h2{font-size:30px}
+  .clone{flex-wrap:wrap;padding:12px 14px}
+  .clone code{white-space:nowrap;font-size:13px;overflow-x:auto}
 }
-@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media(max-width:640px){
+  .cells{grid-template-columns:1fr}
+  .vhead{flex-wrap:wrap;row-gap:8px}
+  .vbody{grid-template-columns:1fr}
+  .vpane+.vpane{border-left:0;border-top:1px dashed rgba(255,255,255,.09)}
+  .flap{min-width:140px}
+  .flap b{font-size:30px}
+  .btn{height:50px;font-size:16px}
+  .dock a{min-width:110px;font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
+<a class="skip" href="#how">К содержанию</a>
+
 <header class="topbar">
   <a class="roundel" href="./"><i aria-hidden="true"></i>Noema</a>
   <nav class="topnav" aria-label="Основная навигация">
-    <a href="#process">Процесс</a><a href="#proof">Доказательства</a><a href="#start">Запуск</a>
+    <a href="#features">Возможности</a><a href="#how">Как работает</a><a href="#start">Запуск</a>
   </nav>
   <div class="auth"><a href="https://github.com/ssrjkk/noema">GitHub ↗</a></div>
 </header>
 
-<section class="hero">
+<section class="hero" aria-label="Noema — нейросимвольная инженерия">
   <div class="hero-stars" aria-hidden="true"></div>
   <div class="hero-inner">
+    <span class="tag lilac">нейросимвольная инженерия</span>
     <h1>Идея — нейронная.<br>Проверка — формальная.</h1>
-    <p class="sub">LLM предлагает решение. Z3 проверяет его по контрактам. Между предположением и результатом — проверяемый инженерный процесс, где каждый шаг оставляет аудируемый след.</p>
+    <p class="sub">LLM предлагает решение, Z3 проверяет его по контрактам, инциденты чинятся через pull requests. Каждый шаг оставляет аудируемый след.</p>
     <div class="btnrow">
       <a class="btn btn-violet" href="https://github.com/ssrjkk/noema">Начать проверку →</a>
-      <a class="btn btn-glass" href="https://github.com/ssrjkk/noema#readme">Документация</a>
+      <a class="btn btn-glass" href="#how">Как это работает</a>
     </div>
-    <div class="stack" style="margin-top:28px;font:400 14px var(--sans);color:var(--muted)">Python · Z3 · gRPC</div>
-    <div class="console" role="img" aria-label="Консоль формальной проверки">
-      <div class="console-head"><span class="on">verify</span><span>contracts</span><span>runtime</span><span>incidents</span></div>
-      <div class="console-body">
-        <div class="ln"><span class="prompt">$</span><span>noema verify --contract budget.zh3 --candidate llm.json</span></div>
-        <div class="ln"><span class="prompt">›</span><span class="dim">гипотеза LLM: бюджет списаний &lt;= 100 USDC за эпоху</span></div>
-        <div class="ln"><span class="prompt">›</span><span class="ok">Z3: контракт выполнен — контрпримеров не найдено (18 мс)</span></div>
-        <div class="ln"><span class="prompt">›</span><span class="dim">песочница: запуск кандидата ... ok · аудит-след записан</span></div>
-        <div class="ln"><span class="prompt">›</span><span class="lilac">результат допущен к публикации: 01/12</span></div>
+    <div class="stack">Python · Z3 · gRPC</div>
+  </div>
+
+  <!-- Мокап продукта: окно верификации с Z3-выводом -->
+  <div class="verifier" role="img" aria-label="Мокап окна верификации Noema: слева контракт budget.zh3 с полями-ограничениями, справа проверка гипотезы — Z3 не нашёл контрпримеров за 18 миллисекунд, вердикт «проверено, допущено к публикации». Внизу audit trail из пяти отметок с метками времени.">
+    <div class="vhead">
+      <div class="vtabs"><span class="on">verify</span><span>contracts</span><span>runtime</span><span>incidents</span></div>
+      <div class="vstatus"><i aria-hidden="true"></i>Z3 · готов</div>
+    </div>
+    <div class="vbody">
+      <div class="vpane">
+        <span class="vlabel"><i aria-hidden="true"></i>контракт</span>
+        <div class="code">
+          <div class="cl"><em>1</em><span><i class="k">contract</i> budget {</span></div>
+          <div class="cl"><em>2</em><span>&nbsp;&nbsp;<i class="k">require</i> spend &lt;= <i class="n">100 USDC</i></span></div>
+          <div class="cl"><em>3</em><span>&nbsp;&nbsp;<i class="k">forbid</i>&nbsp; withdraw &gt; budget</span></div>
+          <div class="cl"><em>4</em><span>&nbsp;&nbsp;<i class="k">require</i> trail != <i class="n">empty</i></span></div>
+          <div class="cl"><em>5</em><span>}</span></div>
+        </div>
+      </div>
+      <div class="vpane">
+        <span class="vlabel"><i aria-hidden="true"></i>проверка</span>
+        <div class="vrow"><b>гипотеза</b><span class="c-lilac">агент списывает ≤ 100 USDC за эпоху</span></div>
+        <div class="vrow"><b>Z3</b><span class="c-green">контрпримеров не найдено — 18 мс</span></div>
+        <div class="vrow"><b>sandbox</b><span class="c-dim">кандидат исполнен в изоляции — ok</span></div>
+        <span class="vverdict"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 12.5 5 5 10-11"/></svg>Проверено · допущено к публикации · демо 01/12</span>
       </div>
     </div>
+    <div class="vaudit">
+      <span class="alabel">audit trail</span>
+      <span class="vtick"><b>14:02:11</b>требование → контракт</span>
+      <span class="vtick"><b>14:02:12</b>гипотеза → кандидат</span>
+      <span class="vtick"><b>14:02:13</b>Z3 → вердикт · 18 мс</span>
+      <span class="vtick"><b>14:02:14</b>sandbox → ok</span>
+      <span class="vtick"><b>14:02:15</b>аудит → записан</span>
+    </div>
   </div>
-  <div class="dock" role="navigation" aria-label="Главы процесса">
-    <a class="active" href="#process">Требование</a><a href="#process">Гипотеза LLM</a><a href="#process">Контракт Z3</a><a href="#proof">Песочница</a><a href="#start">Публикация</a>
+
+  <!-- Станционный док -->
+  <div class="dock" role="navigation" aria-label="Остановки процесса">
+    <a class="active" href="#how">Требование</a><a href="#how">Гипотеза LLM</a><a href="#how">Контракт Z3</a><a href="#how">Результат</a><a href="#start">Публикация</a>
   </div>
+
+  <!-- Метрики-табло -->
   <div class="stats">
-    <div class="flap"><b>Z3</b><span>формальная проверка</span></div>
-    <div class="flap"><b>12</b><span>живых демо, без API-ключей</span></div>
-    <div class="flap"><b>P1</b><span>архитектура production-ready</span></div>
+    <div class="flap"><b>12</b><span>живых демо · без API-ключей</span></div>
+    <div class="flap"><b>Z3</b><span>проверка каждой гипотезы</span></div>
+    <div class="flap"><b>100%</b><span>шагов с audit trail</span></div>
+    <div class="flap"><b>PR</b><span>инциденты чинятся через pull requests</span></div>
   </div>
 </section>
 
-<main class="chapters" id="process">
-  <section class="chapter">
-    <div class="rail"><span class="ring" aria-hidden="true"></span><span class="line" aria-hidden="true"></span></div>
-    <div>
-      <span class="tag">Глава 01 — вход</span>
-      <h2>Требование фиксируется контрактом</h2>
-      <p>Заказчик и система договариваются на языке формальных контрактов: бюджеты, пороги, границы действий. Требование перестаёт быть туманным абзацем в чате — оно становится проверяемым объектом.</p>
-      <div class="triad">
-        <div class="cell"><b>Бюджеты и пороги</b><p>Каждое ограничение — числовое поле контракта.</p></div>
-        <div class="cell"><b>Границы действий</b><p>Что агенту можно, а что запрещено — до запуска.</p></div>
-        <div class="cell"><b>Версии контрактов</b><p>Изменение требования = новый ревьюируемый коммит.</p></div>
+<main id="how">
+  <!-- Возможности -->
+  <section id="features" aria-label="Возможности">
+    <div class="shead">
+      <span class="tag">возможности</span>
+      <h2>Доказательства вместо обещаний</h2>
+      <p>Noema превращает разговор с моделью в проверяемый инженерный процесс: у каждого утверждения есть вердикт, у каждого шага — след.</p>
+    </div>
+    <div class="cells">
+      <div class="cell">
+        <svg class="ic ic-lilac" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 11.5 2 2 4-4.5"/></svg>
+        <b>Доказательства вместо обещаний</b>
+        <p>Гипотеза получает статус результата только после проверки Z3: контрпримеров нет — обещание стало доказательством.</p>
+      </div>
+      <div class="cell">
+        <svg class="ic ic-green" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h3M14 12h3"/></svg>
+        <b>Audit trail каждого шага</b>
+        <p>Требование, гипотеза, вердикт, патч — записаны и воспроизводимы. Разбор инцидента начинается с фактов, а не с догадок.</p>
+      </div>
+      <div class="cell">
+        <svg class="ic ic-peach" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+        <b>Sandbox-рантайм</b>
+        <p>Кандидат исполняется в изоляции до публикации. Непроверенный код не доезжает до продакшена.</p>
+      </div>
+      <div class="cell">
+        <svg class="ic ic-lilac" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><circle cx="18" cy="18" r="2.6"/><path d="M6 8.6v6.8"/><path d="M18 15.4V10a3 3 0 0 0-3-3h-2.5"/><path d="m15 4.5-3 2.5 3 2.5"/></svg>
+        <b>Автономное исправление инцидентов</b>
+        <p>Noema находит причину, готовит патч и открывает pull request с доказательством, что исправление проходит те же контракты.</p>
+      </div>
+      <div class="cell">
+        <svg class="ic ic-green" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m10 13-2 2.5 2 2.5"/><path d="m14 13 2 2.5-2 2.5"/></svg>
+        <b>Контракты как код</b>
+        <p>Бюджеты, пороги и границы действий — поля контракта. Изменение требования — ревьюируемый коммит, а не сообщение в чате.</p>
+      </div>
+      <div class="cell">
+        <svg class="ic ic-peach" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 5 5-5 5"/><path d="M13 19h6"/></svg>
+        <b>12 демо без ключей</b>
+        <p>Живые демо запускаются без API-ключей: контракты, Z3 и песочница уже в репозитории.</p>
       </div>
     </div>
   </section>
-  <section class="chapter pine">
-    <div class="rail"><span class="ring" aria-hidden="true"></span><span class="line" aria-hidden="true"></span></div>
-    <div>
-      <span class="tag lilac">Глава 02 — гипотеза</span>
-      <h2>LLM предлагает, но не решает</h2>
-      <p>Языковая модель генерирует решение: код, план, конфигурацию. Её ответ — это гипотеза, у которой пока нет права считаться результатом. Никакой мистики — просто кандидаты на проверку.</p>
-      <div class="triad">
-        <div class="cell"><b>Кандидаты решений</b><p>Каждая гипотеза сохраняется и воспроизводима.</p></div>
-        <div class="cell"><b>Ревью гипотез</b><p>Отклонённые кандидаты остаются в истории.</p></div>
-        <div class="cell"><b>Ноль доверия</b><p>Модель не может подтвердить сама себя.</p></div>
-      </div>
+
+  <!-- Как это работает -->
+  <section aria-label="Как это работает">
+    <div class="shead">
+      <span class="tag green">как это работает</span>
+      <h2>Четыре остановки от требования до результата</h2>
+      <p>Маршрут один и тот же для любой задачи: зафиксировать требование, получить гипотезу, проверить её контрактом, опубликовать результат.</p>
     </div>
-  </section>
-  <section class="chapter plum" id="proof">
-    <div class="rail"><span class="ring" aria-hidden="true"></span><span class="line" aria-hidden="true"></span></div>
-    <div>
-      <span class="tag peach">Глава 03 — доказательство</span>
-      <h2>Z3 отвечает за истину</h2>
-      <p>Solver Z3 проверяет гипотезу против контрактов: контрпримеров нет — гипотеза становится результатом. Контрпример найден — система называет точное место, где обещание расходится с реальностью.</p>
-      <div class="triad">
-        <div class="cell"><b>Контрпримеры</b><p>Не «что-то не так», а «вот условия, при которых ложно».</p></div>
-        <div class="cell"><b>Аудит-след</b><p>Каждый шаг проверки записан и воспроизводим.</p></div>
-        <div class="cell"><b>Sandbox-рантайм</b><p>Кандидат исполняется в изоляции до публикации.</p></div>
+    <div class="route">
+      <div class="station">
+        <span class="ring" aria-hidden="true"></span>
+        <span class="step">01 · требование → контракт</span>
+        <h3>Требование фиксируется контрактом</h3>
+        <p>Бюджеты, пороги и границы действий становятся числовыми полями контракта. Требование перестаёт быть туманным абзацем в чате.</p>
+        <ul class="facts">
+          <li><span>ограничения — проверяемые поля</span></li>
+          <li><span>изменение требования — новый коммит</span></li>
+        </ul>
       </div>
-    </div>
-  </section>
-  <section class="chapter">
-    <div class="rail"><span class="ring" aria-hidden="true"></span></div>
-    <div>
-      <span class="tag green">Глава 04 — результат</span>
-      <h2>Инциденты чинятся до звонка</h2>
-      <p>Когда инцидент всё же случается, Noema находит причину, готовит исправление и открывает pull request с доказательством, что патч проходит те же контракты. Автономно — от сигнала до ревью.</p>
-      <a class="frosted" href="https://github.com/ssrjkk/noema#readme">Как устроена автономия →</a>
+      <div class="station">
+        <span class="ring" aria-hidden="true"></span>
+        <span class="step">02 · гипотеза → кандидат</span>
+        <h3>LLM предлагает решение</h3>
+        <p>Модель генерирует код, план или конфигурацию. Её ответ — гипотеза без права считаться результатом: ни один кандидат не проверяет сам себя.</p>
+        <ul class="facts">
+          <li><span>кандидаты сохраняются и воспроизводимы</span></li>
+          <li><span>отклонённые гипотезы остаются в истории</span></li>
+        </ul>
+      </div>
+      <div class="station">
+        <span class="ring" aria-hidden="true"></span>
+        <span class="step">03 · гипотеза × контракт → вердикт</span>
+        <h3>Z3 проверяет по контрактам</h3>
+        <p>Солвер Z3 сравнивает гипотезу с контрактом. Контрпримеров нет — гипотеза становится результатом. Контрпример есть — система называет точные условия, где обещание ложно.</p>
+        <ul class="facts">
+          <li><span>контрпримеры вместо «что-то не так»</span></li>
+          <li><span>исполнение кандидата — только в sandbox</span></li>
+        </ul>
+      </div>
+      <div class="station">
+        <span class="ring" aria-hidden="true"></span>
+        <span class="step">04 · патч → pull request</span>
+        <h3>Инциденты чинятся через pull requests</h3>
+        <p>Когда инцидент случается, Noema находит причину, готовит исправление и открывает pull request с доказательством, что патч проходит те же контракты.</p>
+        <ul class="facts">
+          <li><span>автономно — от сигнала до ревью</span></li>
+          <li><span>аудит-след каждого шага</span></li>
+        </ul>
+      </div>
     </div>
   </section>
 </main>
 
-<section class="boarding" id="start">
+<!-- Финальный CTA -->
+<section class="boarding" id="start" aria-label="Запуск">
+  <svg class="orn" width="120" height="14" viewBox="0 0 120 14" aria-hidden="true"><line x1="10" y1="7" x2="110" y2="7" stroke="rgba(255,255,255,.25)" stroke-width="2" stroke-dasharray="6 6"/><circle cx="10" cy="7" r="5" fill="none" stroke="#42946e" stroke-width="2"/><circle cx="60" cy="7" r="5" fill="none" stroke="#a78bfa" stroke-width="2"/><circle cx="110" cy="7" r="5" fill="none" stroke="#eab38a" stroke-width="2"/></svg>
   <h2>Первая проверка — в одну команду.</h2>
-  <p>Демо работают без API-ключей: контракты, Z3 и песочница уже в репозитории.</p>
-  <a class="aboard" href="https://github.com/ssrjkk/noema">Клонировать и проверить →</a>
+  <p>12 живых демо работают без API-ключей: контракты, Z3 и песочница уже в репозитории.</p>
+  <div class="clone">
+    <code id="cmd">git clone https://github.com/ssrjkk/noema.git</code>
+    <button class="btn-copy" type="button" data-copy="git clone https://github.com/ssrjkk/noema.git">Скопировать</button>
+  </div>
+  <div class="btnrow">
+    <a class="aboard" href="https://github.com/ssrjkk/noema">Открыть репозиторий →</a>
+    <a class="btn btn-glass" href="https://github.com/ssrjkk/noema#readme">Документация</a>
+  </div>
 </section>
 
 <footer>
   <div>Проект SSRJKK · Noema — нейросимвольная инженерия</div>
-  <div><a href="https://github.com/ssrjkk/noema">Исходники ↗</a> · <a href="https://ssrjkk.github.io/">Все проекты ↗</a></div>
+  <nav aria-label="Футер">
+    <a href="https://github.com/ssrjkk/noema">Репозиторий ↗</a> ·
+    <a href="https://ssrjkk.github.io/">Все проекты ↗</a>
+  </nav>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
 <script>
-/* Моушен-слой витрин: вход хиро + scroll-ревилы секций. GSAP по CDN. */
+/* Моушен-слой витрин: вход хиро каскадом + scroll-ревилы секций. GSAP по CDN. */
 (function () {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (!window.gsap || !window.ScrollTrigger) return;
   gsap.registerPlugin(ScrollTrigger);
 
   var heroKids = document.querySelectorAll(
-    "section:first-of-type h1, section:first-of-type .tag, section:first-of-type .sub," +
-    "section:first-of-type .intro, section:first-of-type .lede, section:first-of-type .btnrow," +
-    "section:first-of-type .cta, section:first-of-type .actions, section:first-of-type .stack," +
-    "section:first-of-type .eyebrow, section:first-of-type .pill, section:first-of-type .lead"
+    ".hero .tag, .hero h1, .hero .sub, .hero .btnrow, .hero .stack," +
+    ".hero .verifier, .hero .dock, .hero .stats"
   );
   if (heroKids.length) {
     gsap.set(heroKids, { autoAlpha: 0, y: 18 });
@@ -232,7 +408,7 @@ footer a:hover{color:var(--ink)}
   }
 
   var targets = [];
-  document.querySelectorAll("main > section, main > div, body > main > section, .section").forEach(function (sec) {
+  document.querySelectorAll("main > section, body > section.boarding, .route").forEach(function (sec) {
     Array.prototype.forEach.call(sec.children, function (c) {
       if (targets.indexOf(c) === -1) targets.push(c);
     });
@@ -250,6 +426,32 @@ footer a:hover{color:var(--ink)}
       }
     });
   }
+})();
+</script>
+<script>
+/* Копирование команды запуска */
+(function(){
+  'use strict';
+  document.querySelectorAll('[data-copy]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var text=btn.getAttribute('data-copy');
+      function done(){
+        var old=btn.textContent;
+        btn.textContent='Скопировано';btn.disabled=true;
+        setTimeout(function(){btn.textContent=old;btn.disabled=false;},1600);
+      }
+      function fallback(){
+        var ta=document.createElement('textarea');
+        ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+        document.body.appendChild(ta);ta.select();
+        try{document.execCommand('copy');done();}catch(e){}
+        document.body.removeChild(ta);
+      }
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done,fallback);
+      }else{fallback();}
+    });
+  });
 })();
 </script>
 </body>
