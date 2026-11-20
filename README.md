@@ -11,7 +11,7 @@
 Noema is not another code generator. It is a neurosymbolic system that proposes solutions with LLMs, verifies them against formal contracts with Z3, validates them in a sandboxed runtime, and maintains a fully auditable trail of every reasoning step — then fixes its own incidents end-to-end.
 
 > [!NOTE]
-> **Phase 1 — The Architect** is production-ready. Phase 2 (autonomous self-healing) and Phase 3 (multi-node grid federation) are in active development.
+> **Phase 1 — The Architect** is production-ready. Phase 2 (autonomous self-healing) and Phase 3 (multi-node grid federation) are merged and under test — `docs/ROADMAP.md` has no open items. Pointing the incident → PR loop at a real repository is a configuration step: it needs `NOEMA_AUTONOMY__GITHUB_*` credentials.
 
 ---
 

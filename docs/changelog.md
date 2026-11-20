@@ -24,6 +24,10 @@
   (2 750 passed + 17 skipped), 225 Python files under `noema/`, 43 406 lines.
 - README feature tables and the ML/AI upgrade plan describe the bundle as shipped instead of planned;
   `README.ru.md` docs list brought to parity with `README.md`.
+- README phase note corrected: it claimed Phases 2–3 were "in active development" while
+  `docs/ROADMAP.md` has all 26 items ticked and v1.2.0 recorded the phases as closed. The note now
+  says what is true — merged and under test, with the incident → PR loop needing
+  `NOEMA_AUTONOMY__GITHUB_*` credentials to point at a real repository.
 - Default provider remains `fallback`, routing remains `static` — the v2 surfaces are additive and
   off unless enabled.
 
