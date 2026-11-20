@@ -153,6 +153,19 @@ class LLMSettings(BaseSettings):
         default="fallback",
         description="fallback | ollama | openai | anthropic. Default = fallback so the engine works out-of-the-box without keys or a local Ollama install. Set NOEMA_LLM__PROVIDER=ollama to use a local model.",
     )
+    router: str = Field(
+        default="static",
+        description="static | linucb. 'linucb' enables the contextual-bandit routing "
+        "policy (noema.llm.router_bandit) inside the unified ModelRouter; it learns "
+        "online from verified task outcomes and fails closed with BudgetExceededError "
+        "when a USD budget is exhausted. Set NOEMA_LLM__ROUTER=linucb to enable.",
+    )
+    router_checkpoint: str = Field(
+        default="",
+        description="Optional JSON checkpoint for the linucb router (validated on "
+        "load; a corrupt checkpoint raises instead of silently resetting weights). "
+        "Empty = start with fresh priors.",
+    )
     ollama_url: str = Field(default="http://localhost:11434")
     ollama_model: str = Field(default="llama3.1")
     openai_api_key: SecretStr = Field(default=SecretStr(""))

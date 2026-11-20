@@ -99,6 +99,9 @@ class ThinkEvent(TypedDict, total=False):
     static_passed: bool
     static_issues: list[str]
     static_verdict: dict[str, Any]
+    cegis_verdict: str
+    cegis_unsat_core: list[str]
+    cegis_counterexample: dict[str, str]
     counterfactuals_count: int
     solution: dict[str, Any]
     attempts: int
@@ -357,6 +360,7 @@ class NeuroSymbolicEngine:
                     "static_issues": static_verdict.issues,
                 }
                 is_valid, violations = await self.symbolic.verify_solution(hypothesis, task_graph)
+                cegis = self.symbolic.last_feedback
                 trace_rounds.append(
                     VerificationRound(
                         attempt=attempt + 1,
@@ -379,6 +383,9 @@ class NeuroSymbolicEngine:
                     "static_analyzed": static_verdict.analyzed,
                     "static_passed": static_verdict.passed,
                     "static_issues": static_verdict.issues,
+                    "cegis_verdict": cegis.verdict,
+                    "cegis_unsat_core": list(cegis.unsat_core),
+                    "cegis_counterexample": dict(cegis.counterexample),
                 }
 
                 if is_valid:
@@ -445,8 +452,16 @@ class NeuroSymbolicEngine:
                         "status": "started",
                         "correlation_id": correlation_id,
                     }
+                    # CEGIS: hand the refiner structured counterexamples / the
+                    # minimal unsat_core, not just the bare violation strings.
+                    refine_violations = list(violations)
+                    if cegis.unsat_core:
+                        refine_violations.append(f"unsat_core: {', '.join(cegis.unsat_core)}")
+                    if cegis.counterexample:
+                        cex = ", ".join(f"{k}={v}" for k, v in cegis.counterexample.items())
+                        refine_violations.append(f"counterexample (satisfying assignment): {cex}")
                     hypothesis = await self.neural.refine_hypothesis(
-                        hypothesis=hypothesis, violations=violations, task_graph=task_dict
+                        hypothesis=hypothesis, violations=refine_violations, task_graph=task_dict
                     )
                     self._metrics["total_llm_calls"] += 1
                     self._metrics["total_refinements"] += 1

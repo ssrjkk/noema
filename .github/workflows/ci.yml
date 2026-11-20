@@ -97,6 +97,44 @@ jobs:
             results.xml
             htmlcov/
 
+  z3-verification:
+    name: Z3 / CEGIS / MKS (full extras)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: lint
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      # The main test matrix installs without z3, so the formal-verification
+      # paths run degraded there. This job installs the `full` extra (z3-solver)
+      # so the Z3 CEGIS verifier, unsat_core extraction and MKS mutator actually
+      # execute in CI instead of being skipped.
+      - name: Install dependencies (full)
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev,full]"
+
+      - name: Run formal-verification tests
+        env:
+          NOEMA_API_RATE_LIMIT_ENABLED: "false"
+        run: |
+          python -m pytest \
+            tests/test_ml_upgrades.py \
+            tests/test_ml_integration.py \
+            tests/test_neurosymbolic.py \
+            tests/test_neurosymbolic_neural.py \
+            tests/test_symbolic_coverage.py \
+            tests/test_refactor_neurosymbolic.py \
+            tests/test_reasoning_trace.py \
+            tests/test_static_verdict.py \
+            -v --tb=short --timeout=120
+
   security:
     name: Security Scan
     runs-on: ubuntu-latest

@@ -5,13 +5,17 @@ from __future__ import annotations
 
 import importlib.machinery
 import json
+import re
 import sys
+import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from noema.memory.hybrid_retriever import FailurePattern
 from noema.memory.store import EpisodicMemory, ProceduralMemory, SemanticMemory
 from noema.persistence.pg_memory import PostgresMemoryStore
 
@@ -98,6 +102,10 @@ def _semantic_row(**over: Any) -> dict[str, Any]:
         "use_count": 3,
         "last_used": 100.0,
         "tags": ["t"],
+        "valid_from": 90.0,
+        "superseded_at": None,
+        "supersedes": "",
+        "decay_lambda": 0.05,
     }
     row.update(over)
     return row
@@ -124,6 +132,7 @@ def _make_conn(
     episodic: list[dict[str, Any]] | None = None,
     semantic: list[dict[str, Any]] | None = None,
     procedural: list[dict[str, Any]] | None = None,
+    failures: list[dict[str, Any]] | None = None,
 ):
     """Fake asyncpg connection routing ``fetch`` by table name."""
     conn = MagicMock()
@@ -134,6 +143,7 @@ def _make_conn(
         "noema_episodic": episodic or [],
         "noema_semantic": semantic or [],
         "noema_procedural": procedural or [],
+        "noema_failure_fix": failures or [],
     }
 
     async def fetch(query: str, *args: Any):
@@ -160,6 +170,55 @@ def _patch_asyncpg(conn):
     # __spec__ off whatever is already registered in sys.modules.
     module.__spec__ = importlib.machinery.ModuleSpec("asyncpg", loader=None)
     return patch.dict(sys.modules, {"asyncpg": module}), module
+
+
+_INSERT_RE = re.compile(r"INSERT\s+INTO\s+(\w+)\s*\(([^)]*)\)", re.IGNORECASE)
+_DELETE_RE = re.compile(r"DELETE\s+FROM\s+(\w+)", re.IGNORECASE)
+_SELECT_RE = re.compile(r"SELECT\s+\*\s+FROM\s+(\w+)", re.IGNORECASE)
+
+
+def _make_pg_executor(
+    tables: dict[str, list[dict[str, Any]]] | None = None,
+) -> tuple[MagicMock, dict[str, list[dict[str, Any]]]]:
+    """Fake asyncpg connection backed by in-memory tables.
+
+    Understands only the statement shapes ``PostgresMemoryStore`` emits, which is
+    enough to prove that rows written by ``save()`` come back through ``_load()``
+    for the same tenant and not for another one. Passing ``tables`` lets two
+    connections share one store, standing in for a second pod.
+    """
+    tables = {} if tables is None else tables
+    conn = MagicMock()
+
+    async def execute(query: str, *args: Any) -> None:
+        insert = _INSERT_RE.search(query)
+        if insert:
+            columns = [name.strip() for name in insert.group(2).split(",")]
+            rows = tables.setdefault(insert.group(1), [])
+            rows.append(dict(zip(columns, args, strict=True)))
+            return
+        delete = _DELETE_RE.search(query)
+        if delete:
+            tables[delete.group(1)] = [
+                row for row in tables.get(delete.group(1), []) if row["tenant_id"] != args[0]
+            ]
+
+    async def fetch(query: str, *args: Any) -> list[dict[str, Any]]:
+        select = _SELECT_RE.search(query)
+        if not select:
+            return []
+        return [dict(row) for row in tables.get(select.group(1), []) if row["tenant_id"] == args[0]]
+
+    conn.execute = AsyncMock(side_effect=execute)
+    conn.fetch = AsyncMock(side_effect=fetch)
+    conn.close = AsyncMock()
+
+    @asynccontextmanager
+    async def transaction():
+        yield
+
+    conn.transaction = transaction
+    return conn, tables
 
 
 @pytest.mark.asyncio
@@ -251,9 +310,33 @@ async def test_ensure_pg_tables_creates_tenant_scoped_schema(tmp_path):
     await store._ensure_pg_tables(conn)
 
     created = [call.args[0] for call in conn.execute.await_args_list]
-    assert len(created) == 3
-    assert all("CREATE TABLE IF NOT EXISTS" in sql for sql in created)
-    assert all("tenant_id TEXT" in sql for sql in created)
+    assert len(created) == 5
+    assert all("tenant_id TEXT" in sql for sql in created[:4])
+    assert sum(1 for sql in created if "CREATE TABLE IF NOT EXISTS" in sql) == 4
+    # The bi-temporal columns reach an existing deployment only through the
+    # parity ALTER; CREATE TABLE IF NOT EXISTS never touches an old table.
+    assert sum(1 for sql in created if "ADD COLUMN IF NOT EXISTS" in sql) == 1
+
+
+@pytest.mark.asyncio
+async def test_ensure_pg_tables_schema_parity_with_file_backend(tmp_path):
+    """Every persisted dataclass field must have a column on the pg side."""
+    from dataclasses import fields as dc_fields
+    from dataclasses import is_dataclass
+
+    def field_names(model: type) -> list[str]:
+        if is_dataclass(model):
+            return [f.name for f in dc_fields(model)]
+        return list(model.model_fields)
+
+    store = PostgresMemoryStore(persist_dir=str(tmp_path / "pgmem"), database_url="")
+    conn = _make_conn()
+    await store._ensure_pg_tables(conn)
+    schema = "\n".join(call.args[0] for call in conn.execute.await_args_list)
+
+    for model in (EpisodicMemory, SemanticMemory, ProceduralMemory, FailurePattern):
+        for name in field_names(model):
+            assert name in schema, f"{model.__name__}.{name} has no pg column"
 
 
 @pytest.mark.asyncio
@@ -280,11 +363,12 @@ async def test_save_to_pg_writes_in_one_transaction(tmp_path):
     module.connect.assert_awaited_once()
     executed = [call.args[0] for call in conn.execute.await_args_list]
 
-    # 3 CREATE TABLE + 3 DELETE + 1 INSERT per memory type.
-    assert sum(1 for sql in executed if "CREATE TABLE" in sql) == 3
+    # 4 CREATE TABLE + 4 DELETE + 1 INSERT per memory type.
+    assert sum(1 for sql in executed if "CREATE TABLE" in sql) == 4
     deletes = [sql for sql in executed if sql.startswith("DELETE FROM")]
     assert sorted(deletes) == [
         "DELETE FROM noema_episodic WHERE tenant_id = $1",
+        "DELETE FROM noema_failure_fix WHERE tenant_id = $1",
         "DELETE FROM noema_procedural WHERE tenant_id = $1",
         "DELETE FROM noema_semantic WHERE tenant_id = $1",
     ]
@@ -361,3 +445,104 @@ async def test_pg_memory_learn_fact_and_procedure(tmp_path):
     store2 = PostgresMemoryStore(persist_dir=str(tmp_path / "pgmem"), database_url="")
     assert len(store2.semantic) == 1
     assert len(store2.procedural) == 1
+
+
+# ── Postgres round-trip against an in-memory SQL executor ──────────────────
+
+
+def _bi_temporal_semantic_row(now: float) -> SemanticMemory:
+    return SemanticMemory(
+        id="s1",
+        topic="python",
+        fact="FastAPI is async",
+        confidence=0.9,
+        valid_from=now - 100.0,
+        superseded_at=now - 5.0,
+        supersedes="s0",
+        decay_lambda=0.12,
+    )
+
+
+def _failure_row(now: float) -> FailurePattern:
+    return FailurePattern(
+        pattern_id="f1",
+        error_signature="KeyError: 'tenant'",
+        unsat_core=("load_ok", "patch_ok"),
+        verified_patch_diff="diff --git a/x",
+        z3_contract="(assert (not bad))",
+        created_at=datetime.fromtimestamp(now - 50.0, UTC),
+    )
+
+
+def _store_with_history(persist_dir: str, tenant: str, now: float) -> PostgresMemoryStore:
+    store = PostgresMemoryStore(
+        persist_dir=persist_dir,
+        database_url="postgresql://u@h/db",
+        tenant_id=tenant,
+    )
+    store._has_pg = True
+    store.semantic = [_bi_temporal_semantic_row(now)]
+    store.failures = [_failure_row(now)]
+    store._dirty = True
+    return store
+
+
+@pytest.mark.asyncio
+async def test_pg_roundtrip_preserves_bi_temporal_and_failure_fields(tmp_path):
+    """The newest fields must survive a pg write followed by a pg read."""
+    now = time.time()
+    tables: dict[str, list[dict[str, Any]]] = {}
+
+    store = _store_with_history(str(tmp_path / "writer"), "acme", now)
+    write_ctx, _ = _patch_asyncpg(_make_pg_executor(tables)[0])
+    with write_ctx:
+        await store.save()
+
+    reader = PostgresMemoryStore(
+        persist_dir=str(tmp_path / "reader"),
+        database_url="postgresql://u@h/db",
+        tenant_id="acme",
+    )
+    read_ctx, _ = _patch_asyncpg(_make_pg_executor(tables)[0])
+    with read_ctx:
+        await reader._load()
+
+    assert len(reader.semantic) == 1
+    kept = reader.semantic[0]
+    assert kept.valid_from == now - 100.0
+    assert kept.superseded_at == now - 5.0
+    assert kept.supersedes == "s0"
+    assert kept.decay_lambda == pytest.approx(0.12)
+
+    assert len(reader.failures) == 1
+    fix = reader.failures[0]
+    assert fix.pattern_id == "f1"
+    assert fix.error_signature == "KeyError: 'tenant'"
+    assert fix.unsat_core == ("load_ok", "patch_ok")
+    assert fix.verified_patch_diff == "diff --git a/x"
+    assert fix.z3_contract == "(assert (not bad))"
+    assert fix.created_at == datetime.fromtimestamp(now - 50.0, UTC)
+
+
+@pytest.mark.asyncio
+async def test_pg_reads_are_scoped_to_the_store_tenant(tmp_path):
+    """A second pod on another tenant must see none of acme's memory."""
+    now = time.time()
+    tables: dict[str, list[dict[str, Any]]] = {}
+
+    store = _store_with_history(str(tmp_path / "writer"), "acme", now)
+    write_ctx, _ = _patch_asyncpg(_make_pg_executor(tables)[0])
+    with write_ctx:
+        await store.save()
+
+    other = PostgresMemoryStore(
+        persist_dir=str(tmp_path / "other"),
+        database_url="postgresql://u@h/db",
+        tenant_id="globex",
+    )
+    read_ctx, _ = _patch_asyncpg(_make_pg_executor(tables)[0])
+    with read_ctx:
+        await other._load()
+
+    assert other.semantic == []
+    assert other.failures == []

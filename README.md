@@ -111,7 +111,7 @@ pip install -e ".[full]"
 pip install -e ".[dev,full,db,grpc,vault]"
 ```
 
-**Python 3.11+** (CI covers 3.12 + 3.13; the Docker image ships 3.14).
+**Python 3.11+** declared in `pyproject.toml`; CI actually runs 3.12, 3.13 and 3.14 on Ubuntu + Windows, and the Docker image ships 3.14.
 
 **LLM providers:** `openai`, `anthropic`, `ollama` + built-in **fallback provider** (works without API keys — for demos and CI).
 
@@ -287,16 +287,18 @@ noema/
 
 | Metric | Value |
 |---|---|
-| **Tests** | 2,622 (pytest + hypothesis + pytest-benchmark) |
-| **Source files** | 219 Python modules |
-| **Lines of code** | ~40,000+ |
-| **CI** | Ruff lint + format, mypy, bandit, safety, pip-audit |
+| **Tests** | 2,734 collected — unit, hypothesis property and pytest-benchmark cases |
+| **Source files** | 224 Python files under `noema/` (159 modules + 65 package `__init__`) |
+| **Lines of code** | 42,882 lines, 36,323 of them code (the rest blank and comments) |
+| **CI** | Ruff lint + format, encoding/mojibake gate, mypy, bandit + pip-audit, golden eval, merge gate |
 | **Platforms** | Ubuntu + Windows, Python 3.12 + 3.13 + 3.14 |
 | **Encoding** | Unicode mojibake gate — broken strings fail CI |
 
 ## Documentation
 
 - [Usage Guide](docs/usage-guide.md) — complete CLI, API, and library reference with examples
+- [3D Connectome Showcase](docs/noema.html) — interactive neural-connectome page (static, DEMO SIM mode)
+- [ML/AI Upgrade Plan](docs/noema_ml_ai_upgrade_plan.md) — RLVR, hybrid memory, LinUCB routing, Z3 CEGIS roadmap
 - [Whitepaper](docs/WHITEPAPER.md) — vision and design principles
 - [Roadmap](docs/ROADMAP.md) — three phases: Architect → Autopoietic Enterprise → Global Noema Grid
 - [Configuration](docs/configuration.md) — all env vars and YAML options

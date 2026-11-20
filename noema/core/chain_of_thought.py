@@ -32,6 +32,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from noema.llm.providers import BaseLLMProvider, LLMMessage
+from noema.llm.router_bandit import BudgetExceededError
 from noema.logging import get_logger
 
 if TYPE_CHECKING:
@@ -230,6 +231,7 @@ class ChainOfThought:
             "knowledge": knowledge_context,
             "graph": graph_context,
             "ontology": ontology_context,
+            "complexity": complexity,
         }
 
         if reflexion_errors:
@@ -305,6 +307,10 @@ class ChainOfThought:
                     logger.error(f"step_not_found: {step_name}")
                     continue
                 if isinstance(result, BaseException):
+                    # Fail-closed: an exhausted USD budget must abort the run,
+                    # not degrade into a "failed step" that still yields a solution.
+                    if isinstance(result, BudgetExceededError):
+                        raise result
                     done_step.status = StepStatus.FAILED
                     done_step.result = f"Error: {result}"
                     logger.error(f"[CoT] Step {done_step.name} failed: {result}")
@@ -549,6 +555,12 @@ class ChainOfThought:
         llm: BaseLLMProvider = self.llm
         if self._model_router and budget and budget.should_degrade():
             llm = self._model_router.select(complexity="simple", degraded=True)
+        elif self._model_router is not None and self._model_router.bandit_active:
+            llm = self._model_router.select(
+                complexity=str(self._context.get("complexity", "moderate")),
+                tags=list(self._context.get("tags") or []),
+                prompt_tokens=estimated_tokens // 2,
+            )
 
         t0 = time.monotonic()
         response = await llm.complete(messages, temperature=0.4, max_tokens=4096)

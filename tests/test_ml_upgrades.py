@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import ast
 import importlib
+import itertools
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -12,6 +14,7 @@ import pytest
 
 from noema.llm.router_bandit import BudgetExceededError, LinUCBModelRouter, ModelArm, TaskContext
 from noema.memory.hybrid_retriever import FailurePattern, HybridCognitiveMemory, MemoryRecord
+from noema.memory.store import MemoryStore
 from noema.neurosymbolic.cegis_mutator import (
     Z3_AVAILABLE,
     ASTContractMutator,
@@ -153,6 +156,25 @@ def test_z3_cegis_fail_closed_or_unsat_core() -> None:
         assert set(fb.unsat_core) == {"c_pos", "c_neg"}
 
 
+def test_z3_cegis_counterexample_not_shadowed_by_tracking_literal() -> None:
+    """SAT counterexample must report the variable's value, not the assert_and_track
+    tracking literal sharing its name (regression: model.decls()-by-name shadowing)."""
+    if not Z3_AVAILABLE:
+        pytest.skip("z3-solver not installed")
+    z3 = importlib.import_module("z3")
+    x = z3.Int("x")
+    verifier = Z3CEGISVerifier(fail_closed=True)
+    # Label "x" collides with the Int variable name "x".
+    fb = verifier.verify_named_constraints({"x": x > 5, "upper": x < 100})
+    assert fb.verdict == "SAT"
+    value = fb.counterexample["x"]
+    assert value not in ("True", "False"), (
+        f"tracking literal shadowed variable: {fb.counterexample}"
+    )
+    assert value.lstrip("-").isdigit(), f"expected integer assignment, got {value!r}"
+    assert 5 < int(value) < 100
+
+
 def test_linucb_cost_sensitivity_budget_fail_closed_and_load_validation(tmp_path: Path) -> None:
     arms = (
         ModelArm("local-lora", "ollama", "qwen-7b-lora", 0.0002, 0.7, is_local=True),
@@ -237,6 +259,170 @@ def test_hybrid_bitemporal_memory_strict_supersede_and_non_destructive_retention
     found = mem.lookup_similar_failures("ZeroDivisionError quota_router", ("c_nonzero_divisor",))
     assert len(found) == 1
     assert found[0][0].pattern_id == "fix_div0"
+
+
+def _hit_ids(hits) -> set[str]:
+    return {hit.record.record_id for hit in hits}
+
+
+def test_store_hybrid_view_follows_tier_mutations(tmp_path) -> None:
+    store = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    fact = store.learn_fact(topic="billing", fact="Idempotency keys are mandatory for payments")
+    assert any(
+        rid.endswith(fact.id)
+        for rid in _hit_ids(store.search_hybrid("idempotency payments", top_k=5))
+    ), "the view never picked up a fact added after it was built"
+
+    episode = store.record_episode(
+        task_description="Rotate the signing key",
+        solution_summary="vault rotation",
+        outcome="success",
+    )
+    assert any(
+        rid.endswith(episode.id)
+        for rid in _hit_ids(store.search_hybrid("signing key rotation", top_k=5))
+    ), "a cached view survived a tier mutation"
+
+    procedure = store.store_procedure(
+        procedure_name="canary rollout", steps=["bake", "promote", "verify"]
+    )
+    assert any(
+        rid.endswith(procedure.id)
+        for rid in _hit_ids(store.search_hybrid("canary bake promote", top_k=5))
+    ), "a cached view survived a procedure mutation"
+
+
+def test_store_hybrid_view_drops_what_a_mutation_removed(tmp_path) -> None:
+    store = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    gone = store.learn_fact(topic="cache", fact="Redis evicts under memory pressure")
+    assert store.search_hybrid("redis eviction cache", top_k=5)
+    store.semantic = []
+
+    assert store.search_hybrid("redis eviction cache", top_k=5) == []
+    assert not any(rid.endswith(gone.id) for rid in _hit_ids(store.search_hybrid("redis", top_k=5)))
+
+
+def test_search_hybrid_honours_bitemporal_validity(tmp_path, monkeypatch) -> None:
+    store = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    now = 1_000_000.0
+    # A clock that cannot return the same reading twice. Windows' clock can be
+    # ~0.5-15 ms coarse, so two real reads inside one call often land on the same
+    # tick — and a second, accidental reading would then satisfy the assertion.
+    ticks = iter(itertools.count(now))
+    monkeypatch.setattr("noema.memory.store.time.time", lambda: next(ticks))
+    old = store.learn_fact(topic="rate limit", fact="Rate limit is 100 requests per minute")
+    old.valid_from = now - 3600
+    new = store.supersede_fact(
+        old.id, topic="rate limit", fact="Rate limit is 500 requests per minute"
+    )
+    # Exact, not approx: at epoch magnitude pytest.approx's default relative
+    # tolerance is minutes wide, which would not notice two separate clock reads.
+    assert new.valid_from == old.superseded_at
+    assert new.supersedes == old.id
+
+    current = _hit_ids(store.search_hybrid("rate limit requests minute", top_k=10))
+    assert any(rid.endswith(new.id) for rid in current)
+    assert not any(rid.endswith(old.id) for rid in current), "a superseded fact is still current"
+
+    historical = _hit_ids(
+        store.search_hybrid(
+            "rate limit requests minute",
+            top_k=10,
+            at_time=datetime.fromtimestamp(now - 1800, UTC),
+        )
+    )
+    assert any(rid.endswith(old.id) for rid in historical), "history lost the fact it replaced"
+    assert not any(rid.endswith(new.id) for rid in historical), (
+        "a fact that starts later is visible in the past"
+    )
+
+
+def test_index_failure_fix_persists_and_answers_similar_signatures(tmp_path) -> None:
+    store = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    pattern = FailurePattern(
+        pattern_id="div0",
+        error_signature="ZeroDivisionError in quota_router.py",
+        unsat_core=("c_nonzero_divisor",),
+        verified_patch_diff="if divisor <= 0: raise ValueError()",
+        z3_contract="(assert (> divisor 0))",
+    )
+    store.index_failure_fix(pattern)
+    store.save()
+
+    reopened = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    assert [fix.pattern_id for fix in reopened.failures] == ["div0"]
+    found = reopened.lookup_similar_failures(
+        "ZeroDivisionError quota_router", ("c_nonzero_divisor",)
+    )
+    assert found and found[0][0].pattern_id == "div0"
+    assert reopened.stats()["failure_fix_count"] == 1
+
+    reopened.index_failure_fix(replace(pattern, verified_patch_diff="if divisor < 1: raise()"))
+    live = reopened.lookup_similar_failures(
+        "ZeroDivisionError quota_router", ("c_nonzero_divisor",)
+    )
+    assert live[0][0].verified_patch_diff == "if divisor < 1: raise()", (
+        "the cached view kept answering with the patch it had already replaced"
+    )
+    reopened.save()
+    again = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    assert len(again.failures) == 1, "re-indexing one pattern duplicated it"
+    assert again.failures[0].verified_patch_diff == "if divisor < 1: raise()"
+
+
+def test_hybrid_view_follows_content_reloaded_under_the_same_ids(tmp_path) -> None:
+    """A pod that edits a row in place keeps its id: only the content changed."""
+    store = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    store.learn_fact(topic="rate limit", fact="Rate limit is 100 requests per minute")
+    store.save()
+    assert any("100 requests" in hit.record.content for hit in store.search_hybrid("rate limit"))
+
+    other = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    other.semantic[0].fact = "Rate limit is 5000 requests per minute"
+    other.save()
+
+    store._load()
+    contents = [hit.record.content for hit in store.search_hybrid("rate limit", top_k=10)]
+    assert any("5000 requests" in text for text in contents)
+    assert not any("100 requests" in text for text in contents), (
+        "the view was rebuilt from ids that never changed, not from content"
+    )
+
+
+def test_supersede_fact_strictness_and_corrupt_failure_rows(tmp_path) -> None:
+    store = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    with pytest.raises(KeyError, match="unknown semantic id"):
+        store.supersede_fact("missing", topic="cache", fact="Redis TTL is 60 seconds")
+    assert len(store.semantic) == 0, "a rejected supersede still wrote a fact"
+
+    orphan = store.supersede_fact(
+        "missing", topic="cache", fact="Redis TTL is 60 seconds", strict=False
+    )
+    assert len(store.semantic) == 1
+    assert orphan.supersedes == ""
+
+    store.index_failure_fix(
+        FailurePattern(
+            pattern_id="good",
+            error_signature="KeyError in tenant.py",
+            unsat_core=("c_tenant_present",),
+            verified_patch_diff="if tenant is None: raise()",
+            z3_contract="(assert tenant_ok)",
+        )
+    )
+    store.save()
+    failures_file = tmp_path / "mem" / "failures.json"
+    rows = json.loads(failures_file.read_text(encoding="utf-8"))
+    rows.append({"created_at": "not-a-timestamp"})
+    rows.append("not-an-object")
+    failures_file.write_text(json.dumps(rows), encoding="utf-8")
+
+    reopened = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    assert [mem.fact for mem in reopened.semantic] == ["Redis TTL is 60 seconds"]
+    assert reopened.semantic[0].supersedes == ""
+    assert [fix.pattern_id for fix in reopened.failures] == ["good"], (
+        "unreadable failure rows poisoned the whole failure tier"
+    )
 
 
 def test_rlvr_dataset_builder_and_honest_out_of_sample_calibration(tmp_path: Path) -> None:

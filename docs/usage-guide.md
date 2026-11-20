@@ -56,7 +56,7 @@ Verify:
 
 ```bash
 python -m noema --help        # CLI entry point
-python demo.py                # 12 live demos — no API keys required
+python scripts/demo.py          # 12 live demos — no API keys required
 ```
 
 If you see `=== ALL DEMOS COMPLETE ===` — installation is good.

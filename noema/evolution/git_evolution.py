@@ -204,6 +204,12 @@ class GitEvolution:
             "-q",
             "--tb=short",
             "--timeout=60",
+            # Isolate from a parent directory's pytest addopts / coverage gate
+            # so the verdict reflects this project's tests only.
+            "-p",
+            "no:cov",
+            "-o",
+            "addopts=",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(self.project_root),

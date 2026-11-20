@@ -168,6 +168,24 @@ def _parse_pytest_counts(output: str, returncode: int) -> tuple[int, int]:
     return passed, failed
 
 
+def _lint_selector(config: SandboxConfig, tmp_dir: Path) -> list[str]:
+    """Ruff arguments for one lint pass over a staged copy of the files.
+
+    Without ``lint_config_path`` the sandbox keeps its standalone ruleset, which
+    is the right default for untrusted generated code. With it, the repository's
+    own ruff configuration is staged next to the copy so ruff discovers it: a
+    caller validating first-party files is then judged by the same rules its CI
+    lint job applies, instead of by a divergent default ruleset.
+    """
+    if not config.lint_config_path:
+        return ["--select=E,F,W"]
+    source = Path(config.lint_config_path)
+    if not source.is_file():
+        return ["--select=E,F,W"]
+    shutil.copyfile(source, tmp_dir / source.name)
+    return []
+
+
 @dataclass
 class SandboxConfig:
     enabled: bool = True
@@ -180,6 +198,7 @@ class SandboxConfig:
     static_check_enabled: bool = True
     static_allow_imports: tuple[str, ...] = ()
     lint_enabled: bool = True
+    lint_config_path: str = ""
     type_check_enabled: bool = True
     run_enabled: bool = True
     test_enabled: bool = True
@@ -311,6 +330,7 @@ class LocalEnvironment(Environment):
         tmp_dir = Path(tempfile.mkdtemp())
         try:
             self._write_files(files, tmp_dir)
+            selector = _lint_selector(self.config, tmp_dir)
 
             def _lint(i: int, f: dict[str, str]) -> None:
                 path = f.get("path", f.get("filename", "main.py"))
@@ -319,7 +339,7 @@ class LocalEnvironment(Environment):
 
                 if lang == "python" and file_path.suffix == ".py":
                     proc = subprocess.run(
-                        [sys.executable, "-m", "ruff", "check", "--select=E,F,W", str(file_path)],
+                        [sys.executable, "-m", "ruff", "check", *selector, str(file_path)],
                         capture_output=True,
                         text=True,
                         timeout=self.config.max_cpu_seconds,
@@ -499,6 +519,7 @@ class DockerEnvironment(Environment):
         tmp_dir = Path(tempfile.mkdtemp())
         try:
             self._write_files(files, tmp_dir)
+            selector = _lint_selector(self.config, tmp_dir)
 
             for i, f in enumerate(files):
                 path = f.get("path", f.get("filename", "main.py"))
@@ -506,6 +527,11 @@ class DockerEnvironment(Environment):
                 lang = f.get("language", "python")
 
                 if lang == "python" and file_path.suffix == ".py":
+                    # The staged copy keeps its directory layout, so the
+                    # container path must be relative to the mount root, not
+                    # just the basename: /sandbox/gate.py does not exist for a
+                    # file staged at noema/experiments/gate.py.
+                    container_path = file_path.relative_to(tmp_dir).as_posix()
                     proc: Process | None = None
                     try:
                         proc = await asyncio.create_subprocess_exec(
@@ -520,8 +546,8 @@ class DockerEnvironment(Environment):
                             "ruff",
                             "check",
                             "--no-cache",
-                            "--select=E,F,W",
-                            f"/sandbox/{file_path.name}",
+                            *selector,
+                            f"/sandbox/{container_path}",
                             stdout=asyncio.subprocess.PIPE,
                             stderr=asyncio.subprocess.PIPE,
                         )

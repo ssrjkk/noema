@@ -2,11 +2,15 @@
 
 Covers ``noema/autonomy``:
 - incident normalization (Sentry envelope, generic webhook, own schema),
+- the failure signature that keys one bug's repairs together across alerts,
 - GitHub client REST calls (branch refs, contents, pulls) via a mock transport,
 - the IncidentFixer end-to-end flow with a mocked engine + mocked GitHub,
-- the passing-run gate (no PR when the sandbox run is not all-valid).
+- the passing-run gate (no PR when the sandbox run is not all-valid),
+- the memory loop: verified patches indexed by signature, recalled as priors,
+  blocked or errored gate runs kept out of the index, a dead store survivable.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
@@ -14,8 +18,16 @@ import pytest
 
 from noema.autonomy.fixer import IncidentFixer, _block_path, _solution_files
 from noema.autonomy.github import GitHubClient, GitHubError
-from noema.autonomy.incidents import incident_branch_name, incident_to_task, parse_incident
+from noema.autonomy.incidents import (
+    error_signature,
+    incident_branch_name,
+    incident_to_task,
+    parse_incident,
+)
 from noema.core.types import CodeBlock, Solution
+from noema.experiments.gate import GateReport
+from noema.memory.hybrid_retriever import FailurePattern
+from noema.memory.store import MemoryStore
 
 # ── Incident parsing ───────────────────────────────────────────────────
 
@@ -195,6 +207,11 @@ async def _fixer_with_mocks(engine, github) -> IncidentFixer:
     async def factory():
         return engine
 
+    # These flow tests are about the fix loop, not the failure index: without an
+    # explicit store the AsyncMock engine answers every attribute with a mock, and
+    # recall would run against a coroutine instead of a memory tier.
+    engine.memory = None
+
     return IncidentFixer(github=github, engine_factory=factory)
 
 
@@ -297,6 +314,247 @@ def test_solution_files_dedupes_and_falls_back():
     assert files == [("app/fix.py", "print('fixed')\n")]
     empty = CodeBlock(filename="", language="python", content="x")
     assert _block_path(empty).endswith(".py")
+
+
+# ── Incident ↔ memory integration ──────────────────────────────────────
+
+
+def _alert(
+    event_id: str,
+    message: str,
+    environment: str = "production",
+    filename: str = "app/billing.py",
+    lineno: int = 42,
+) -> dict:
+    """A Sentry-shaped alert, so two alerts for one bug can be compared."""
+    return {
+        "event": {
+            "id": event_id,
+            "title": "ZeroDivisionError: division by zero",
+            "message": message,
+            "environment": environment,
+            "exception": {
+                "values": [
+                    {
+                        "type": "ZeroDivisionError",
+                        "value": "division by zero",
+                        "stacktrace": {
+                            "frames": [
+                                {"filename": filename, "function": "total", "lineno": lineno}
+                            ]
+                        },
+                    }
+                ]
+            },
+        },
+        "source": "sentry",
+    }
+
+
+def _store(tmp_path) -> MemoryStore:
+    return MemoryStore(persist_dir=str(tmp_path / "memory"), auto_save=False)
+
+
+class _RecordingEngine:
+    """Engine double that keeps the tasks it was asked to solve."""
+
+    def __init__(self, memory, run_ok: bool = True) -> None:
+        self.memory = memory
+        self.tasks: list = []
+        self._solution = _fake_solution(judge_passed=True)
+        self._run = SimpleNamespace(all_valid=run_ok, summary="all ok")
+
+    async def think(self, task):
+        self.tasks.append(task)
+        return self._solution, SimpleNamespace()
+
+    async def validate_solution(self, solution, run_tests=False):
+        return self._run
+
+
+def _github_with_mock():
+    github = AsyncMock()
+    github.submit_fix_pr = AsyncMock(
+        return_value={"branch": "b", "pr_number": 1, "pr_url": "url", "files": 1}
+    )
+    return github
+
+
+def _memory_fixer(engine, github, gate_report=None) -> IncidentFixer:
+    async def factory():
+        return engine
+
+    gate_runner = None
+    if gate_report is not None:
+        gate_runner = AsyncMock(return_value=gate_report)
+
+    return IncidentFixer(
+        github=github,
+        engine_factory=factory,
+        gate_runner=gate_runner,
+        auto_approve=gate_report is not None,
+    )
+
+
+def test_error_signature_keys_the_repair_on_what_and_where_broke():
+    first = parse_incident(_alert("abc123", "div by zero at 10:00"))
+    second = parse_incident(_alert("zzz999", "checkout blew up", environment="staging"))
+
+    assert first.id != second.id
+    assert first.description != second.description
+    assert error_signature(first) == error_signature(second)
+    assert "division by zero" in error_signature(first)
+    assert "app/billing.py" in error_signature(first)
+
+    # A different raise site is a different repair, even for the same exception.
+    elsewhere = parse_incident(_alert("q1", "div by zero", filename="app/cart.py"))
+    assert error_signature(elsewhere) != error_signature(first)
+
+    # And an alert with no trace at all still keys on something other than nothing.
+    bare = parse_incident({"incident": {"id": "b1", "title": "Timeout in API"}})
+    assert error_signature(bare) == "Timeout in API | id:b1"
+
+    # With a deep stack the signature must cite the frame that raised, not the
+    # outermost one — otherwise two different bugs in one handler collide.
+    deep = parse_incident(
+        {
+            "incident": {
+                "id": "d1",
+                "title": "KeyError",
+                "stack_trace": (
+                    "KeyError: 'card'\n"
+                    "  File 'app/outer.py', line 1, in handle\n"
+                    "  File 'app/cart.py', line 88, in add_item"
+                ),
+            }
+        }
+    )
+    assert error_signature(deep) == "KeyError: 'card' | File 'app/cart.py', line 88, in add_item"
+
+
+@pytest.mark.asyncio
+async def test_fixer_recalls_a_previous_patch_into_the_fix_task(tmp_path):
+    store = _store(tmp_path)
+    known = parse_incident(_alert("abc123", "div by zero at 10:00"))
+    store.index_failure_fix(
+        FailurePattern(
+            pattern_id="older-alert",
+            error_signature=error_signature(known),
+            unsat_core=(),
+            verified_patch_diff="def total(amount, rate):\n    if rate == 0: raise ValueError()\n",
+            z3_contract="",
+        )
+    )
+
+    engine = _RecordingEngine(store)
+    fixer = _memory_fixer(engine, _github_with_mock())
+    result = await fixer.handle_incident(_alert("zzz999", "checkout blew up"))
+
+    assert result["status"] == "pr_created"
+    description = engine.tasks[0].description
+    assert "Previously verified fixes" in description
+    assert "if rate == 0: raise ValueError()" in description
+    # The alert's own trace still has to reach the model.
+    assert "Stack trace:" in description
+
+
+@pytest.mark.asyncio
+async def test_fixer_indexes_a_validated_fix_for_the_next_alert(tmp_path):
+    store = _store(tmp_path)
+    engine = _RecordingEngine(store)
+    github = _github_with_mock()
+    fixer = _memory_fixer(engine, github)
+
+    result = await fixer.handle_incident(_alert("abc123", "div by zero"))
+    assert result["status"] == "pr_created"
+
+    assert [f.pattern_id for f in store.failures] == ["abc123"]
+    assert store.failures[0].error_signature == error_signature(
+        parse_incident(_alert("abc123", ""))
+    )
+    assert "app/fix.py" in store.failures[0].verified_patch_diff
+    assert "print('fixed')" in store.failures[0].verified_patch_diff
+
+    # The recorded lesson has to answer the next alert, not just sit on disk. A
+    # decoy pattern joins the index first: if the lesson were keyed on anything
+    # other than the failure it describes, the decoy would outrank it.
+    decoy = FailurePattern(
+        pattern_id="unrelated",
+        error_signature="TypeError: unsupported | File 'app/pdf.py', line 7, in render",
+        unsat_core=(),
+        verified_patch_diff="unrelated repair",
+        z3_contract="",
+    )
+    store.index_failure_fix(decoy)
+    hits = store.lookup_similar_failures(
+        error_signature(parse_incident(_alert("abc123", ""))), top_k=2
+    )
+    assert [pattern.pattern_id for pattern, _score in hits][0] == "abc123"
+
+    # And the next alert of the same bug gets the patch as priors.
+    engine2 = _RecordingEngine(store)
+    fixer2 = _memory_fixer(engine2, _github_with_mock())
+    await fixer2.handle_incident(_alert("zzz999", "checkout blew up"))
+    assert "print('fixed')" in engine2.tasks[0].description
+
+
+@pytest.mark.asyncio
+async def test_fixer_keeps_a_gate_blocked_fix_out_of_the_index(tmp_path):
+    store = _store(tmp_path)
+    engine = _RecordingEngine(store)
+    github = _github_with_mock()
+    fixer = _memory_fixer(
+        engine, github, gate_report=GateReport(passed=False, changed_files=1, blocked_by=["judge"])
+    )
+
+    result = await fixer.handle_incident(_alert("abc123", "div by zero"))
+
+    assert result["status"] == "pr_created"
+    assert result["merge_gate_passed"] is False
+    assert store.failures == []
+
+
+@pytest.mark.asyncio
+async def test_fixer_keeps_a_gate_errored_fix_out_of_the_index(tmp_path):
+    """An unusable gate means "unverified", not "allowed": no lesson is recorded."""
+    store = _store(tmp_path)
+
+    async def crashing_gate(files):
+        raise RuntimeError("lean toolchain broken")
+
+    async def factory():
+        return _RecordingEngine(store)
+
+    fixer = IncidentFixer(
+        github=_github_with_mock(),
+        engine_factory=factory,
+        gate_runner=crashing_gate,
+        auto_approve=True,
+    )
+    result = await fixer.handle_incident(_alert("abc123", "div by zero"))
+
+    assert result["merge_gate_error"] == "lean toolchain broken"
+    assert store.failures == []
+
+
+@pytest.mark.asyncio
+async def test_fixer_still_ships_the_pr_when_memory_is_unusable(tmp_path):
+    """Recall and indexing are optimisations: a dead store must not stop the fix."""
+
+    class _BrokenStore:
+        def lookup_similar_failures(self, *args, **kwargs):
+            raise RuntimeError("hnsw index corrupt")
+
+        def index_failure_fix(self, *args, **kwargs):
+            raise RuntimeError("disk full")
+
+    github = _github_with_mock()
+    fixer = _memory_fixer(_RecordingEngine(_BrokenStore()), github)
+
+    result = await fixer.handle_incident(SENTRY_PAYLOAD)
+
+    assert result["status"] == "pr_created"
+    github.submit_fix_pr.assert_awaited_once()
 
 
 # ── Worker wiring ──────────────────────────────────────────────────────

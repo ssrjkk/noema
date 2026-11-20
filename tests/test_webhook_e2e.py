@@ -8,6 +8,8 @@ Exercises the full closed loop through the real HTTP endpoint:
 4. The merge gate runs over the fix files; on pass the PR is approved and —
    with ``auto_merge`` — merged (Evolution Auto-Apply).
 5. The generation cost is attributed per module (``noema_pr_cost_usd``).
+6. The verified patch is indexed under its failure signature, so the next alert
+   of the same bug can recall it as priors — unless the merge gate blocked it.
 
 Redis is stubbed out so the inline fallback path is exercised deterministically;
 everything else (HMAC, payload parsing, fixer, gate wiring) is real.
@@ -25,10 +27,12 @@ import httpx
 import pytest
 
 from noema.api.server import app
+from noema.autonomy.incidents import error_signature, parse_incident
 from noema.billing.cost_tracker import CostTracker
 from noema.config.settings import get_settings, reset_settings
 from noema.core.types import CodeBlock, Solution
 from noema.experiments.gate import GateConfig, GateReport, run_merge_gate
+from noema.memory.store import MemoryStore
 
 SENTRY_INCIDENT = {
     "event": "incident",
@@ -118,7 +122,7 @@ def _autonomy_env(monkeypatch):
 
 
 @pytest.fixture
-def e2e_mocks(monkeypatch):
+def e2e_mocks(monkeypatch, tmp_path):
     """Stub Redis, the engine, GitHub transport, and the merge gate."""
     calls: list[dict] = []
 
@@ -133,6 +137,9 @@ def e2e_mocks(monkeypatch):
     engine.think = AsyncMock(return_value=(_mock_solution(), AsyncMock()))
     run = SimpleNamespace(all_valid=True, summary="all ok")
     engine.validate_solution = AsyncMock(return_value=run)
+    # A real store, so the closed loop is checked against the failure index the
+    # next alert would recall from — not against a mock that answers everything.
+    engine.memory = MemoryStore(persist_dir=str(tmp_path / "memory"), auto_save=False)
 
     async def _engine_factory():
         return engine
@@ -152,7 +159,9 @@ def e2e_mocks(monkeypatch):
     gate_runner = AsyncMock(return_value=gate_report)
     monkeypatch.setattr("noema.autonomy.fixer._default_gate_runner", gate_runner)
 
-    return SimpleNamespace(calls=calls, engine=engine, gate_runner=gate_runner)
+    return SimpleNamespace(
+        calls=calls, engine=engine, gate_runner=gate_runner, memory=engine.memory
+    )
 
 
 @pytest.mark.asyncio
@@ -196,6 +205,13 @@ async def test_sentry_webhook_full_loop_to_auto_merged_pr(e2e_mocks):
     e2e_mocks.gate_runner.assert_awaited_once()
     gate_files = e2e_mocks.gate_runner.await_args.args[0]
     assert gate_files == [FIX_FILE]
+
+    # The merged-quality fix is now a lesson: the same signature must find it.
+    assert [f.pattern_id for f in e2e_mocks.memory.failures] == ["e2e-1"]
+    hits = e2e_mocks.memory.lookup_similar_failures(
+        error_signature(parse_incident(SENTRY_INCIDENT)), top_k=1
+    )
+    assert hits and hits[0][0].verified_patch_diff == f"+++ {FIX_FILE[0]}\n{FIX_FILE[1]}"
 
     methods = [c["method"] for c in e2e_mocks.calls]
     assert "POST" in methods  # branch refs + PR
@@ -295,6 +311,8 @@ async def test_gate_failure_blocks_auto_approve_and_merge(e2e_mocks):
     assert result["merge_gate_blocked_by"] == ["sandbox"]
     assert "merge_gate_approved" not in result
     assert "merged" not in result
+    # A gate-blocked patch is not trustworthy yet: it must not become a lesson.
+    assert e2e_mocks.memory.failures == []
 
     urls = [c["url"] for c in e2e_mocks.calls]
     assert not any("reviews" in u for u in urls)

@@ -298,6 +298,13 @@ Respond in JSON:
                 "-q",
                 "-p",
                 "no:cacheprovider",
+                # Isolate the mutation verdict from ambient config: a parent
+                # directory's pytest addopts (e.g. --cov-fail-under) would
+                # otherwise force every run red regardless of the tests.
+                "-p",
+                "no:cov",
+                "-o",
+                "addopts=",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(self.project_root),

@@ -340,7 +340,16 @@ class Z3CEGISVerifier:
 
         if status == z3.sat:
             model = solver.model()
-            cex = {decl.name(): str(model[decl]) for decl in model.decls()}
+            # Extract over the constraints' real free variables, not model.decls():
+            # assert_and_track tracking literals share the requirement labels and
+            # would shadow a same-named variable (yielding "True" instead of its value).
+            variables: dict[str, Any] = {}
+            for expr in constraints.values():
+                for var in z3.z3util.get_vars(expr):
+                    variables[var.decl().name()] = var
+            cex = {
+                name: str(model.eval(var, model_completion=True)) for name, var in variables.items()
+            }
             if check_negated_safety:
                 return CEGISFeedback(
                     verdict="UNSAT",
