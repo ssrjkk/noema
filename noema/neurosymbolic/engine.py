@@ -453,7 +453,7 @@ class NeuroSymbolicEngine:
                         "correlation_id": correlation_id,
                     }
                     # CEGIS: hand the refiner structured counterexamples / the
-                    # minimal unsat_core, not just the bare violation strings.
+                    # unsat_core, not just the bare violation strings.
                     refine_violations = list(violations)
                     if cegis.unsat_core:
                         refine_violations.append(f"unsat_core: {', '.join(cegis.unsat_core)}")

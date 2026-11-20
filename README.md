@@ -83,7 +83,7 @@ The neural side **proposes**, the symbolic side **adjudicates**, and every excha
 | Capability | Description |
 |---|---|
 | **Solution generation** | `noema think "Real-time Chat"` — full architecture, stack, code, optimizations, security |
-| **Formal verification (Z3)** | Every hypothesis is checked against a symbolic contract extracted from requirements. Solver unavailable → solution rejected (fail-closed) |
+| **Formal verification (Z3)** | Every hypothesis is checked against a symbolic contract extracted from requirements. Solver unavailable → solution rejected (fail-closed). A rejected candidate returns CEGIS feedback: the `unsat_core` naming the conflicting requirements, or a concrete counterexample to refine against |
 | **Pre-run static analysis** | Pure AST pass: syntax, import hygiene, undefined names — verdict before untrusted code ever runs |
 | **Sandboxed execution** | Docker isolation: no network, CPU/memory/time limits. Static verdict short-circuits execution |
 | **Reasoning audit** | Every thought step, Z3 verdict, and AST check is recorded. Old verdicts are re-verified deterministically — no LLM needed |
@@ -92,8 +92,11 @@ The neural side **proposes**, the symbolic side **adjudicates**, and every excha
 | **22 domain modules** | auth, database, gateway, graphql, ml_ops, mobile, terraform, websocket, and more — work independently and together |
 | **Specialized kernels & agents** | Architect, Coder, Security, DevOps, DBA, AI Engineer. Pipelines: fullstack, quick, security, arch-review |
 | **Memory & knowledge** | Episodic, semantic, and procedural memory + domain knowledge base |
+| **Hybrid retrieval** | BM25 and dense scores fused by Reciprocal Rank Fusion, filtered by bi-temporal validity; Ebbinghaus retention ranks results instead of dropping them. Verified fixes are indexed by the incident's error signature (exception line + raising frame) and its Z3 `unsat_core`, and looked up before a new patch is proposed |
 | **Token economics** | Every LLM call is traced, attributed, and converted to cost. Budgets and circuit breakers included |
+| **Model routing (opt-in)** | `NOEMA_LLM__ROUTER=linucb` hands arm selection to a LinUCB contextual bandit updated from verified outcomes (Sherman-Morrison rank-1 inverse updates). Budget exhausted → `BudgetExceededError`, never an unmodelled call; a corrupt checkpoint raises instead of resetting |
 | **Reproducible benchmarks** | One task matrix across providers/models → `results.json` + CSV summaries with per-file token/cost breakdown |
+| **Verified training data** | `noema train export-dpo` / `export-grpo` build RLVR datasets from rollouts that already passed verification; `calibrate-judge` reports out-of-sample k-fold Brier/ECE for the judge |
 | **Production API** | FastAPI: rate limiting, API keys, per-tenant quotas, request timeout guard (504 + exempt paths), RFC 7807, Prometheus metrics, SSE streaming |
 | **Grid federation** | `noema grid federate`: subtasks delegated to peers via gRPC with circuit breaker and retry. Local fallback when peers are down. Every node's contribution recorded in an auditable ledger |
 | **Grid dashboard** | `GET /grid` and `noema grid status`: live fleet state — latency, tokens, errors per node + cluster totals |
@@ -287,9 +290,9 @@ noema/
 
 | Metric | Value |
 |---|---|
-| **Tests** | 2,734 collected — unit, hypothesis property and pytest-benchmark cases |
-| **Source files** | 224 Python files under `noema/` (159 modules + 65 package `__init__`) |
-| **Lines of code** | 42,882 lines, 36,323 of them code (the rest blank and comments) |
+| **Tests** | 2,769 collected — unit, hypothesis property and pytest-benchmark cases (2,752 passed + 17 skipped on Ubuntu / 3.12) |
+| **Source files** | 225 Python files under `noema/` (160 modules + 65 package `__init__`) |
+| **Lines of code** | 43,406 lines, 36,767 of them code (the rest blank and comments) |
 | **CI** | Ruff lint + format, encoding/mojibake gate, mypy, bandit + pip-audit, golden eval, merge gate |
 | **Platforms** | Ubuntu + Windows, Python 3.12 + 3.13 + 3.14 |
 | **Encoding** | Unicode mojibake gate — broken strings fail CI |
@@ -298,7 +301,7 @@ noema/
 
 - [Usage Guide](docs/usage-guide.md) — complete CLI, API, and library reference with examples
 - [3D Connectome Showcase](docs/noema.html) — interactive neural-connectome page (static, DEMO SIM mode)
-- [ML/AI Upgrade Plan](docs/noema_ml_ai_upgrade_plan.md) — RLVR, hybrid memory, LinUCB routing, Z3 CEGIS roadmap
+- [ML/AI Upgrade Plan](docs/noema_ml_ai_upgrade_plan.md) — v2: RLVR, hybrid memory, LinUCB routing, Z3 CEGIS (shipped to `main`)
 - [Whitepaper](docs/WHITEPAPER.md) — vision and design principles
 - [Roadmap](docs/ROADMAP.md) — three phases: Architect → Autopoietic Enterprise → Global Noema Grid
 - [Configuration](docs/configuration.md) — all env vars and YAML options

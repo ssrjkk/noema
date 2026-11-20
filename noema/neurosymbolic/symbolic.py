@@ -299,7 +299,7 @@ def _z3_unavailable(exc: BaseException) -> bool:
 def _extract_cegis_feedback(
     solver: Any, is_valid: bool, variables: dict[str, Any]
 ) -> CEGISFeedback:
-    """Derive a minimal unsat_core / satisfying counterexample from a pooled solver.
+    """Derive the solver's unsat_core / a satisfying counterexample from a pooled solver.
 
     The solver holds only the tracked requirements here (candidate push/pop pairs
     are balanced). An UNSAT contract yields the core naming the conflicting
@@ -315,9 +315,7 @@ def _extract_cegis_feedback(
         status = solver.check()
         if status == unsat:
             core = tuple(str(c) for c in solver.unsat_core())
-            return CEGISFeedback(
-                verdict="UNSAT", unsat_core=core, reason=f"minimal unsat_core: {core}"
-            )
+            return CEGISFeedback(verdict="UNSAT", unsat_core=core, reason=f"unsat_core: {core}")
         if status == sat:
             if is_valid:
                 return CEGISFeedback(verdict="SAT", reason="all formal constraints satisfiable")
@@ -503,8 +501,8 @@ class SymbolicEngine:
 
         try:
             async with self._get_solver() as solver:
-                # Track each requirement by name so an UNSAT contract yields a
-                # minimal unsat_core (CEGIS feedback) instead of a bare verdict.
+                # Track each requirement by name so an UNSAT contract yields an
+                # unsat_core (CEGIS feedback) instead of a bare verdict.
                 solver.set("unsat_core", True)
                 for req in task_graph.requirements:
                     solver.assert_and_track(req.expression, req.name)
