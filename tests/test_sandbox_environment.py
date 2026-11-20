@@ -120,6 +120,7 @@ class TestSandboxConfig:
         assert config.static_check_enabled is True
         assert config.max_parallel == 4
         assert config.temp_dir == ""
+        assert config.static_allow_relative_imports is False
 
     def test_custom_values(self):
         cfg = SandboxConfig(timeout=120, max_memory_mb=512, docker_image="custom:1.0")
@@ -984,6 +985,32 @@ class TestDockerLint:
         mock_log.warning.assert_called_once_with("lint_docker_error", error="disk full")
         assert result.files[0].lint_passed is True
         assert not work.exists()
+
+    @pytest.mark.asyncio
+    async def test_lint_failure_survives_unresolved_tempdir(
+        self, docker_env: DockerEnvironment, tmp_path: Path
+    ):
+        """Regression: _safe_join returns resolved paths, so the container path
+        must be relative to a resolved base. Windows mkdtemp can return an 8.3
+        short name that resolve() expands; an unresolved base made relative_to
+        raise ValueError, swallowed by the outer except into a silent lint pass.
+        A redundant '..' reproduces that mismatch on any platform.
+        """
+        work = tmp_path / "work"
+        work.mkdir()
+        unresolved = str(work / ".." / "work")
+        files = [_py_file("bad code")]
+        result = _make_result(files)
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"E501 too long\n", b""))
+        mock_proc.returncode = 1
+        with (
+            patch("tempfile.mkdtemp", return_value=unresolved),
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+        ):
+            result = await docker_env.lint(result, files)
+        assert result.files[0].lint_passed is False
+        assert "E501" in result.files[0].lint_errors[0]
 
 
 # ===================================================================

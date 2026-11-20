@@ -342,7 +342,12 @@ class _UndefinedNameFinder:
                 self._visit_expr(child)
 
 
-def _import_issues(tree: ast.Module, allowed_imports: Collection[str]) -> list[StaticIssue]:
+def _import_issues(
+    tree: ast.Module,
+    allowed_imports: Collection[str],
+    *,
+    allow_relative_imports: bool = False,
+) -> list[StaticIssue]:
     issues: list[StaticIssue] = []
     allowed = set(allowed_imports)
     for node in ast.walk(tree):
@@ -359,9 +364,14 @@ def _import_issues(tree: ast.Module, allowed_imports: Collection[str]) -> list[S
                     )
         elif isinstance(node, ast.ImportFrom):
             if node.level > 0:
-                issues.append(
-                    StaticIssue(node.lineno, "relative-import", "relative imports are not allowed")
-                )
+                # First-party package code legitimately imports its own siblings;
+                # only untrusted generated code is confined against relative imports.
+                if not allow_relative_imports:
+                    issues.append(
+                        StaticIssue(
+                            node.lineno, "relative-import", "relative imports are not allowed"
+                        )
+                    )
                 continue
             for alias in node.names:
                 if alias.name == "*":
@@ -389,18 +399,23 @@ def analyze_code(
     code: str,
     *,
     allowed_imports: Collection[str] = _STDLIB_MODULES,
+    allow_relative_imports: bool = False,
 ) -> list[StaticIssue]:
     """Return the static issues found in ``code``. Never raises.
 
     ``allowed_imports`` is the set of import root modules the code may use
     (stdlib by default; callers with sibling files should extend it).
+    ``allow_relative_imports`` relaxes the relative-import ban for first-party
+    package code; untrusted generated code keeps the default containment.
     """
     try:
         tree = ast.parse(code)
     except SyntaxError as exc:
         return [StaticIssue(exc.lineno or 1, "syntax", exc.msg or "invalid syntax")]
 
-    issues: list[StaticIssue] = _import_issues(tree, allowed_imports)
+    issues: list[StaticIssue] = _import_issues(
+        tree, allowed_imports, allow_relative_imports=allow_relative_imports
+    )
     try:
         finder = _UndefinedNameFinder(issues)
         finder.run(tree)

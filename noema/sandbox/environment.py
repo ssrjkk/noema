@@ -197,6 +197,7 @@ class SandboxConfig:
     docker_image: str = "noema-sandbox:3.12"
     static_check_enabled: bool = True
     static_allow_imports: tuple[str, ...] = ()
+    static_allow_relative_imports: bool = False
     lint_enabled: bool = True
     lint_config_path: str = ""
     type_check_enabled: bool = True
@@ -516,7 +517,8 @@ class DockerEnvironment(Environment):
             file_path.write_text(content, encoding="utf-8")
 
     async def lint(self, result: SandboxResult, files: list[dict[str, str]]) -> SandboxResult:
-        tmp_dir = Path(tempfile.mkdtemp())
+        # Resolved so _safe_join's resolved paths stay relative_to this base (Windows 8.3 short names).
+        tmp_dir = Path(tempfile.mkdtemp()).resolve()
         try:
             self._write_files(files, tmp_dir)
             selector = _lint_selector(self.config, tmp_dir)

@@ -85,7 +85,7 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           fail_ci_if_error: false
 
       - name: Upload test results
@@ -229,6 +229,8 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -e ".[dev,db]"
+          # Gate import policy allows a root only if it resolves here; symbolic.py imports z3.
+          pip install "z3-solver>=5.1.0.0"
 
       - name: Run merge gate
         id: gate

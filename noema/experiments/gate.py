@@ -466,6 +466,7 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
                 run_enabled=cfg.sandbox_run,
                 test_enabled=False,
                 static_allow_imports=_environment_import_roots(files),
+                static_allow_relative_imports=True,
                 lint_config_path=_repo_lint_config(),
             )
         )

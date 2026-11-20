@@ -462,6 +462,30 @@ x = 1
     assert any("definitely_not_installed_pkg_xyz" in issue for issue in report.sandbox_issues)
 
 
+@pytest.mark.asyncio
+async def test_gate_allows_first_party_relative_imports(tmp_path, monkeypatch):
+    """Package internals legitimately import their own siblings. The gate
+    validates first-party files, so relative imports must not block it (the
+    untrusted-code default still rejects them — see test_sandbox_static_check)."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(_RUFF_CONFIG, encoding="utf-8")
+    content = """from .store import MemoryRecord
+from ..config import get_settings
+
+__all__ = ["MemoryRecord", "get_settings"]
+"""
+
+    cfg = GateConfig(
+        diff_target="origin/main",
+        judge=await _judge_factory(0.9),
+        explicit_files=[{"path": "pkg/__init__.py", "content": content}],
+    )
+    report = await run_merge_gate(cfg)
+
+    assert report.sandbox_all_valid is True, report.sandbox_issues
+    assert not any("relative-import" in issue for issue in report.sandbox_issues)
+
+
 def test_environment_import_roots_skips_stdlib_and_unresolvable(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     files = [
