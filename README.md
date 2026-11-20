@@ -321,8 +321,8 @@ noema/
 | Phase | Name | Status |
 |---|---|---|
 | **1** | **The Architect** — generation + verification + sandbox + benchmarks + knowledge + reasoning trace | **Done** |
-| **2** | **The Autopoietic Enterprise** — incident → PR, merge gate, evolution with auto-apply, benchmark service | **In progress** |
-| **3** | **Global Noema Grid** — multi-node pool, gRPC federation, token/ledger economics, live dashboard | **In progress** |
+| **2** | **The Autopoietic Enterprise** — incident → PR, merge gate, evolution with auto-apply, benchmark service | **Merged, under test** |
+| **3** | **Global Noema Grid** — multi-node pool, gRPC federation, token/ledger economics, live dashboard | **Merged, under test** |
 
 ## Author
 
