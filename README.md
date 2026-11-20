@@ -118,7 +118,9 @@ pip install -e ".[dev,full,db,grpc,vault]"
 
 **LLM providers:** `openai`, `anthropic`, `ollama` + built-in **fallback provider** (works without API keys — for demos and CI).
 
-Configure via env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+Configure via env: `NOEMA_LLM__PROVIDER=openai`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. Pin a model with
+`noema think --model gpt-4o` per command, or `NOEMA_LLM__OLLAMA_MODEL` for Ollama. Env beats the YAML
+file — see [Configuration](docs/configuration.md) for the full precedence.
 
 ### Verify Installation
 
@@ -195,7 +197,8 @@ curl -X POST http://localhost:8000/think \
 
 ### Required
 
-1. **LLM provider** — default is `fallback` (template responses, not LLM)
+1. **LLM provider** — the code default is `fallback` (template responses, not LLM); the `settings.yaml`
+   shipped in this repo selects `ollama`, so name the provider explicitly instead of inheriting either
    ```bash
    export NOEMA_LLM__PROVIDER=openai
    export OPENAI_API_KEY=sk-...
@@ -292,7 +295,7 @@ noema/
 |---|---|
 | **Tests** | 2,769 collected — unit, hypothesis property and pytest-benchmark cases (2,752 passed + 17 skipped on Ubuntu / 3.12) |
 | **Source files** | 225 Python files under `noema/` (160 modules + 65 package `__init__`) |
-| **Lines of code** | 43,406 lines, 36,767 of them code (the rest blank and comments) |
+| **Lines of code** | 43,417 lines, 36,774 of them code (the rest blank and comments) |
 | **CI** | Ruff lint + format, encoding/mojibake gate, mypy, bandit + pip-audit, golden eval, merge gate |
 | **Platforms** | Ubuntu + Windows, Python 3.12 + 3.13 + 3.14 |
 | **Encoding** | Unicode mojibake gate — broken strings fail CI |

@@ -112,7 +112,9 @@ pip install -e ".[dev,full,db,grpc,vault]"
 
 **LLM-провайдеры:** `openai`, `anthropic`, `ollama` + встроенный **fallback-провайдер** (работает без ключей — для демо и CI).
 
-Настройка через env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+Настройка через env: `NOEMA_LLM__PROVIDER=openai`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. Модель задаётся
+на команду флагом `noema think --model gpt-4o`, либо `NOEMA_LLM__OLLAMA_MODEL` для Ollama. Env перебивает
+YAML-файл — полное описание приоритетов в [Configuration](docs/configuration.md).
 
 ### Проверка установки
 
@@ -189,7 +191,8 @@ curl -X POST http://localhost:8000/think \
 
 ### Обязательные
 
-1. **LLM-провайдер** — по умолчанию `fallback` (шаблонные ответы, не LLM)
+1. **LLM-провайдер** — дефолт кода `fallback` (шаблонные ответы, не LLM); в `settings.yaml`, который
+   лежит в этом репозитории, выбран `ollama`, поэтому в проде задавайте провайдер явно
    ```bash
    export NOEMA_LLM__PROVIDER=openai
    export OPENAI_API_KEY=sk-...
@@ -286,7 +289,7 @@ noema/
 |---|---|
 | **Тесты** | 2 769 собрано (2 752 passed + 17 skipped на Ubuntu / 3.12; pytest + hypothesis + pytest-benchmark) |
 | **Исходные файлы** | 225 Python-файлов в `noema/` (160 модулей + 65 `__init__`) |
-| **Строки кода** | 43 406 всего, 36 767 — код (остальное пустые и комментарии) |
+| **Строки кода** | 43 417 всего, 36 774 — код (остальное пустые и комментарии) |
 | **CI** | Ruff lint + format, mypy, bandit, safety, pip-audit |
 | **Платформы** | Ubuntu + Windows, Python 3.12 + 3.13 + 3.14 |
 | **Кодировка** | Mojibake-гейт — сломанные юникод-строки не проходят CI |

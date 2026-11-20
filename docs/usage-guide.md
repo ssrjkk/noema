@@ -66,7 +66,9 @@ If you see `=== ALL DEMOS COMPLETE ===` — installation is good.
 
 ## Configuration
 
-Noema works out of the box with a **fallback provider** (template responses, no LLM). To use a real LLM, set one of:
+Noema works out of the box with a **fallback provider** (template responses, no LLM) — that is the code
+default. Note that `settings.yaml` in this repository selects `ollama`, and YAML beats the code default
+while env beats both, so a clone resolves to `ollama` until you override it. To use a real LLM, set one of:
 
 ### OpenAI
 
@@ -606,10 +608,12 @@ export NOEMA_AUTONOMY__GITHUB_BASE_BRANCH=main
 
 ### "Ollama is unreachable"
 
-Ollama is the default provider. Either start it (`ollama serve`) or switch:
+The code default is `fallback`, but the `settings.yaml` shipped in this repository selects `ollama`,
+so a clone asks for a local Ollama. Either start it (`ollama serve`) or override the file — env vars
+win over YAML:
 
 ```bash
-export NOEMA_LLM__PROVIDER=openai   # or anthropic, fallback
+export NOEMA_LLM__PROVIDER=fallback   # or openai, anthropic
 ```
 
 ### "Service starting" (503 on /admin/metrics)

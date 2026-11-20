@@ -2,6 +2,17 @@
 
 All settings are managed via `noema/config/settings.py` using Pydantic BaseSettings with environment variable overrides and optional YAML file loading.
 
+## Precedence
+
+`get_settings()` resolves in this order: **environment variables > YAML file > field defaults**.
+
+The YAML file is `$NOEMA_CONFIG` when set, otherwise `settings.yaml` next to the `noema/` package
+(i.e. the repository root in a `pip install -e .` checkout). The tables below list **field defaults**;
+where the repository ships a value, that file wins until an env var overrides it — notably
+`settings.yaml` in this repo sets `llm.provider: ollama`, so a clone asks for Ollama even though the
+code default is `fallback`. `NoemaSettings()` built directly ignores both env and YAML by design
+(`tests/test_config.py::test_direct_construction_ignores_env`).
+
 ## Environment Variables
 
 Settings are organized into namespaced groups. Each group uses a unique environment prefix.
@@ -28,7 +39,9 @@ Settings are organized into namespaced groups. Each group uses a unique environm
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NOEMA_LLM_PROVIDER` | `ollama` | Provider: `ollama`, `openai`, `anthropic` |
+| `NOEMA_LLM_PROVIDER` | `fallback` | Provider: `fallback`, `ollama`, `openai`, `anthropic`. `fallback` answers from templates, so a fresh install runs without keys or a local Ollama |
+| `NOEMA_LLM_ROUTER` | `static` | `static` \| `linucb`. `linucb` lets the contextual bandit pick the model arm from verified outcomes; budget exhausted it raises `BudgetExceededError` rather than making an unmodelled call |
+| `NOEMA_LLM_ROUTER_CHECKPOINT` | `` | JSON state file for the bandit. Validated on load — a corrupt checkpoint raises instead of resetting learned weights. Empty = fresh priors |
 | `NOEMA_LLM_OLLAMA_URL` | `http://localhost:11434` | Ollama server URL |
 | `NOEMA_LLM_OLLAMA_MODEL` | `llama3.1` | Default Ollama model |
 | `NOEMA_LLM_OPENAI_API_KEY` | `` | OpenAI API key |
