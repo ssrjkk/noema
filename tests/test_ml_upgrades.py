@@ -6,6 +6,7 @@ import ast
 import importlib
 import itertools
 import json
+import math
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -13,8 +14,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from noema.llm.router_bandit import BudgetExceededError, LinUCBModelRouter, ModelArm, TaskContext
-from noema.memory.hybrid_retriever import FailurePattern, HybridCognitiveMemory, MemoryRecord
-from noema.memory.store import MemoryStore
+from noema.memory.hybrid_retriever import (
+    FailurePattern,
+    HybridCognitiveMemory,
+    MemoryRecord,
+    epoch_to_utc,
+)
+from noema.memory.store import MemoryStore, SemanticMemory
 from noema.neurosymbolic.cegis_mutator import (
     Z3_AVAILABLE,
     ASTContractMutator,
@@ -300,6 +306,41 @@ def test_store_hybrid_view_drops_what_a_mutation_removed(tmp_path) -> None:
 
     assert store.search_hybrid("redis eviction cache", top_k=5) == []
     assert not any(rid.endswith(gone.id) for rid in _hit_ids(store.search_hybrid("redis", top_k=5)))
+
+
+_COARSE_TICK = 1_795_186_342.0368645
+
+
+class _CoarseClock(datetime):
+    """A clock whose next reading is still the tick the fact was written on."""
+
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[override]
+        return datetime.fromtimestamp(math.floor(_COARSE_TICK * 1_000_000) / 1_000_000, tz)
+
+
+def test_epoch_to_utc_floors_the_sub_microsecond_tail() -> None:
+    # A projection must never be later than the reading it came from: rounding the
+    # tail up would put valid_from one microsecond ahead of the next clock read.
+    assert epoch_to_utc(_COARSE_TICK).microsecond == 36864
+    for raw in (_COARSE_TICK, 1.9999999, 0.0000005, 1_795_186_342.0368650):
+        assert epoch_to_utc(raw) <= datetime.fromtimestamp(raw, UTC)
+
+
+def test_fact_written_on_a_coarse_tick_is_retrievable(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("noema.memory.hybrid_retriever.datetime", _CoarseClock)
+    store = MemoryStore(persist_dir=str(tmp_path / "mem"), auto_save=False)
+    store.semantic.append(
+        SemanticMemory(
+            topic="cache", fact="Redis evicts under memory pressure", valid_from=_COARSE_TICK
+        )
+    )
+    # The clock has not moved off the tick the fact was written on. Rounding the
+    # sub-microsecond tail of that reading up made valid_from one microsecond ahead
+    # of now, so the fact was projected as not yet valid and retrieval returned [].
+    assert store.search_hybrid("redis eviction cache", top_k=5), (
+        "a fact written on the current tick was projected as not yet valid"
+    )
 
 
 def test_search_hybrid_honours_bitemporal_validity(tmp_path, monkeypatch) -> None:

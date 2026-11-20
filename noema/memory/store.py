@@ -30,6 +30,7 @@ from noema.memory.hybrid_retriever import (
     HybridCognitiveMemory,
     MemoryRecord,
     RetrievalHit,
+    epoch_to_utc,
 )
 from noema.utils.atomic_io import atomic_read_json, atomic_write_json
 
@@ -251,7 +252,7 @@ class MemoryStore:
                     ),
                     stratum="episodic",
                     tags=tuple(ep.tags),
-                    valid_from=datetime.fromtimestamp(ep.timestamp, UTC),
+                    valid_from=epoch_to_utc(ep.timestamp),
                     metadata={"kind": "episodic", "memory_id": ep.id},
                 )
             )
@@ -262,11 +263,9 @@ class MemoryStore:
                     content=f"{mem.topic} {mem.fact} {' '.join(mem.tags)}",
                     stratum="semantic",
                     tags=tuple(mem.tags),
-                    valid_from=datetime.fromtimestamp(mem.valid_from, UTC),
+                    valid_from=epoch_to_utc(mem.valid_from),
                     superseded_at=(
-                        None
-                        if mem.superseded_at is None
-                        else datetime.fromtimestamp(mem.superseded_at, UTC)
+                        None if mem.superseded_at is None else epoch_to_utc(mem.superseded_at)
                     ),
                     decay_lambda=mem.decay_lambda,
                     metadata={

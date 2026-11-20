@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from noema.logging import get_logger
-from noema.memory.hybrid_retriever import FailurePattern
+from noema.memory.hybrid_retriever import FailurePattern, epoch_to_utc
 from noema.memory.store import (
     EpisodicMemory,
     MemoryStore,
@@ -221,7 +221,7 @@ class PostgresMemoryStore(MemoryStore):
                 unsat_core=tuple(str(t) for t in r["unsat_core"] or ()),
                 verified_patch_diff=r["verified_patch_diff"] or "",
                 z3_contract=r["z3_contract"] or "",
-                created_at=datetime.fromtimestamp(r["created_at"], UTC)
+                created_at=epoch_to_utc(r["created_at"])
                 if r["created_at"]
                 else (datetime.now(UTC)),
             )
