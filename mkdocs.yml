@@ -59,6 +59,7 @@ nav:
   - Usage Guide: usage-guide.md
   - Architecture: architecture.md
   - Roadmap: ROADMAP.md
+  - ML/AI Upgrade Plan: noema_ml_ai_upgrade_plan.md
   - Whitepaper: WHITEPAPER.md
   - API Reference:
       - Noema Engine: api/noema.md

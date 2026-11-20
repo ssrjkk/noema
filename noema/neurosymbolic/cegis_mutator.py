@@ -1,7 +1,7 @@
 """CEGIS verification, AST contract mutation strength testing, and Verifier-Guided MCTS.
 
 Upgrades Noema's linear propose->verify refine loop into:
-1. Fail-closed Z3 CEGIS with minimal unsat_core() and counterexample model extraction.
+1. Fail-closed Z3 CEGIS with unsat_core() and counterexample model extraction.
 2. Mutation-Based Contract Strength Testing (Mutation Kill Score, MKS) that validates
    baseline source first and never counts verifier exceptions as mutant kills.
 3. Verifier-Guided MCTS (PUCT) over ChainOfThought DAG nodes with a pluggable
@@ -316,7 +316,7 @@ class Z3CEGISVerifier:
         constraints: dict[str, object],
         check_negated_safety: bool = False,
     ) -> CEGISFeedback:
-        """Verify named Z3 boolean constraints and extract minimal unsat_core on UNSAT."""
+        """Verify named Z3 boolean constraints and extract the unsat_core on UNSAT."""
         started = time.perf_counter()
         if not Z3_AVAILABLE or z3 is None:
             elapsed = (time.perf_counter() - started) * 1000.0
@@ -377,7 +377,7 @@ class Z3CEGISVerifier:
                 verdict="UNSAT",
                 unsat_core=core,
                 elapsed_ms=elapsed,
-                reason=f"Conflicting constraints in minimal unsat_core: {core}",
+                reason=f"Conflicting constraints in unsat_core: {core}",
             )
 
         return CEGISFeedback(

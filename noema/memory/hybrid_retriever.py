@@ -15,13 +15,27 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
 _TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def epoch_to_utc(seconds: float) -> datetime:
+    """UTC datetime for an epoch reading, floored to the microsecond.
+
+    ``time.time()`` carries a sub-microsecond tail and ``datetime.fromtimestamp``
+    rounds that tail to the nearest microsecond. On a coarse clock the record's own
+    reading and the next one land on the same tick, so rounding up put ``valid_from``
+    a microsecond ahead of ``now`` and a fact written just now was filtered out as
+    not yet valid. Flooring keeps a projection at or before its own clock reading.
+    """
+    return _EPOCH + timedelta(microseconds=math.floor(seconds * 1_000_000))
 
 
 def tokenize(text: str) -> list[str]:

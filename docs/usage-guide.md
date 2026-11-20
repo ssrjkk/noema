@@ -21,6 +21,7 @@ Complete reference for using Noema — from first demo to production deployment.
   - [grid — distributed federation](#grid-distributed-federation)
   - [audit — Merkle proof & verification](#audit-merkle-proof-verification)
   - [health — system checks](#health-system-checks)
+  - [train — RLVR datasets and judge calibration](#train-rlvr-datasets-and-judge-calibration)
 - [API Server](#api-server)
   - [Endpoints](#endpoints)
   - [Authentication](#authentication)
@@ -97,6 +98,22 @@ export NOEMA_LLM__PROVIDER=fallback
 ```
 
 Returns template-based solutions. Useful for demos, CI, and testing the pipeline without burning tokens.
+
+### Model routing (opt-in)
+
+By default the router is `static`: it uses the configured provider without a bandit.
+To let a contextual bandit pick the arm from verified task outcomes:
+
+```bash
+export NOEMA_LLM__ROUTER=linucb
+export NOEMA_LLM__ROUTER_CHECKPOINT=.noema/router.json   # optional persisted state
+```
+
+The bandit updates its ridge solution with exact Sherman-Morrison rank-1 inverse updates and is
+thread-safe (`RLock`). Routing is fail-closed on economics: when the USD budget is exhausted the
+router raises `BudgetExceededError` instead of silently degrading to an unmodelled call, and a
+corrupt checkpoint raises rather than resetting the learned weights. An unknown policy value raises
+`ValueError` at construction.
 
 Full configuration reference: [configuration.md](configuration.md)
 
@@ -335,6 +352,28 @@ noema health check
 noema health check-llm
 ```
 
+### `train` — RLVR datasets and judge calibration
+
+Build preference data from rollouts that were already verified, and measure how honest the judge is.
+
+```bash
+# DPO preference pairs (reward margin >= 0.25, at most 8 pairs per task)
+noema train export-dpo --input rollouts.jsonl --output dpo.jsonl --min-margin 0.25 --max-pairs-per-task 8
+
+# GRPO groups with within-group advantage normalization
+noema train export-grpo --input rollouts.jsonl --output grpo.jsonl
+
+# Out-of-sample judge calibration: Platt scaling, k-fold, Brier / ECE
+noema train calibrate-judge --input judgements.jsonl --folds 5 --out calibration.json
+```
+
+Each `rollouts.jsonl` line is one JSON object with `task_id`, `prompt`, `response`, `ast_ok`,
+`z3_sat`, `mutation_kill_score`, `docker_pass_rate`, plus optional `normalized_cost` (default `0.0`)
+and `raw_judge_score` (default `0.5`). A malformed line stops the command with the file path, the
+line number and the reason. `calibrate-judge` reads `{raw_judge_score, docker_pass}` records and
+reports cross-validated scores rather than in-sample fit, so a judge that merely memorises its
+labels shows up as one.
+
 ---
 
 ## API Server
@@ -443,6 +482,75 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
+
+### Hybrid retrieval
+
+`search_hybrid` fuses sparse BM25 and dense cosine scores with Reciprocal Rank Fusion, filters by
+bi-temporal validity and keeps Ebbinghaus retention as a ranking signal rather than a cutoff, so an
+old fact is never dropped silently.
+
+```python
+from noema.memory.store import MemoryStore
+
+store = MemoryStore()
+for hit in store.search_hybrid("redis eviction cache", top_k=5):
+    print(
+        hit.record.content,
+        f"score={hit.score:.3f}",
+        f"bm25={hit.bm25_score:.3f}",
+        f"dense={hit.dense_score:.3f}",
+        f"retention={hit.retention:.3f}",
+    )
+
+# Same query at an earlier wall-clock time: facts not yet valid are excluded.
+from datetime import datetime, UTC
+snapshot = store.search_hybrid("redis eviction cache", at_time=datetime(2026, 1, 1, tzinfo=UTC))
+```
+
+Superseded records stay in the index for audit and are returned only with `include_superseded=True`.
+
+### Failure-indexed memory
+
+A verified repair is stored against the incident's error signature (exception line + raising frame)
+and its Z3 `unsat_core`; the autonomous fixer queries that index before proposing a new patch.
+
+```python
+from noema.memory.hybrid_retriever import FailurePattern
+
+store.index_failure_fix(
+    FailurePattern(
+        pattern_id="fail-42",
+        error_signature="KeyError: 'tenant_id'",
+        unsat_core=("auth_requires_tenant",),
+        verified_patch_diff=diff_text,
+        z3_contract=contract_source,
+    )
+)
+
+for pattern, similarity in store.lookup_similar_failures(
+    "KeyError: 'tenant_id'", unsat_core=("auth_requires_tenant",), top_k=3
+):
+    print(pattern.pattern_id, similarity)
+```
+
+### CEGIS feedback
+
+`verify_solution_with_feedback` returns the usual verdict plus the structured solver feedback: an
+UNSAT contract yields the `unsat_core` naming the conflicting requirements, a rejected candidate
+yields a concrete `counterexample` model to refine against. Anything the solver cannot decide is
+reported as such — `FAIL_CLOSED` and `UNKNOWN` verdicts exist so an unavailable or indeterminate
+solver can never be read as a pass.
+
+```python
+from noema.neurosymbolic.symbolic import SymbolicEngine
+
+engine = SymbolicEngine()
+await engine.initialize()
+graph = await engine.parse_task(structured_task)
+
+is_valid, violations, feedback = await engine.verify_solution_with_feedback(solution, graph)
+print(feedback.verdict, feedback.unsat_core, feedback.counterexample, feedback.reason)
 ```
 
 ---

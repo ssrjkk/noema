@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+### Features
+- **v2 ML/AI bundle merged to `main`** (`bcfe489`, PR #37) — Z3 CEGIS feedback (`unsat_core` /
+  counterexample on a rejected candidate), hybrid retrieval over BM25 + dense with RRF fusion,
+  bi-temporal validity and failure-indexed memory, opt-in LinUCB model routing
+  (`NOEMA_LLM__ROUTER=linucb`) with fail-closed budget and checkpoint validation, and the
+  `noema train` CLI for DPO/GRPO exports and out-of-sample judge calibration.
+
+### Fixes
+- **Read-after-write in hybrid memory** — the bi-temporal projection converted an epoch float with
+  `datetime.fromtimestamp`, which rounds the sub-microsecond tail up. On a coarse clock a fact written
+  on the current tick got a `valid_from` one microsecond ahead of the next reading and was filtered out
+  as not yet valid, so `search_hybrid` returned nothing for data the store already held. Projection
+  timestamps now floor to the microsecond (`epoch_to_utc`), including `superseded_at` and the Postgres
+  failure-index `created_at`. `tests/test_ml_upgrades.py::test_fact_written_on_a_coarse_tick_is_retrievable`
+  pins the boundary; it fails against the previous code and is deterministic since.
+
+### Documentation
+- `usage-guide.md` covered the v2 surfaces for the first time: model routing, `train` commands with
+  the exact rollout JSONL schema, hybrid retrieval, failure index and CEGIS feedback.
+- README metrics re-measured against the CI run and the tree: 2 767 tests collected
+  (2 750 passed + 17 skipped), 225 Python files under `noema/`, 43 406 lines.
+- README feature tables and the ML/AI upgrade plan describe the bundle as shipped instead of planned;
+  `README.ru.md` docs list brought to parity with `README.md`.
+- Default provider remains `fallback`, routing remains `static` — the v2 surfaces are additive and
+  off unless enabled.
+
 ## v1.4.1 (2026-11-16)
 ### Maintenance
 - CI-матрица дополнена Python 3.14 — Docker-образ больше не обгоняет тесты.
