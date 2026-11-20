@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import time
+from datetime import UTC, datetime
 from typing import Any
 
 from noema.logging import get_logger
+from noema.memory.hybrid_retriever import FailurePattern
 from noema.memory.store import (
     EpisodicMemory,
     MemoryStore,
@@ -72,6 +75,7 @@ class PostgresMemoryStore(MemoryStore):
                 self.episodic = await self._load_episodic(conn)
                 self.semantic = await self._load_semantic(conn)
                 self.procedural = await self._load_procedural(conn)
+                self.failures = await self._load_failures(conn)
                 self._rebuild_indexes()
                 log.info(
                     "pg_memory_loaded", episodic=len(self.episodic), semantic=len(self.semantic)
@@ -96,6 +100,7 @@ class PostgresMemoryStore(MemoryStore):
                     await self._save_episodic(conn)
                     await self._save_semantic(conn)
                     await self._save_procedural(conn)
+                    await self._save_failure_fixes(conn)
             finally:
                 await conn.close()
             self._dirty = False
@@ -130,6 +135,25 @@ class PostgresMemoryStore(MemoryStore):
                 prerequisites TEXT[], tags TEXT[],
                 PRIMARY KEY (id, tenant_id)
             )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS noema_failure_fix (
+                pattern_id TEXT, tenant_id TEXT, error_signature TEXT,
+                unsat_core TEXT[], verified_patch_diff TEXT, z3_contract TEXT,
+                created_at DOUBLE PRECISION,
+                PRIMARY KEY (pattern_id, tenant_id)
+            )
+        """)
+        # Bi-temporal columns arrived after the first schema, and CREATE TABLE
+        # IF NOT EXISTS never touches an existing table. Without these ALTERs a
+        # long-lived deployment would silently drop supersede() bookkeeping on
+        # every Postgres save while the file backend kept it.
+        await conn.execute("""
+            ALTER TABLE noema_semantic
+                ADD COLUMN IF NOT EXISTS valid_from DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS superseded_at DOUBLE PRECISION,
+                ADD COLUMN IF NOT EXISTS supersedes TEXT,
+                ADD COLUMN IF NOT EXISTS decay_lambda REAL
         """)
 
     async def _load_episodic(self, conn: Any) -> list[EpisodicMemory]:
@@ -172,6 +196,34 @@ class PostgresMemoryStore(MemoryStore):
                 use_count=r["use_count"],
                 last_used=r["last_used"],
                 tags=list(r["tags"]) if r["tags"] else [],
+                # Rows written before the bi-temporal columns arrive as NULL;
+                # last_used is the closest honest stand-in for "since when".
+                valid_from=(
+                    r["valid_from"]
+                    if r["valid_from"] is not None
+                    else r["last_used"] or time.time()
+                ),
+                superseded_at=r["superseded_at"],
+                supersedes=r["supersedes"] or "",
+                decay_lambda=r["decay_lambda"] if r["decay_lambda"] is not None else 0.05,
+            )
+            for r in rows
+        ]
+
+    async def _load_failures(self, conn: Any) -> list[FailurePattern]:
+        rows = await conn.fetch(
+            "SELECT * FROM noema_failure_fix WHERE tenant_id = $1", self.tenant_id
+        )
+        return [
+            FailurePattern(
+                pattern_id=r["pattern_id"],
+                error_signature=r["error_signature"] or "",
+                unsat_core=tuple(str(t) for t in r["unsat_core"] or ()),
+                verified_patch_diff=r["verified_patch_diff"] or "",
+                z3_contract=r["z3_contract"] or "",
+                created_at=datetime.fromtimestamp(r["created_at"], UTC)
+                if r["created_at"]
+                else (datetime.now(UTC)),
             )
             for r in rows
         ]
@@ -221,8 +273,9 @@ class PostgresMemoryStore(MemoryStore):
         for mem in self.semantic:
             await conn.execute(
                 """INSERT INTO noema_semantic
-                   (id, tenant_id, topic, fact, confidence, source, use_count, last_used, tags)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)""",
+                   (id, tenant_id, topic, fact, confidence, source, use_count, last_used, tags,
+                    valid_from, superseded_at, supersedes, decay_lambda)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)""",
                 mem.id,
                 self.tenant_id,
                 mem.topic,
@@ -232,6 +285,27 @@ class PostgresMemoryStore(MemoryStore):
                 mem.use_count,
                 mem.last_used,
                 mem.tags,
+                mem.valid_from,
+                mem.superseded_at,
+                mem.supersedes,
+                mem.decay_lambda,
+            )
+
+    async def _save_failure_fixes(self, conn: Any) -> None:
+        await conn.execute("DELETE FROM noema_failure_fix WHERE tenant_id = $1", self.tenant_id)
+        for fix in self.failures:
+            await conn.execute(
+                """INSERT INTO noema_failure_fix
+                   (pattern_id, tenant_id, error_signature, unsat_core,
+                    verified_patch_diff, z3_contract, created_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7)""",
+                fix.pattern_id,
+                self.tenant_id,
+                fix.error_signature,
+                list(fix.unsat_core),
+                fix.verified_patch_diff,
+                fix.z3_contract,
+                fix.created_at.timestamp(),
             )
 
     async def _save_procedural(self, conn: Any) -> None:

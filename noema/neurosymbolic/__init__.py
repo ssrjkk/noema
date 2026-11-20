@@ -1,3 +1,10 @@
+from noema.neurosymbolic.cegis_mutator import (
+    ASTContractMutator,
+    CEGISFeedback,
+    ContractStrengthReport,
+    VerifierGuidedMCTS,
+    Z3CEGISVerifier,
+)
 from noema.neurosymbolic.engine import (
     MaxRefinementsExceededError,
     NeuroSymbolicEngine,
@@ -24,6 +31,11 @@ __all__ = [
     "TaskGraph",
     "Constraint",
     "SymbolicVerificationError",
+    "CEGISFeedback",
+    "Z3CEGISVerifier",
+    "ASTContractMutator",
+    "ContractStrengthReport",
+    "VerifierGuidedMCTS",
     "NeuralInterface",
     "LLMRequest",
     "LLMResponse",

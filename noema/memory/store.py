@@ -1,4 +1,12 @@
-"""Three-tier memory system with dense vector search (HNSW) and atomic persistence."""
+"""Three-tier memory system with dense vector search (HNSW) and atomic persistence.
+
+``HybridCognitiveMemory`` is layered *over* the tiers below rather than running as a
+second store: the records it indexes are derived from ``episodic``/``semantic``/
+``procedural``/``failures`` on demand, so the JSON files (and the Postgres subclass)
+stay the only source of truth. Sparse BM25 + bi-temporal validity + Ebbinghaus
+retention are what the dense-only HNSW indexes cannot express; everything else is
+reused.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +15,8 @@ import inspect
 import time
 import uuid
 from contextlib import suppress
+from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -15,10 +25,16 @@ from pydantic import BaseModel, Field
 from noema.context import get_tenant_id
 from noema.embeddings import HNSWIndex, get_embedder
 from noema.logging import get_logger
+from noema.memory.hybrid_retriever import (
+    FailurePattern,
+    HybridCognitiveMemory,
+    MemoryRecord,
+    RetrievalHit,
+)
 from noema.utils.atomic_io import atomic_read_json, atomic_write_json
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
+    from collections.abc import Callable, Coroutine
 
 log = get_logger(__name__)
 
@@ -29,6 +45,37 @@ def _log_save_failure(task: asyncio.Task) -> None:
         exc = task.exception()
         if exc is not None:
             log.error("memory_debounced_save_failed", error=str(exc))
+
+
+def _parse_iso_datetime(value: object) -> datetime:
+    """Read an ISO timestamp as an aware datetime, falling back to "now".
+
+    The bi-temporal comparisons in ``MemoryRecord`` mix aware datetimes; a naive
+    value from an older or hand-edited JSON file must not raise mid-retrieval.
+    """
+    if isinstance(value, str):
+        with suppress(ValueError):
+            parsed = datetime.fromisoformat(value)
+            return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+    return datetime.now(UTC)
+
+
+def _failure_to_dict(pattern: FailurePattern) -> dict[str, Any]:
+    data: dict[str, Any] = asdict(pattern)
+    data["created_at"] = pattern.created_at.isoformat()
+    data["unsat_core"] = list(pattern.unsat_core)
+    return data
+
+
+def _failure_from_dict(data: dict[str, Any]) -> FailurePattern:
+    return FailurePattern(
+        pattern_id=str(data.get("pattern_id", "")),
+        error_signature=str(data.get("error_signature", "")),
+        unsat_core=tuple(str(t) for t in data.get("unsat_core") or ()),
+        verified_patch_diff=str(data.get("verified_patch_diff", "")),
+        z3_contract=str(data.get("z3_contract", "")),
+        created_at=_parse_iso_datetime(data.get("created_at")),
+    )
 
 
 class EpisodicMemory(BaseModel):
@@ -53,6 +100,12 @@ class SemanticMemory(BaseModel):
     use_count: int = 0
     last_used: float = Field(default_factory=time.time)
     tags: list[str] = Field(default_factory=list)
+    # Bi-temporal bookkeeping: a corrected fact does not delete its predecessor,
+    # it closes its validity interval. Defaults keep old JSON files loadable.
+    valid_from: float = Field(default_factory=time.time)
+    superseded_at: float | None = None
+    supersedes: str = ""
+    decay_lambda: float = 0.05
 
 
 class ProceduralMemory(BaseModel):
@@ -113,8 +166,11 @@ class MemoryStore:
         self.episodic: list[EpisodicMemory] = []
         self.semantic: list[SemanticMemory] = []
         self.procedural: list[ProceduralMemory] = []
+        self.failures: list[FailurePattern] = []
         self._episodic_index = _DenseVectorIndex()
         self._semantic_index = _DenseVectorIndex()
+        self._hybrid: HybridCognitiveMemory | None = None
+        self._hybrid_built: tuple[Any, ...] | None = None
         self._dirty = False
         self._auto_save = auto_save
         self._backup_count = backup_count
@@ -131,6 +187,9 @@ class MemoryStore:
     def _procedural_path(self) -> Path:
         return self.persist_dir / "procedural.json"
 
+    def _failure_path(self) -> Path:
+        return self.persist_dir / "failures.json"
+
     def _restore_from_disk(self) -> None:
         stores: list[tuple[Path, type[BaseModel], list[BaseModel]]] = [
             (self._episodic_path(), EpisodicMemory, cast("list[BaseModel]", self.episodic)),
@@ -146,10 +205,203 @@ class MemoryStore:
             except Exception as exc:
                 log.error("memory_load_error", path=str(path), error=str(exc))
 
+        self.failures.clear()
+        for item in atomic_read_json(self._failure_path(), default=[]):
+            try:
+                pattern = _failure_from_dict(item)
+            except Exception as exc:
+                log.error("failure_pattern_load_error", error=str(exc))
+                continue
+            if not pattern.pattern_id:
+                # An id-less row cannot be looked up, replaced or audited, and it
+                # would silently collide with every other anonymous pattern.
+                log.error("failure_pattern_load_error", error="missing pattern_id")
+                continue
+            self.failures.append(pattern)
+
         self._rebuild_indexes()
 
     def _load(self) -> None:
         self._restore_from_disk()
+
+    def _hybrid_embed_fn(self) -> Callable[[str], list[float]]:
+        """Dense projection shared with the HNSW indexes.
+
+        ``embed_one`` returns a (1, dim) row because the HNSW callers batch against
+        it; the retriever wants a flat vector, hence the reshape.
+        """
+        embedder = get_embedder(128)
+        return lambda text: embedder.embed_one(text).reshape(-1).tolist()
+
+    def _hybrid_records(self) -> list[MemoryRecord]:
+        """Project the persisted tiers onto bi-temporal views for hybrid retrieval.
+
+        Failure fixes are deliberately absent here: they are indexed through
+        ``HybridCognitiveMemory.index_failure_fix``, which also fills the pattern
+        registry that ``lookup_similar_failures`` reads.
+        """
+        records: list[MemoryRecord] = []
+        for ep in self.episodic:
+            records.append(
+                MemoryRecord(
+                    record_id=f"ep::{ep.id}",
+                    content=(
+                        f"{ep.task_description} {ep.solution_summary} {ep.tech_stack} "
+                        f"outcome={ep.outcome} {ep.error_message} {' '.join(ep.tags)}"
+                    ),
+                    stratum="episodic",
+                    tags=tuple(ep.tags),
+                    valid_from=datetime.fromtimestamp(ep.timestamp, UTC),
+                    metadata={"kind": "episodic", "memory_id": ep.id},
+                )
+            )
+        for mem in self.semantic:
+            records.append(
+                MemoryRecord(
+                    record_id=f"sem::{mem.id}",
+                    content=f"{mem.topic} {mem.fact} {' '.join(mem.tags)}",
+                    stratum="semantic",
+                    tags=tuple(mem.tags),
+                    valid_from=datetime.fromtimestamp(mem.valid_from, UTC),
+                    superseded_at=(
+                        None
+                        if mem.superseded_at is None
+                        else datetime.fromtimestamp(mem.superseded_at, UTC)
+                    ),
+                    decay_lambda=mem.decay_lambda,
+                    metadata={
+                        "kind": "semantic",
+                        "memory_id": mem.id,
+                        "confidence": mem.confidence,
+                    },
+                )
+            )
+        for proc in self.procedural:
+            records.append(
+                MemoryRecord(
+                    record_id=f"proc::{proc.id}",
+                    content=(
+                        f"{proc.procedure_name} {' '.join(proc.steps)} "
+                        f"{' '.join(proc.prerequisites)} {' '.join(proc.tags)}"
+                    ),
+                    stratum="procedural",
+                    tags=tuple(proc.tags),
+                    decay_lambda=0.02,
+                    metadata={
+                        "kind": "procedural",
+                        "memory_id": proc.id,
+                        "success_rate": proc.success_rate,
+                    },
+                )
+            )
+        return records
+
+    def hybrid_memory(self) -> HybridCognitiveMemory:
+        """Sparse + dense + RRF view of this store, rebuilt when the tiers changed.
+
+        The view holds no data of its own: everything in it is derived from the
+        tiers above, so persisting it would create a second source of truth.
+        Freshness comes from fingerprinting the projection itself, so no caller has
+        to remember a flag: a row added, edited or deleted — through these methods,
+        by reassigning a tier, or by the Postgres loader — moves the fingerprint and
+        forces a rebuild. Without that, a memory the store no longer holds would go
+        on answering queries from a cached view.
+        """
+        records = self._hybrid_records()
+        fingerprint = (
+            *(
+                (
+                    record.record_id,
+                    record.content,
+                    record.stratum,
+                    record.tags,
+                    record.valid_from,
+                    record.superseded_at,
+                    record.decay_lambda,
+                    tuple(record.metadata.items()),
+                )
+                for record in records
+            ),
+            *(
+                (
+                    fix.pattern_id,
+                    fix.error_signature,
+                    fix.unsat_core,
+                    fix.verified_patch_diff,
+                    fix.z3_contract,
+                    fix.created_at,
+                )
+                for fix in self.failures
+            ),
+        )
+        if self._hybrid is None or fingerprint != self._hybrid_built:
+            view = HybridCognitiveMemory(embed_fn=self._hybrid_embed_fn())
+            for record in records:
+                view.add(record, overwrite=True)
+            for pattern in self.failures:
+                view.index_failure_fix(pattern)
+            self._hybrid = view
+            self._hybrid_built = fingerprint
+        return self._hybrid
+
+    def search_hybrid(
+        self,
+        query: str,
+        top_k: int = 5,
+        at_time: datetime | None = None,
+        include_superseded: bool = False,
+    ) -> list[RetrievalHit]:
+        """Retrieve across all tiers with BM25 + dense fusion and bi-temporal filtering."""
+        return self.hybrid_memory().retrieve(
+            query, top_k=top_k, at_time=at_time, include_superseded=include_superseded
+        )
+
+    def supersede_fact(
+        self,
+        old_id: str,
+        topic: str,
+        fact: str,
+        confidence: float = 0.8,
+        source: str = "",
+        tags: list[str] | None = None,
+        *,
+        strict: bool = True,
+    ) -> SemanticMemory:
+        """Close ``old_id``'s validity interval and record its replacement.
+
+        The old row survives: an audit trail and "what did we believe on date X"
+        both need it. Both records share one timestamp so no instant ever sees two
+        active facts in the same lineage.
+        """
+        now = time.time()
+        old = next((m for m in self.semantic if m.id == old_id), None)
+        if old is None and strict:
+            raise KeyError(f"Cannot supersede unknown semantic id: {old_id!r}")
+        if old is not None:
+            old.superseded_at = now
+        new = self.learn_fact(
+            topic=topic, fact=fact, confidence=confidence, source=source, tags=tags
+        )
+        new.valid_from = now
+        new.supersedes = old_id if old is not None else ""
+        return new
+
+    def index_failure_fix(self, pattern: FailurePattern) -> None:
+        """Persist a verified repair, replacing any earlier record of the same pattern."""
+        self.failures = [f for f in self.failures if f.pattern_id != pattern.pattern_id]
+        self.failures.append(pattern)
+        self._mark_dirty()
+
+    def lookup_similar_failures(
+        self,
+        error_signature: str,
+        unsat_core: tuple[str, ...] = (),
+        top_k: int = 3,
+    ) -> list[tuple[FailurePattern, float]]:
+        """Past verified patches ranked against an incoming failure signature."""
+        return self.hybrid_memory().lookup_similar_failures(
+            error_signature, unsat_core, top_k=top_k
+        )
 
     def _rebuild_indexes(self) -> None:
         ep_docs = [
@@ -182,6 +434,12 @@ class MemoryStore:
         for path, store in stores:
             data = [m.model_dump() for m in store]
             atomic_write_json(path, data, backup=True, backup_count=self._backup_count)
+        atomic_write_json(
+            self._failure_path(),
+            [_failure_to_dict(f) for f in self.failures],
+            backup=True,
+            backup_count=self._backup_count,
+        )
         self._dirty = False
         log.debug("memory_saved")
 
@@ -357,6 +615,8 @@ class MemoryStore:
             "episodic_count": len(self.episodic),
             "semantic_count": len(self.semantic),
             "procedural_count": len(self.procedural),
+            "failure_fix_count": len(self.failures),
+            "active_fact_count": sum(1 for m in self.semantic if m.superseded_at is None),
             "successes": successes,
             "failures": failures,
             "success_rate": successes / max(successes + failures, 1),

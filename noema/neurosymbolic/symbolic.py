@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
 import structlog
 
+from noema.neurosymbolic.cegis_mutator import CEGISFeedback
+
 logger = structlog.get_logger(__name__)
 
 #: Domain-separation prefix for the task source hash (stable across processes,
@@ -294,6 +296,45 @@ def _z3_unavailable(exc: BaseException) -> bool:
     return isinstance(exc, ImportError) or type(exc).__name__ == "Z3Exception"
 
 
+def _extract_cegis_feedback(
+    solver: Any, is_valid: bool, variables: dict[str, Any]
+) -> CEGISFeedback:
+    """Derive a minimal unsat_core / satisfying counterexample from a pooled solver.
+
+    The solver holds only the tracked requirements here (candidate push/pop pairs
+    are balanced). An UNSAT contract yields the core naming the conflicting
+    requirements; a rejected candidate yields a satisfying model as a concrete
+    counterexample for the refine loop. The counterexample is evaluated against
+    the real Z3 variable objects (not model decls by name) so an assertion-tracking
+    literal that shares a requirement's name can never shadow the variable's value.
+    """
+    from z3 import sat, unsat
+
+    solver.push()
+    try:
+        status = solver.check()
+        if status == unsat:
+            core = tuple(str(c) for c in solver.unsat_core())
+            return CEGISFeedback(
+                verdict="UNSAT", unsat_core=core, reason=f"minimal unsat_core: {core}"
+            )
+        if status == sat:
+            if is_valid:
+                return CEGISFeedback(verdict="SAT", reason="all formal constraints satisfiable")
+            model = solver.model()
+            cex = {
+                name: str(model.eval(var, model_completion=True)) for name, var in variables.items()
+            }
+            return CEGISFeedback(
+                verdict="UNSAT",
+                counterexample=cex,
+                reason="candidate rejected; satisfying assignment shown",
+            )
+        return CEGISFeedback(verdict="UNKNOWN", reason="solver returned unknown")
+    finally:
+        solver.pop()
+
+
 class SymbolicEngine:
     def __init__(self, verification_timeout: float = 5.0, max_constraints: int = 1000) -> None:
         self.verification_timeout = verification_timeout
@@ -301,12 +342,22 @@ class SymbolicEngine:
         self._solver_pool: asyncio.Queue[Any] = asyncio.Queue(maxsize=10)
         self._initialized = False
         self._degraded = False
+        self._last_feedback = CEGISFeedback(verdict="UNKNOWN", reason="no verification run yet")
 
         logger.info(
             "symbolic_engine_initialized",
             timeout=verification_timeout,
             max_constraints=max_constraints,
         )
+
+    @property
+    def last_feedback(self) -> CEGISFeedback:
+        """CEGIS feedback (unsat_core / counterexample) from the last verification.
+
+        Populated by :meth:`verify_solution`; lets the refine loop feed structured
+        counterexamples back to the neural interface without a second solver pass.
+        """
+        return self._last_feedback
 
     async def initialize(self) -> None:
         if self._initialized:
@@ -437,30 +488,43 @@ class SymbolicEngine:
             human-readable reasons (empty when the solution is valid).
         """
         if not task_graph:
+            self._last_feedback = CEGISFeedback(
+                verdict="FAIL_CLOSED", reason="task_graph_not_initialized"
+            )
             return False, ["task_graph_not_initialized"]
 
         # Fail closed: without Z3 there is no way to verify anything. Returning
         # True here would silently accept every candidate, so it must not happen.
         if self._degraded:
+            self._last_feedback = CEGISFeedback(
+                verdict="FAIL_CLOSED", reason="z3 unavailable; fail-closed"
+            )
             return False, ["symbolic_engine_unavailable_z3_not_installed"]
 
         try:
             async with self._get_solver() as solver:
+                # Track each requirement by name so an UNSAT contract yields a
+                # minimal unsat_core (CEGIS feedback) instead of a bare verdict.
+                solver.set("unsat_core", True)
                 for req in task_graph.requirements:
-                    solver.add(req.expression)
+                    solver.assert_and_track(req.expression, req.name)
 
                 if not task_graph.requirements and not task_graph.constraints:
                     logger.warning(
                         "nothing_to_verify",
                         solution_keys=list(solution.keys()),
                     )
+                    self._last_feedback = CEGISFeedback(
+                        verdict="SAT", reason="no constraints to verify"
+                    )
                     return True, []
 
                 try:
-                    return await asyncio.wait_for(
-                        self._check_solution(solver, solution, task_graph),
+                    is_valid, violations = await asyncio.wait_for(
+                        self._check_and_extract(solver, solution, task_graph),
                         timeout=self.verification_timeout,
                     )
+                    return is_valid, violations
 
                 except TimeoutError:
                     logger.error(
@@ -468,13 +532,37 @@ class SymbolicEngine:
                         timeout=self.verification_timeout,
                         solution_keys=list(solution.keys()),
                     )
+                    self._last_feedback = CEGISFeedback(
+                        verdict="UNKNOWN", reason="verification timeout; unverified"
+                    )
                     return False, ["verification_timeout"]
 
         except SymbolicVerificationError:
             raise
         except Exception as e:
             logger.error("verification_failed", error=str(e), error_type=type(e).__name__)
+            self._last_feedback = CEGISFeedback(verdict="FAIL_CLOSED", reason=str(e))
             return False, [f"verification_error: {str(e)}"]
+
+    async def _check_and_extract(
+        self, solver: Any, solution: dict, task_graph: TaskGraph
+    ) -> tuple[bool, list[str]]:
+        """Run the candidate check, then extract CEGIS feedback from the same solver.
+
+        Both steps share one timeout budget so feedback extraction can never
+        outlive the verification deadline. The verdict comes from the unchanged
+        :meth:`_check_solution`; feedback is purely additive.
+        """
+        is_valid, violations = await self._check_solution(solver, solution, task_graph)
+        self._last_feedback = _extract_cegis_feedback(solver, is_valid, task_graph.variables)
+        return is_valid, violations
+
+    async def verify_solution_with_feedback(
+        self, solution: dict, task_graph: TaskGraph
+    ) -> tuple[bool, list[str], CEGISFeedback]:
+        """Verify and return structured CEGIS feedback alongside the verdict."""
+        is_valid, violations = await self.verify_solution(solution, task_graph)
+        return is_valid, violations, self._last_feedback
 
     async def _check_solution(
         self, solver: Any, solution: dict, task_graph: TaskGraph

@@ -382,6 +382,10 @@ class NoemaEngine:
         if not self._initialized:
             await self.initialize()
 
+        # A crashed previous task must not leak its bandit selections into this
+        # task's verification verdict.
+        self.model_router.discard_pending_outcomes()
+
         # Check for existing checkpoint (resumable execution). The checkpoint
         # file is kept until the run completes: if the process crashes mid-run
         # the recorded progress survives, so it can be resumed on retry.
@@ -717,13 +721,25 @@ class NoemaEngine:
         sandbox_verdict = await self._verify_think_solution(solution)
         if sandbox_verdict.get("enabled"):
             solution.metadata["sandbox"] = sandbox_verdict
-            if not sandbox_verdict["passed"] and self._settings.sandbox.verify_think_enforce:
-                raise SandboxValidationError(sandbox_verdict["summary"])
 
         # Judge gate (fail-closed when enforced). Only solutions that went
         # through the judge loop carry the verdict; the neurosymbolic fast
         # path is unaffected by design.
         judge_passed = solution.metadata.get("judge_passed")
+
+        # Online bandit update from ground-truth verification: the sandbox
+        # static gate plus the judge verdict (the NS path is Z3-verified by
+        # construction and carries no judge verdict). Recorded before the
+        # enforce checks so a rejected solution still teaches the router.
+        sandbox_ok = bool(sandbox_verdict.get("passed", True))
+        self.model_router.record_outcome(verified_pass=sandbox_ok and judge_passed is not False)
+
+        if (
+            sandbox_verdict.get("enabled")
+            and not sandbox_verdict["passed"]
+            and self._settings.sandbox.verify_think_enforce
+        ):
+            raise SandboxValidationError(sandbox_verdict["summary"])
         if judge_passed is False and self._settings.judge.enforce:
             raise JudgeError(
                 "Solution failed the judge gate (enforce=true); refusing to "

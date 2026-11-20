@@ -151,6 +151,20 @@ def _sentry_tags(body: dict[str, Any]) -> list[str]:
     return []
 
 
+def error_signature(incident: Incident) -> str:
+    """Key a repair into the failure index by what broke and where.
+
+    Two alerts for one bug differ in event id, timestamp and message body but
+    share the exception line and the frame that raised it, so that pair is what
+    a lookup of previously verified patches has to match on.
+    """
+    lines = [line.strip() for line in incident.stack_trace.splitlines() if line.strip()]
+    if not lines:
+        return f"{incident.title.strip() or 'Incident'} | id:{incident.id}"[:200]
+    frame = next((line for line in reversed(lines) if line.startswith("File")), "")
+    return f"{lines[0]} | {frame}"[:200]
+
+
 def incident_to_task(incident: Incident) -> dict[str, Any]:
     """Project an incident onto the fix-task contract consumed by NoemaEngine."""
     title = f"Fix: {incident.title}"

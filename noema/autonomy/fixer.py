@@ -26,6 +26,7 @@ import structlog
 from noema.autonomy.github import GitHubClient
 from noema.autonomy.incidents import (
     Incident,
+    error_signature,
     incident_branch_name,
     incident_to_task,
     parse_incident,
@@ -145,10 +146,12 @@ class IncidentFixer:
         )
 
         engine = await self._get_engine()
+        spec = incident_to_task(incident)
+        priors = self._recall_verified_fixes(incident)
         task = Task(
-            title=incident_to_task(incident)["title"],
-            description=incident_to_task(incident)["description"],
-            tags=incident_to_task(incident)["tags"],
+            title=spec["title"],
+            description=f"{spec['description']}\n\n{priors}" if priors else spec["description"],
+            tags=spec["tags"],
         )
 
         try:
@@ -226,6 +229,12 @@ class IncidentFixer:
                 result["merge_gate_passed"] = bool(gate_report.passed)
                 result["merge_gate_blocked_by"] = list(gate_report.blocked_by)
 
+        # The sandbox run above passed, so this patch is a candidate answer for the
+        # next alert with the same signature. A blocked merge gate means it is not
+        # trustworthy yet, so it is kept out of the index.
+        if result.get("merge_gate_passed") is not False and "merge_gate_error" not in result:
+            self._index_verified_fix(incident, files)
+
         logger.info(
             "incident_fix_pr_created",
             incident_id=incident.id,
@@ -234,6 +243,55 @@ class IncidentFixer:
             merge_gate_passed=result.get("merge_gate_passed"),
         )
         return result
+
+    def _memory(self) -> Any | None:
+        """The engine's memory store, when one has been built."""
+        return getattr(self._engine, "memory", None) if self._engine is not None else None
+
+    def _recall_verified_fixes(self, incident: Incident) -> str:
+        """Previously verified patches for this signature, as prompt context.
+
+        Recall is an optimisation: a store that is down or unreadable must not
+        stop the incident from being fixed, so every failure here degrades to
+        "no priors" and is logged.
+        """
+        lookup = getattr(self._memory(), "lookup_similar_failures", None)
+        if lookup is None:
+            return ""
+        try:
+            matches = lookup(error_signature(incident), top_k=3) or []
+            lines = [
+                f"- {fix.error_signature}\n  verified patch: {fix.verified_patch_diff[:600]}"
+                for fix, _score in matches[:3]
+            ]
+        except Exception as e:  # noqa: BLE001 - a broken recall must not block the fix
+            logger.warning("incident_fix_recall_failed", incident_id=incident.id, error=str(e))
+            return ""
+        if not lines:
+            return ""
+        logger.info("incident_fix_priors_recalled", incident_id=incident.id, count=len(lines))
+        return "Previously verified fixes for this failure:\n" + "\n".join(lines)
+
+    def _index_verified_fix(self, incident: Incident, files: list[tuple[str, str]]) -> None:
+        """Record a sandbox-verified patch so the next alert can reuse it."""
+        index = getattr(self._memory(), "index_failure_fix", None)
+        if index is None:
+            return
+        from noema.memory.hybrid_retriever import FailurePattern
+
+        diff = "\n".join(f"+++ {path}\n{content}" for path, content in files)
+        try:
+            index(
+                FailurePattern(
+                    pattern_id=incident.id[:32],
+                    error_signature=error_signature(incident),
+                    unsat_core=(),
+                    verified_patch_diff=diff[:4000],
+                    z3_contract="",
+                )
+            )
+        except Exception as e:  # noqa: BLE001 - losing one lesson beats losing the loop
+            logger.warning("incident_fix_index_failed", incident_id=incident.id, error=str(e))
 
     async def _attribute_pr_cost(
         self, task_id: str, pr_number: int, files: list[tuple[str, str]]

@@ -31,6 +31,7 @@ from noema.cli.grpc import grpc_app
 from noema.cli.health import health_app
 from noema.cli.init_cmd import init_app
 from noema.cli.mcp import mcp_app
+from noema.cli.train import train_app
 from noema.cli.ui import (
     ARROW,
     ELLIPSIS,
@@ -769,6 +770,7 @@ app.add_typer(grpc_app, name="grpc", rich_help_panel="Background")
 app.add_typer(mcp_app, name="mcp", rich_help_panel="Background")
 app.add_typer(audit_app, name="audit", rich_help_panel="Audit")
 app.add_typer(eval_app, name="eval", rich_help_panel="Evaluation")
+app.add_typer(train_app, name="train", rich_help_panel="Evaluation")
 
 if __name__ == "__main__":
     app()

@@ -678,6 +678,19 @@ class TestImportChecks:
         issues = analyze_code(code)
         assert any(i.rule == "relative-import" for i in issues)
 
+    def test_relative_import_allowed_for_first_party(self):
+        code = "from . import foo\nfrom ..module import thing\n"
+        issues = analyze_code(code, allow_relative_imports=True)
+        assert not any(i.rule == "relative-import" for i in issues)
+
+    def test_relative_allowance_does_not_open_absolute_imports(self):
+        """Counterweight: the opt-in relaxes only relative imports, not the
+        absolute-import containment untrusted code relies on."""
+        code = "from . import foo\nimport requests\n"
+        issues = analyze_code(code, allowed_imports={"os"}, allow_relative_imports=True)
+        assert not any(i.rule == "relative-import" for i in issues)
+        assert any(i.rule == "import-not-allowed" and "requests" in i.message for i in issues)
+
 
 # ── analyze_code ─────────────────────────────────────────────────────────────
 

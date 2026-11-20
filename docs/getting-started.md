@@ -27,7 +27,7 @@ noema --help
 python -m noema --help
 
 # Запустить живую демонстрацию всех 12 модулей (без ключей LLM — sandbox mode)
-python demo.py
+python scripts/demo.py
 ```
 
 ## Configuration

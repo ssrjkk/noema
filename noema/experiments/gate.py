@@ -16,8 +16,10 @@ from __future__ import annotations
 import argparse
 import ast
 import asyncio
+import importlib.util
 import json
 import subprocess
+import sys
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -27,6 +29,7 @@ from noema.core.types import CodeBlock, Solution
 from noema.judge import JudgeVerdict, evaluate_solution
 from noema.logging import get_logger
 from noema.sandbox.engine import SandboxConfig, SandboxEngine, SandboxResult
+from noema.training.rlvr_pipeline import JudgeCalibrator
 
 if TYPE_CHECKING:
     from noema.ontology import OntologyGraph
@@ -61,6 +64,12 @@ class GateConfig:
     failed proof blocks the gate. ``require_spec_patterns`` (path prefixes)
     additionally blocks changed ``.py`` files under those prefixes that have
     no matching ``.lean`` spec — the anti-vacuum guarantee for critical code.
+
+    ``calibration_*`` / ``calibrate_threshold``: the RLVR judge-calibration stage.
+    A labeled history of judge scores against verified outcomes fits a Platt
+    transform; the gate reports its out-of-sample Brier/ECE and, when a threshold
+    is given, compares the calibrated pass probability instead of trusting the
+    raw score. The stage is opt-in: unset, the verdict is exactly what it was.
     """
 
     judge_threshold: float = 0.0
@@ -76,6 +85,30 @@ class GateConfig:
     verifier: Any | None = None
     require_spec_patterns: tuple[str, ...] = ()
     ontology: OntologyGraph | None = None
+    calibration_scores: tuple[float, ...] = ()
+    calibration_outcomes: tuple[int, ...] = ()
+    calibration_file: str = ""
+    calibration_folds: int = 5
+    calibrate_threshold: float | None = None
+
+
+@dataclass(frozen=True)
+class CalibrationReport:
+    """Judge-score calibration measured on held-out folds, plus the fitted transform.
+
+    ``brier_score`` and ``ece`` are out-of-sample on purpose: a Platt fit scored on
+    its own training data reports the optimism of the fit, not the reliability of the
+    judge, which is the number the gate is supposed to trust. ``in_sample_brier`` is
+    kept next to it so the gap between the two stays visible in the artifact.
+    """
+
+    method: str
+    brier_score: float
+    ece: float
+    samples: int
+    in_sample_brier: float
+    slope: float
+    intercept: float
 
 
 @dataclass
@@ -89,11 +122,15 @@ class GateReport:
     judge_summary: str = ""
     sandbox_all_valid: bool | None = None
     sandbox_summary: str = ""
+    sandbox_issues: list[str] = field(default_factory=list)
     formal_verified: bool | None = None
     formal_error: str = ""
     blocked_by: list[str] = field(default_factory=list)
     ontology_violations: list[str] = field(default_factory=list)
     note: str = ""
+    judge_calibrated: float | None = None
+    calibration: CalibrationReport | None = None
+    calibration_error: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -208,6 +245,154 @@ def _missing_formal_specs(
     return missing
 
 
+def _environment_import_roots(files: list[dict[str, str]]) -> tuple[str, ...]:
+    """Import roots the changed repo files use that this environment provides.
+
+    ``SandboxEngine`` defaults to a stdlib-only import policy, which is correct
+    containment for untrusted generated code but wrong for first-party files:
+    repo modules legitimately import the project's own dependencies. The gate
+    therefore allows a root exactly when it resolves in the environment running
+    the gate, so a dependency the workflow forgot to install still blocks the
+    merge and names itself in the sandbox issue.
+
+    Fail-closed: an unresolvable or malformed probe leaves the root blocked.
+    """
+    roots: set[str] = set()
+    for f in files:
+        if not f["path"].endswith(".py"):
+            continue
+        try:
+            tree = ast.parse(f["content"])
+        except SyntaxError:
+            continue  # the sandbox reports the syntax failure itself
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    roots.add(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                roots.add(node.module.split(".")[0])
+
+    allowed: set[str] = set()
+    for root in roots:
+        if not root or root in sys.stdlib_module_names:
+            continue
+        try:
+            if importlib.util.find_spec(root) is not None:
+                allowed.add(root)
+        except (ImportError, ValueError):
+            continue
+    return tuple(sorted(allowed))
+
+
+def _repo_lint_config() -> str:
+    """Path to the ruff configuration this repository lints itself with, or "".
+
+    The sandbox stages files into a temporary directory, where ruff would
+    otherwise fall back to its default ruleset and disagree with the CI lint job
+    (for example ``E501``, which this project ignores). Reusing the repository
+    configuration keeps one source of truth for what "lints clean" means.
+    Precedence mirrors ruff's own: ``ruff.toml`` / ``.ruff.toml`` beat
+    ``pyproject.toml``.
+    """
+    for name in ("ruff.toml", ".ruff.toml", "pyproject.toml"):
+        candidate = Path(name).resolve()
+        if candidate.is_file():
+            return str(candidate)
+    return ""
+
+
+def _sandbox_issues(result: Any, limit: int = 12) -> list[str]:
+    """Per-file reasons the sandbox refused a file, for the report artifact.
+
+    ``sandbox_summary`` only counts files, so a blocked gate used to say
+    ``blocked_by=['sandbox']`` and leave the author to reproduce CI locally.
+    These lines carry the actual rule and file. Read defensively: a sandbox
+    that returns a partial result must not turn a block into a crash.
+    """
+    issues: list[str] = []
+    for vr in getattr(result, "files", None) or []:
+        if all(
+            getattr(vr, flag, True)
+            for flag in ("ast_valid", "static_passed", "lint_passed", "run_passed")
+        ):
+            continue
+        path = str(getattr(vr, "file_path", "?"))
+        for label in ("ast_errors", "static_issues", "lint_errors"):
+            for msg in getattr(vr, label, None) or []:
+                issues.append(f"{path}: {label}: {str(msg).strip()[:300]}")
+        run_error = str(getattr(vr, "run_errors", "") or "").strip()
+        if run_error:
+            issues.append(f"{path}: run_errors: {run_error[:300]}")
+    return issues[:limit]
+
+
+def _calibration_requested(cfg: GateConfig) -> bool:
+    """Whether the caller asked for the judge-calibration stage at all."""
+    return bool(
+        cfg.calibration_scores
+        or cfg.calibration_outcomes
+        or cfg.calibration_file
+        or cfg.calibrate_threshold is not None
+    )
+
+
+def _calibration_history(cfg: GateConfig) -> tuple[tuple[float, ...], tuple[int, ...]]:
+    """Labeled ``(judge_score, verified outcome)`` history for the calibration stage.
+
+    In-memory pairs win over the file so a caller holding an RLVR export does not
+    have to round-trip it through disk. Fail-closed: no history, an unreadable file
+    or a malformed shape all raise, and the caller turns that into a blocked gate.
+    A stage somebody asked for must never switch itself off quietly.
+    """
+    if cfg.calibration_scores or cfg.calibration_outcomes:
+        return cfg.calibration_scores, cfg.calibration_outcomes
+    if not cfg.calibration_file:
+        raise ValueError(
+            "calibration requested but no history supplied "
+            "(set calibration_scores/calibration_outcomes or --calibration-file)"
+        )
+    data = json.loads(Path(cfg.calibration_file).read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or "scores" not in data or "outcomes" not in data:
+        raise ValueError("calibration file must be a JSON object with 'scores' and 'outcomes'")
+    return tuple(float(s) for s in data["scores"]), tuple(int(o) for o in data["outcomes"])
+
+
+def _run_calibration(cfg: GateConfig) -> tuple[CalibrationReport, JudgeCalibrator]:
+    """Cross-validate the judge→verified mapping and fit the transform to apply.
+
+    The reported Brier/ECE come from k-fold held-out predictions; the slope and
+    intercept come from the full history, because that is the model the gate applies
+    to this PR's score. Outcomes are the objective verifiable reward (a verified
+    pass/fail), not another model opinion, so the fit is grounded in fact.
+    """
+    scores, outcomes = _calibration_history(cfg)
+    if len(scores) != len(outcomes):
+        raise ValueError(f"history lengths differ: {len(scores)} scores, {len(outcomes)} outcomes")
+    if len(scores) < 2:
+        raise ValueError(f"need at least 2 labeled samples for cross-validation, got {len(scores)}")
+    if any(o not in (0, 1) for o in outcomes):
+        raise ValueError("outcomes must be 0 (verification failed) or 1 (verified pass)")
+    if any(not 0.0 <= s <= 1.0 for s in scores):
+        raise ValueError("judge scores in the history must lie in [0, 1]")
+
+    folds = min(max(2, cfg.calibration_folds), len(scores))
+    held_out = JudgeCalibrator.cross_validate(scores, outcomes, k_folds=folds)
+    deployed = JudgeCalibrator()
+    in_sample = deployed.fit(scores, outcomes)
+    return (
+        CalibrationReport(
+            method=f"{folds}-fold-out-of-sample",
+            brier_score=held_out.brier_score,
+            ece=held_out.ece,
+            samples=held_out.samples,
+            in_sample_brier=in_sample.brier_score,
+            slope=deployed.slope,
+            intercept=deployed.intercept,
+        ),
+        deployed,
+    )
+
+
 async def run_merge_gate(cfg: GateConfig) -> GateReport:
     """Evaluate the PR's changed files and decide pass/block.
 
@@ -218,14 +403,17 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
       spec (``missing_formal_spec``), or
     - a configured ontology finds ``requires``/``forbids`` axiom violations in
       the changed files (``ontology:...`` blocks), or
-    - the judge's overall score is below ``judge_threshold``.
+    - the judge's overall score is below ``judge_threshold``, or
+    - the calibration stage was requested and cannot run, or its calibrated
+      pass probability falls below ``calibrate_threshold``.
 
     The formal stage runs over *every* changed file (including PRs that touch
     only ``.lean`` specs), so spec-only changes are still theorem-checked.
 
-    The gate never raises: a crashing verifier, sandbox, or judge maps to a
-    blocked verdict (``verifier_crashed`` / ``sandbox_error`` / ``judge_error``)
-    so every run produces a report artifact.
+    The gate never raises: a crashing verifier, sandbox, judge or calibration
+    stage maps to a blocked verdict (``verifier_crashed`` / ``sandbox_error`` /
+    ``judge_error`` / ``calibration_error``) so every run produces a report
+    artifact.
     """
     raw_files = _raw_changed_files(cfg)
     files = [f for f in raw_files if f["path"].endswith(cfg.include_suffixes)]
@@ -268,6 +456,7 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
 
     sandbox_all_valid: bool | None = None
     sandbox_summary = ""
+    sandbox_issues: list[str] = []
     if cfg.sandbox_enabled:
         sandbox = cfg.sandbox or SandboxEngine(
             config=SandboxConfig(
@@ -276,15 +465,20 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
                 type_check_enabled=True,
                 run_enabled=cfg.sandbox_run,
                 test_enabled=False,
+                static_allow_imports=_environment_import_roots(files),
+                static_allow_relative_imports=True,
+                lint_config_path=_repo_lint_config(),
             )
         )
         try:
             result: SandboxResult = await sandbox.validate_files(files, run_tests=cfg.run_tests)
             sandbox_all_valid = bool(result.all_valid)
             sandbox_summary = str(result.summary)
+            sandbox_issues = _sandbox_issues(result)
         except Exception as e:  # noqa: BLE001 - a crashing sandbox blocks
             sandbox_all_valid = False
             sandbox_summary = f"sandbox_error:{e}"
+            sandbox_issues = [f"sandbox_error:{e}"]
         if not sandbox_all_valid:
             blocked_by.append("sandbox")
 
@@ -311,6 +505,23 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
     if judge_score < cfg.judge_threshold:
         blocked_by.append(f"judge_score={judge_score:.3f} < threshold={cfg.judge_threshold:.3f}")
 
+    judge_calibrated: float | None = None
+    calibration: CalibrationReport | None = None
+    calibration_error = ""
+    if _calibration_requested(cfg):
+        try:
+            calibration, calibrator = _run_calibration(cfg)
+        except Exception as e:  # noqa: BLE001 - a requested stage that cannot run blocks
+            calibration_error = f"calibration_error:{e}"
+            blocked_by.append(calibration_error)
+        else:
+            judge_calibrated = calibrator.calibrate(judge_score)
+            if cfg.calibrate_threshold is not None and judge_calibrated < cfg.calibrate_threshold:
+                blocked_by.append(
+                    f"judge_calibrated={judge_calibrated:.3f} "
+                    f"< threshold={cfg.calibrate_threshold:.3f}"
+                )
+
     return GateReport(
         passed=not blocked_by,
         changed_files=len(files),
@@ -319,10 +530,14 @@ async def run_merge_gate(cfg: GateConfig) -> GateReport:
         judge_summary=judge_summary,
         sandbox_all_valid=sandbox_all_valid,
         sandbox_summary=sandbox_summary,
+        sandbox_issues=sandbox_issues,
         formal_verified=formal_verified,
         formal_error=formal_error,
         blocked_by=blocked_by,
         ontology_violations=ontology_violations,
+        judge_calibrated=judge_calibrated,
+        calibration=calibration,
+        calibration_error=calibration_error,
     )
 
 
@@ -376,6 +591,27 @@ async def run_gate_cli(argv: list[str] | None = None) -> int:
         help="Path prefix whose changed .py files must ship a matching .lean "
         "spec or the gate blocks (repeatable)",
     )
+    parser.add_argument(
+        "--calibration-file",
+        default="",
+        metavar="PATH",
+        help="JSON object with 'scores' and 'outcomes' history (judge score vs "
+        "verified pass). Enables the calibration stage: out-of-sample k-fold "
+        "Brier/ECE land in the report and an unusable history blocks the merge.",
+    )
+    parser.add_argument(
+        "--calibration-folds",
+        type=int,
+        default=5,
+        help="k for the out-of-sample cross-validation (default: 5)",
+    )
+    parser.add_argument(
+        "--calibrate-threshold",
+        type=float,
+        default=None,
+        help="Additionally block when the calibrated pass probability of the "
+        "judge score falls below this value",
+    )
     parser.add_argument("--out", default="gate.json", help="Path for the JSON report")
     args = parser.parse_args(argv)
 
@@ -385,6 +621,9 @@ async def run_gate_cli(argv: list[str] | None = None) -> int:
         sandbox_run=args.sandbox_run,
         diff_target=args.diff_target,
         require_spec_patterns=tuple(args.require_spec),
+        calibration_file=args.calibration_file,
+        calibration_folds=args.calibration_folds,
+        calibrate_threshold=args.calibrate_threshold,
     )
     if args.verifier:
         from noema.verifiers.lean import LeanVerifier

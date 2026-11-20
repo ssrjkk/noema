@@ -169,7 +169,11 @@ class SandboxEngine:
                 static_passed = True
                 static_issues: list[str] = []
                 if ast_valid and self.config.static_check_enabled:
-                    issues = analyze_code(code, allowed_imports=allowed)
+                    issues = analyze_code(
+                        code,
+                        allowed_imports=allowed,
+                        allow_relative_imports=self.config.static_allow_relative_imports,
+                    )
                     if issues:
                         static_passed = False
                         static_issues = [issue.render() for issue in issues]
