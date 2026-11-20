@@ -20,12 +20,24 @@
 ### Documentation
 - `usage-guide.md` covered the v2 surfaces for the first time: model routing, `train` commands with
   the exact rollout JSONL schema, hybrid retrieval, failure index and CEGIS feedback.
-- README metrics re-measured against the CI run and the tree: 2 767 tests collected
-  (2 750 passed + 17 skipped), 225 Python files under `noema/`, 43 406 lines.
+- README metrics re-measured against the CI run and the tree: 2 769 tests collected
+  (2 752 passed + 17 skipped on Ubuntu / 3.12), 225 Python files under `noema/`, 43 417 lines.
 - README feature tables and the ML/AI upgrade plan describe the bundle as shipped instead of planned;
   `README.ru.md` docs list brought to parity with `README.md`.
-- Default provider remains `fallback`, routing remains `static` — the v2 surfaces are additive and
-  off unless enabled.
+- README phase status corrected: the note claimed Phases 2–3 were "in active development" and the
+  roadmap table still listed them as in progress, while `docs/ROADMAP.md` has all 26 items ticked
+  (0 `[~]`, 0 `[ ]`) and v1.2.0 recorded the phases as closed. Both the note and the table now say
+  what is true — merged and under test, with the incident → PR loop needing
+  `NOEMA_AUTONOMY__GITHUB_*` credentials to point at a real repository. `README.ru.md` moved to the
+  same wording.
+- Configuration docs now state the real precedence — env > YAML > field defaults — because the
+  repository ships a `settings.yaml` selecting `llm.provider: ollama` while `LLMSettings.provider`
+  defaults to `fallback`. `configuration.md` listed `ollama` as the default and omitted the
+  `fallback` value, `router` and `router_checkpoint` entirely.
+- Removed `NOEMA_LLM__MODEL` from both READMEs: no settings field reads it, so it silently did nothing.
+  The real knobs are the `--model` flag (`noema/cli/main.py`) and `NOEMA_LLM__OLLAMA_MODEL`.
+- Routing remains `static` unless `NOEMA_LLM__ROUTER=linucb` — the v2 surfaces are additive and off
+  by default.
 
 ## v1.4.1 (2026-11-16)
 ### Maintenance

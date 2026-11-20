@@ -11,7 +11,7 @@
 Noema is not another code generator. It is a neurosymbolic system that proposes solutions with LLMs, verifies them against formal contracts with Z3, validates them in a sandboxed runtime, and maintains a fully auditable trail of every reasoning step — then fixes its own incidents end-to-end.
 
 > [!NOTE]
-> **Phase 1 — The Architect** is production-ready. Phase 2 (autonomous self-healing) and Phase 3 (multi-node grid federation) are in active development.
+> **Phase 1 — The Architect** is production-ready. Phase 2 (autonomous self-healing) and Phase 3 (multi-node grid federation) are merged and under test — `docs/ROADMAP.md` has no open items. Pointing the incident → PR loop at a real repository is a configuration step: it needs `NOEMA_AUTONOMY__GITHUB_*` credentials.
 
 ---
 
@@ -118,7 +118,9 @@ pip install -e ".[dev,full,db,grpc,vault]"
 
 **LLM providers:** `openai`, `anthropic`, `ollama` + built-in **fallback provider** (works without API keys — for demos and CI).
 
-Configure via env: `NOEMA_LLM__PROVIDER=openai`, `NOEMA_LLM__MODEL=...`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+Configure via env: `NOEMA_LLM__PROVIDER=openai`, `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. Pin a model with
+`noema think --model gpt-4o` per command, or `NOEMA_LLM__OLLAMA_MODEL` for Ollama. Env beats the YAML
+file — see [Configuration](docs/configuration.md) for the full precedence.
 
 ### Verify Installation
 
@@ -195,7 +197,8 @@ curl -X POST http://localhost:8000/think \
 
 ### Required
 
-1. **LLM provider** — default is `fallback` (template responses, not LLM)
+1. **LLM provider** — the code default is `fallback` (template responses, not LLM); the `settings.yaml`
+   shipped in this repo selects `ollama`, so name the provider explicitly instead of inheriting either
    ```bash
    export NOEMA_LLM__PROVIDER=openai
    export OPENAI_API_KEY=sk-...
@@ -292,7 +295,7 @@ noema/
 |---|---|
 | **Tests** | 2,769 collected — unit, hypothesis property and pytest-benchmark cases (2,752 passed + 17 skipped on Ubuntu / 3.12) |
 | **Source files** | 225 Python files under `noema/` (160 modules + 65 package `__init__`) |
-| **Lines of code** | 43,406 lines, 36,767 of them code (the rest blank and comments) |
+| **Lines of code** | 43,417 lines, 36,774 of them code (the rest blank and comments) |
 | **CI** | Ruff lint + format, encoding/mojibake gate, mypy, bandit + pip-audit, golden eval, merge gate |
 | **Platforms** | Ubuntu + Windows, Python 3.12 + 3.13 + 3.14 |
 | **Encoding** | Unicode mojibake gate — broken strings fail CI |
@@ -318,8 +321,8 @@ noema/
 | Phase | Name | Status |
 |---|---|---|
 | **1** | **The Architect** — generation + verification + sandbox + benchmarks + knowledge + reasoning trace | **Done** |
-| **2** | **The Autopoietic Enterprise** — incident → PR, merge gate, evolution with auto-apply, benchmark service | **In progress** |
-| **3** | **Global Noema Grid** — multi-node pool, gRPC federation, token/ledger economics, live dashboard | **In progress** |
+| **2** | **The Autopoietic Enterprise** — incident → PR, merge gate, evolution with auto-apply, benchmark service | **Merged, under test** |
+| **3** | **Global Noema Grid** — multi-node pool, gRPC federation, token/ledger economics, live dashboard | **Merged, under test** |
 
 ## Author
 
