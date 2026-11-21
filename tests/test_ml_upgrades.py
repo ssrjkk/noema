@@ -682,3 +682,91 @@ def test_dpo_builder_caps_pairs_per_task() -> None:
 
     capped = builder.build_dpo_pairs(rollouts, max_pairs_per_task=2)
     assert len(capped) == 2
+
+
+def test_retrieve_rejects_non_positive_top_k() -> None:
+    """``top_k=-1`` would slice ``shortlist[:-1]`` and return nearly the whole corpus."""
+    t = datetime(2026, 1, 1, tzinfo=UTC)
+    mem = HybridCognitiveMemory()
+    for i in range(4):
+        mem.add(
+            MemoryRecord(
+                record_id=f"fact_{i}",
+                content=f"payment gateway timeout retry budget variant {i}",
+                valid_from=t,
+            )
+        )
+
+    for bad in (0, -1, -100):
+        with pytest.raises(ValueError, match="top_k must be >= 1"):
+            mem.retrieve("payment gateway timeout", top_k=bad)
+        with pytest.raises(ValueError, match="top_k must be >= 1"):
+            mem.lookup_similar_failures("ZeroDivisionError", top_k=bad)
+
+    assert len(mem.retrieve("payment gateway timeout", top_k=2)) == 2
+    assert len(mem.retrieve("payment gateway timeout", top_k=10)) == 4
+
+
+def test_router_rejects_duplicate_arm_id() -> None:
+    """``{a.arm_id: a for a in arms}`` used to keep the last arm and drop the rest silently."""
+
+    def arm(arm_id: str, *, cost: float = 0.01, local: bool = True) -> ModelArm:
+        return ModelArm(
+            arm_id=arm_id,
+            provider="openai",
+            model="gpt-test",
+            cost_per_1k_tokens_usd=cost,
+            avg_latency_sec=1.0,
+            is_local=local,
+        )
+
+    with pytest.raises(ValueError, match=r"Duplicate arm_id\(s\) \['x'\]"):
+        LinUCBModelRouter([arm("x"), arm("x", cost=0.5)])
+
+    router = LinUCBModelRouter([arm("x"), arm("y", cost=0.5, local=False)])
+    assert set(router.arms) == {"x", "y"}
+    assert set(router.arms) == set(router._states)
+
+
+def test_export_jsonl_refuses_new_dirs_and_root_escapes(tmp_path: Path) -> None:
+    builder = RLVRDatasetBuilder(min_reward_margin=0.25)
+    records: list[dict[str, object]] = [{"chosen": "a", "rejected": "b"}]
+
+    assert builder.export_jsonl(records, tmp_path / "flat.jsonl").exists()
+
+    with pytest.raises(FileNotFoundError, match="create_parents=True"):
+        builder.export_jsonl(records, tmp_path / "nested" / "deep.jsonl")
+    assert not (tmp_path / "nested").exists(), "refused export must not leave a directory behind"
+
+    deep = builder.export_jsonl(records, tmp_path / "nested" / "deep.jsonl", create_parents=True)
+    assert deep.exists()
+
+    inside = tmp_path / "nested" / "inside.jsonl"
+    assert builder.export_jsonl(records, inside, allowed_root=tmp_path) == inside
+    with pytest.raises(ValueError, match="escapes allowed_root"):
+        builder.export_jsonl(records, inside, allowed_root=tmp_path / "nested" / "sibling")
+    dot_dot = tmp_path / "nested" / ".." / "sneak.jsonl"
+    with pytest.raises(ValueError, match="escapes allowed_root"):
+        builder.export_jsonl(records, dot_dot, allowed_root=tmp_path / "nested")
+
+
+def test_static_ast_gate_blocks_shell_helpers_bound_by_import() -> None:
+    """``from os import system`` rebinds the call to a bare Name the old gate let through."""
+    for source in (
+        "from os import system\nsystem('ls')\n",
+        "from subprocess import run\nrun('ls', shell=True)\n",
+        "from subprocess import Popen\nPopen('ls')\n",
+        "from os import popen\npopen('ls')\n",
+        "from builtins import eval\neval('1+1')\n",
+    ):
+        result = run_static_ast_gate(source)
+        assert not result.ok, f"must be rejected: {source!r}"
+        assert result.forbidden_calls, f"rejection must name the construct: {source!r}"
+
+    benign = run_static_ast_gate("from os import sep\nprint(sep.join(['a', 'b']))\n")
+    assert benign.ok, f"benign import blocked: {benign.forbidden_calls}"
+
+    own_helper = run_static_ast_gate(
+        "def system(x: str) -> str:\n    return x\nprint(system('ok'))\n"
+    )
+    assert own_helper.ok, f"locally defined helper blocked: {own_helper.forbidden_calls}"

@@ -232,7 +232,12 @@ class HybridCognitiveMemory:
 
         By default ``min_retention=0.0`` so older valid semantic facts are never silently
         erased; Ebbinghaus decay acts purely as a ranking weight unless pruning is requested.
+
+        Raises ValueError if ``top_k`` is not a positive slice count: a negative value
+        would otherwise slice ``shortlist[:-n]`` and return nearly the whole corpus.
         """
+        if top_k < 1:
+            raise ValueError(f"top_k must be >= 1, got {top_k}")
         now = at_time or datetime.now(UTC)
         valid_ids = [
             rid

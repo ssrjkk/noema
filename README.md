@@ -293,7 +293,7 @@ noema/
 
 | Metric | Value |
 |---|---|
-| **Tests** | 2,769 collected — unit, hypothesis property and pytest-benchmark cases (2,752 passed + 17 skipped on Ubuntu / 3.12) |
+| **Tests** | 2,773 collected — unit, hypothesis property and pytest-benchmark cases (2,756 passed + 17 skipped on Ubuntu / 3.12) |
 | **Source files** | 225 Python files under `noema/` (160 modules + 65 package `__init__`) |
 | **Lines of code** | 43,417 lines, 36,774 of them code (the rest blank and comments) |
 | **CI** | Ruff lint + format, encoding/mojibake gate, mypy, bandit + pip-audit, golden eval, merge gate |
@@ -303,7 +303,8 @@ noema/
 ## Documentation
 
 - [Usage Guide](docs/usage-guide.md) — complete CLI, API, and library reference with examples
-- [3D Connectome Showcase](docs/noema.html) — interactive neural-connectome page (static, DEMO SIM mode)
+- [3D Connectome Showcase](https://ssrjkk.github.io/noema/) — interactive neural-connectome landing page (static, DEMO SIM mode)
+- [Anatomical Atlas](https://ssrjkk.github.io/noema/atlas.html) ([source](docs/atlas.html)) — engraved paper edition of the same walk
 - [ML/AI Upgrade Plan](docs/noema_ml_ai_upgrade_plan.md) — v2: RLVR, hybrid memory, LinUCB routing, Z3 CEGIS (shipped to `main`)
 - [Whitepaper](docs/WHITEPAPER.md) — vision and design principles
 - [Roadmap](docs/ROADMAP.md) — three phases: Architect → Autopoietic Enterprise → Global Noema Grid

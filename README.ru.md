@@ -287,7 +287,7 @@ noema/
 
 | Метрика | Значение |
 |---|---|
-| **Тесты** | 2 769 собрано (2 752 passed + 17 skipped на Ubuntu / 3.12; pytest + hypothesis + pytest-benchmark) |
+| **Тесты** | 2 773 собрано (2 756 passed + 17 skipped на Ubuntu / 3.12; pytest + hypothesis + pytest-benchmark) |
 | **Исходные файлы** | 225 Python-файлов в `noema/` (160 модулей + 65 `__init__`) |
 | **Строки кода** | 43 417 всего, 36 774 — код (остальное пустые и комментарии) |
 | **CI** | Ruff lint + format, mypy, bandit, safety, pip-audit |
@@ -297,7 +297,8 @@ noema/
 ## Документация
 
 - [Руководство пользователя](docs/usage-guide.md) — полный справочник по CLI, API и библиотеке с примерами
-- [3D-коннектум (витрина)](docs/noema.html) — интерактивная страница нейронного коннектума (статичная, режим DEMO SIM)
+- [3D-коннектом (витрина)](https://ssrjkk.github.io/noema/) — интерактивная страница нейронного коннектума, корневая страница сайта (статичная, режим DEMO SIM)
+- [Анатомический атлас](https://ssrjkk.github.io/noema/atlas.html) ([исходник](docs/atlas.html)) — бумажная гравюрная версия того же прохождения
 - [План ML/AI-апгрейда](docs/noema_ml_ai_upgrade_plan.md) — v2: RLVR, гибридная память, маршрутизация LinUCB, Z3 CEGIS (слито в `main`)
 - [Whitepaper](docs/WHITEPAPER.md) — видение и дизайн-принципы
 - [Roadmap](docs/ROADMAP.md) — три фазы: Архитектор → Автопеитическое предприятие → Глобальный грид Noema

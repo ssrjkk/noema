@@ -141,6 +141,17 @@ class LinUCBModelRouter:
     ) -> None:
         if not arms:
             raise ValueError("LinUCBModelRouter requires at least one ModelArm")
+        seen_ids: set[str] = set()
+        duplicates: set[str] = set()
+        for arm in arms:
+            if arm.arm_id in seen_ids:
+                duplicates.add(arm.arm_id)
+            seen_ids.add(arm.arm_id)
+        if duplicates:
+            raise ValueError(
+                f"Duplicate arm_id(s) {sorted(duplicates)} would silently drop an arm "
+                "from the routing pool"
+            )
         self._lock = threading.RLock()
         self.arms: dict[str, ModelArm] = {a.arm_id: a for a in arms}
         self.alpha = alpha

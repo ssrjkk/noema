@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Noema — атлас нейросимвольного движка</title>
+<meta name="description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально. Пройдите по отделам мозга — каждый отдел это часть системы. FastAPI, gRPC-федерация, MCP, 2 773 теста.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SSRJKK">
+<meta property="og:title" content="Noema — атлас нейросимвольного движка">
+<meta property="og:description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально. Пройдите по отделам мозга — каждый отдел это часть системы. FastAPI, gRPC-федерация, MCP, 2 773 теста.">
+<meta property="og:url" content="https://ssrjkk.github.io/noema/atlas.html">
+<meta property="og:locale" content="ru_RU">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Noema — атлас нейросимвольного движка">
+<meta name="twitter:description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально. Пройдите по отделам мозга — каждый отдел это часть системы.">
+<meta name="twitter:image" content="https://ssrjkk.github.io/noema/og-card.png">
+<meta property="og:image" content="https://ssrjkk.github.io/noema/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23f3ecdd'/%3E%3Cpath d='M14 26c2-10 12-16 24-14 12 2 18 12 16 22-2 8-8 12-16 12l-2 10-6-2 2-10c-10 2-20-6-18-18z' fill='none' stroke='%231d2b3a' stroke-width='3'/%3E%3Ccircle cx='38' cy='22' r='4' fill='%23a4322a'/%3E%3C/svg%3E">
+<link rel="canonical" href="https://ssrjkk.github.io/noema/atlas.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,500;0,700;1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f3ecdd; --paper2:#ece2cd; --ink:#1d2b3a; --soft:#5e6b78;
+  --artery:#a4322a; --vein:#2c5f8a; --gold:#8a6d3b;
+  --hairline:rgba(29,43,58,.25); --frame:rgba(29,43,58,.8);
+  --serif:'Spectral',serif; --text:'Inter',sans-serif; --mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:
+    radial-gradient(1400px 700px at 70% 0%, rgba(255,252,244,.7), transparent 60%),
+    var(--paper);
+  color:var(--ink); font:15.5px/1.75 var(--text);
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+/* ── верх листа ──────────────────────────────── */
+header{max-width:1200px;margin:0 auto;padding:26px 30px 0;
+  display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+header .plate-name{font:600 12px var(--mono);letter-spacing:.26em;color:var(--gold);
+  text-transform:uppercase}
+header a{color:var(--ink);text-decoration:none;border-bottom:1.5px solid var(--hairline)}
+header a:hover{border-bottom-color:var(--artery)}
+/* ── титул атласа ────────────────────────────── */
+.title{max-width:1200px;margin:0 auto;padding:54px 30px 26px;text-align:center}
+.title .small{font:italic 500 17px var(--serif);color:var(--soft)}
+.title h1{font:700 clamp(40px,6vw,74px)/1.1 var(--serif);letter-spacing:-.01em;margin:14px 0 18px}
+.title h1 i{font-style:italic;color:var(--artery)}
+.title p{max-width:64ch;margin:0 auto;color:var(--soft);font-size:16.5px}
+.title .hint{margin-top:26px;font:500 12px var(--mono);letter-spacing:.22em;
+  color:var(--gold);text-transform:uppercase}
+/* ── рабочая зона: планшет + главы ───────────── */
+.atlas{display:grid;grid-template-columns:minmax(340px,520px) 1fr;
+  gap:40px;max-width:1280px;margin:20px auto 0;padding:0 30px;
+  align-items:start}
+/* планшет с мозгом */
+.plate{position:sticky;top:36px}
+.plate .frame{
+  border:1.6px solid var(--frame);outline:1px solid var(--hairline);outline-offset:5px;
+  background:var(--paper2);border-radius:2px;padding:22px 20px 16px;
+}
+.plate .fig{font:500 12px var(--mono);letter-spacing:.14em;color:var(--gold);display:block;
+  text-transform:uppercase;margin-bottom:6px}
+.plate svg{width:100%;display:block}
+.zone{opacity:0;transition:opacity .5s}
+.zone.lit{opacity:1}
+.zone#z-meninges.lit path{opacity:.9}
+.zone .fill{opacity:.5}
+.zone .hatch{opacity:.6}
+.zlabel{font:italic 500 13px var(--serif);fill:var(--ink)}
+.zlead{stroke:var(--hairline);stroke-width:1}
+.plate .caption{
+  border-top:1px solid var(--hairline);margin-top:14px;padding-top:10px;
+  font:italic 500 13.5px var(--serif);color:var(--soft);
+}
+.plate .caption b{font-style:normal;color:var(--artery);font-weight:600}
+.plate .legend{list-style:none;margin-top:12px;font:12.5px var(--mono);color:var(--soft)}
+.plate .legend li{padding:2px 0;transition:.35s}
+.plate .legend li.lit{color:var(--artery)}
+.plate .legend li i{display:inline-block;width:26px;margin-right:6px;font-style:normal}
+/* ── главы-отделы ────────────────────────────── */
+.chapters{padding-top:120px}
+.chap{padding:74px 0 60px;border-top:1px solid var(--hairline)}
+.chap:first-child{border-top:none;padding-top:30px}
+.fig-no{font:500 12.5px var(--mono);letter-spacing:.2em;color:var(--gold);
+  text-transform:uppercase;display:block;margin-bottom:10px}
+.chap h2{font:700 clamp(30px,3.6vw,44px)/1.16 var(--serif);margin-bottom:6px}
+.chap .lat{font:italic 500 15px var(--serif);color:var(--vein);display:block;margin-bottom:18px}
+.chap p{color:var(--soft);max-width:58ch;margin-bottom:14px}
+.chap .fn{list-style:none;margin:6px 0 16px}
+.chap .fn li{padding:5px 0 5px 24px;position:relative;font-size:14.5px}
+.chap .fn li::before{content:"—";position:absolute;left:0;color:var(--artery)}
+.chap .code{margin-top:14px;padding:14px 18px;border-left:2px solid var(--artery);
+  background:rgba(164,50,42,.05);font:13px/1.8 var(--mono);color:var(--ink);max-width:58ch;
+  overflow-wrap:anywhere}
+.chap .code b{color:var(--artery);font-weight:600}
+/* ── статистика между главами ────────────────── */
+.stats{max-width:1200px;margin:0 auto;padding:40px 30px;display:flex;gap:14px;flex-wrap:wrap}
+.stat{border:1px solid var(--hairline);border-radius:3px;padding:16px 26px;
+  background:rgba(255,252,244,.5);flex:1;min-width:170px;text-align:center}
+.stat b{display:block;font:700 30px var(--serif);color:var(--ink)}
+.stat span{font:11.5px var(--mono);letter-spacing:.1em;color:var(--soft)}
+/* ── подвал ──────────────────────────────────── */
+footer{max-width:1200px;margin:50px auto 0;padding:26px 30px 54px;
+  border-top:1px solid var(--hairline);display:flex;justify-content:space-between;
+  gap:14px;flex-wrap:wrap;font-size:13.5px;color:var(--soft)}
+footer a{color:var(--ink);text-decoration:none;border-bottom:1.5px solid var(--gold)}
+footer a:hover{border-bottom-color:var(--artery)}
+@media(max-width:1020px){
+  .atlas{grid-template-columns:1fr}
+  .plate{position:relative;top:0;max-width:520px;margin:0 auto}
+  .chapters{padding-top:60px}
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="plate-name">Атлас нейросимвольного движка · Лист I–VI</span>
+  <a href="index.html">3D-коннектом ↗</a>
+  <a href="https://github.com/ssrjkk/noema">GitHub ↗</a>
+</header>
+
+<div class="title">
+  <span class="small">Anatomia cerebri artificialis</span>
+  <h1>Noema. Мозг, который <i>доказывает</i>.</h1>
+  <p>Нейросимвольный движок: языковая модель предлагает решение, решатель Z3
+  доказывает его формально. Листайте страницы — каждый отдел мозга на планшете
+  слева подсветится, когда вы дойдёте до его главы.</p>
+  <span class="hint">листать ↓</span>
+</div>
+
+<div class="atlas">
+  <!-- ПЛАНШЕТ -->
+  <div class="plate">
+    <div class="frame">
+      <span class="fig">Табл. I · Sagittal view</span>
+      <svg viewBox="0 0 470 370" role="img" aria-label="Сагиттальный срез мозга: шесть отделов">
+        <defs>
+          <pattern id="hatchR" width="7" height="7" patternTransform="rotate(38)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="7" stroke="#a4322a" stroke-width="1.2"/>
+          </pattern>
+          <pattern id="hatchB" width="7" height="7" patternTransform="rotate(-34)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="7" stroke="#2c5f8a" stroke-width="1.2"/>
+          </pattern>
+          <pattern id="hatchG" width="7" height="7" patternTransform="rotate(80)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="7" stroke="#8a6d3b" stroke-width="1.2"/>
+          </pattern>
+        </defs>
+
+        <!-- силуэт -->
+        <path d="M46 150 C50 106,96 66,162 50 C244 28,340 40,398 96 C436 132,444 180,420 214
+                 C408 230,392 240,378 246 C396 254,408 272,404 292 C400 314,376 326,350 322
+                 C324 318,306 304,300 290 L300 290 C296 312,288 326,274 332 L258 336
+                 C246 338,238 330,240 318 L246 262 C224 258,180 262,140 246 C84 224,44 194,46 150 Z"
+              fill="#fbf6ea" stroke="#1d2b3a" stroke-width="2.6"/>
+
+        <!-- зоны (подсветка) -->
+        <g class="zone" id="z-prefrontal">
+          <path class="fill" fill="#a4322a" d="M52 138 C58 106,96 78,150 62 L158 76 C116 92,84 122,78 160 Z"/>
+          <path class="hatch" fill="url(#hatchR)" d="M52 138 C58 106,96 78,150 62 L158 76 C116 92,84 122,78 160 Z"/>
+          <line class="zlead" x1="100" y1="110" x2="30" y2="58"/>
+          <text class="zlabel" x="6" y="50">Cortex prefrontalis</text>
+        </g>
+        <g class="zone" id="z-corpus">
+          <path class="fill" fill="#8a6d3b" d="M168 120 C208 84,268 82,310 116 C274 98,214 100,178 132 Z"/>
+          <path class="hatch" fill="url(#hatchG)" d="M168 120 C208 84,268 82,310 116 C274 98,214 100,178 132 Z"/>
+          <line class="zlead" x1="242" y1="100" x2="242" y2="40"/>
+          <text class="zlabel" x="196" y="32">Corpus callosum</text>
+        </g>
+        <g class="zone" id="z-hippocampus">
+          <path class="fill" fill="#2c5f8a" d="M200 220 C218 200,254 198,274 216 C286 226,282 244,264 250 C242 256,210 244,200 220 Z"/>
+          <path class="hatch" fill="url(#hatchB)" d="M200 220 C218 200,254 198,274 216 C286 226,282 244,264 250 C242 256,210 244,200 220 Z"/>
+          <line class="zlead" x1="216" y1="244" x2="76" y2="304"/>
+          <text class="zlabel" x="14" y="318">Hippocampus</text>
+        </g>
+        <g class="zone" id="z-cerebellum">
+          <path class="fill" fill="#a4322a" d="M348 250 C372 246,396 258,400 278 C402 298,380 312,354 310 C330 308,314 294,316 276 C318 262,330 252,348 250 Z"/>
+          <path class="hatch" fill="url(#hatchR)" d="M348 250 C372 246,396 258,400 278 C402 298,380 312,354 310 C330 308,314 294,316 276 C318 262,330 252,348 250 Z"/>
+          <g stroke="#a4322a" stroke-width="1" fill="none" opacity=".55">
+            <path d="M326 262 C344 258,368 260,390 272"/>
+            <path d="M322 276 C344 272,368 274,392 286"/>
+            <path d="M326 292 C346 290,366 292,386 300"/>
+          </g>
+          <line class="zlead" x1="398" y1="284" x2="444" y2="232"/>
+          <text class="zlabel" x="356" y="222">Cerebellum</text>
+        </g>
+        <g class="zone" id="z-brainstem">
+          <path class="fill" fill="#8a6d3b" d="M246 264 C260 260,276 264,286 274 L282 322 C280 334,270 340,258 338 C246 336,238 326,240 314 Z"/>
+          <path class="hatch" fill="url(#hatchG)" d="M246 264 C260 260,276 264,286 274 L282 322 C280 334,270 340,258 338 C246 336,238 326,240 314 Z"/>
+          <line class="zlead" x1="270" y1="330" x2="330" y2="356"/>
+          <text class="zlabel" x="292" y="366">Truncus encephali</text>
+        </g>
+        <g class="zone" id="z-meninges">
+          <path d="M46 150 C50 106,96 66,162 50 C244 28,340 40,398 96 C436 132,444 180,420 214 C408 230,392 240,378 246 C396 254,408 272,404 292 C400 314,376 326,350 322 C324 318,306 304,300 290 L300 290 C296 312,288 326,274 332 L258 336 C246 338,238 330,240 318 L246 262 C224 258,180 262,140 246 C84 224,44 194,46 150"
+                fill="none" stroke="#2c5f8a" stroke-width="3.4" opacity=".85"/>
+        </g>
+
+        <!-- извилины -->
+        <g stroke="#1d2b3a" stroke-width="1.1" fill="none" opacity=".55">
+          <path d="M96 130 C140 106,186 102,226 84"/>
+          <path d="M80 168 C118 148,158 146,192 130"/>
+          <path d="M96 204 C134 186,172 186,206 170"/>
+          <path d="M120 236 C158 220,196 222,232 206"/>
+          <path d="M252 74 C292 92,324 116,344 146"/>
+          <path d="M300 100 C336 118,366 148,382 180"/>
+          <path d="M350 150 C372 168,386 188,392 206"/>
+          <path d="M210 140 C244 152,272 172,288 196"/>
+          <path d="M156 96 C196 88,236 92,272 104"/>
+          <path d="M76 190 C104 214,130 232,158 244"/>
+        </g>
+      </svg>
+      <span class="caption" id="plate-caption">Мозг Noema в разрезе. <b>Подсветите отдел</b> — прочтите главу.</span>
+      <ol class="legend" id="legend">
+        <li data-z="z-prefrontal"><i>рис. 1</i>Cortex prefrontalis — решение</li>
+        <li data-z="z-hippocampus"><i>рис. 2</i>Hippocampus — память</li>
+        <li data-z="z-cerebellum"><i>рис. 3</i>Cerebellum — навыки</li>
+        <li data-z="z-brainstem"><i>рис. 4</i>Truncus encephali — стержень</li>
+        <li data-z="z-corpus"><i>рис. 5</i>Corpus callosum — связь</li>
+        <li data-z="z-meninges"><i>рис. 6</i>Meninges — оболочки</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ГЛАВЫ -->
+  <div class="chapters">
+
+    <article class="chap" id="prefrontal" data-z="z-prefrontal" data-cap="рис. 1 — Cortex prefrontalis отвечает за /think">
+      <span class="fig-no">рис. 1 · лист I</span>
+      <h2>Здесь рождается решение</h2>
+      <span class="lat">Cortex prefrontalis — префронтальная кора</span>
+      <p>Префронтальная кора у человека отвечает за рассуждение и планирование.
+      У Noema это точка входа <code>/think</code>: модель предлагает гипотезу,
+      а решатель Z3 обязан доказать её формально — иначе ответ не засчитывается.</p>
+      <ul class="fn">
+        <li>LLM-провайдеры: OpenAI, Anthropic, Ollama</li>
+        <li>формальная верификация Z3 до отдачи ответа</li>
+        <li>chain-of-thought с наблюдаемыми шагами</li>
+        <li>fallback-провайдер без ключей — демо и CI из коробки</li>
+      </ul>
+      <div class="code">POST /think → <b>гипотеза LLM</b> → <b>Z3 proof</b> → ответ с доказательством</div>
+    </article>
+
+    <article class="chap" id="hippocampus" data-z="z-hippocampus" data-cap="рис. 2 — Hippocampus хранит эпизоды и knowledge graph">
+      <span class="fig-no">рис. 2 · лист II</span>
+      <h2>Здесь живёт память</h2>
+      <span class="lat">Hippocampus — гиппокамп</span>
+      <p>Гиппокамп переводит опыт в долгосрочную память. Noema хранит эпизоды
+      рассуждений и наращивает knowledge graph: движок помнит выводы и опирается
+      на них в следующих сессиях, а не выводит заново.</p>
+      <ul class="fn">
+        <li>эпизодическая память: запросы и их исходы</li>
+        <li>knowledge graph: сущности и связи</li>
+        <li>поиск по прошлым доказательствам</li>
+      </ul>
+      <div class="code">CLI: <b>memory</b> — эпизоды · <b>knowledge</b> — граф · <b>graph</b> — операции</div>
+    </article>
+
+    <article class="chap" id="cerebellum" data-z="z-cerebellum" data-cap="рис. 3 — Cerebellum оттачивает kernels и pipeline">
+      <span class="fig-no">рис. 3 · лист III</span>
+      <h2>Здесь оттачиваются навыки</h2>
+      <span class="lat">Cerebellum — мозжечок</span>
+      <p>Мозжечок доводит движения до автоматизма. У Noema это ядра (kernels) —
+      упакованные умения, которые собираются в pipeline, и цикл «evolve»,
+      где движок улучшает свои же навыки.</p>
+      <ul class="fn">
+        <li>kernels: кодогенерация, знания, доменные модули</li>
+        <li>pipeline: композиция ядер в маршрут рассуждения</li>
+        <li>evolve: цикл самосовершенствования</li>
+      </ul>
+      <div class="code">CLI: <b>pipeline</b> — маршрут ядер · <b>evolve</b> — цикл улучшения</div>
+    </article>
+
+    <article class="chap" id="brainstem" data-z="z-brainstem" data-cap="рис. 4 — Truncus encephali держит gateway и провайдеров">
+      <span class="fig-no">рис. 4 · лист IV</span>
+      <h2>Здесь пульсируют жизненные функции</h2>
+      <span class="lat">Truncus encephali — ствол мозга</span>
+      <p>Ствол мозга держит дыхание и сердцебиение. Ствол Noema — gateway:
+      маршрутизация к провайдерам, отслеживание переезда кредов, doctor-диагностика
+      и встроенный fallback, который дышит даже без внешних ключей.</p>
+      <ul class="fn">
+        <li>единая резолюция «какой провайдер обслужит модель»</li>
+        <li>doctor-CLI: диагностика окружения и конфигурации</li>
+        <li>fallback-провайдер — демо и CI без ключей</li>
+      </ul>
+      <div class="code">CLI: <b>serve</b> — API :8000 · <b>doctor</b> — здоровье · <b>grid federate</b> — связь</div>
+    </article>
+
+    <article class="chap" id="corpus" data-z="z-corpus" data-cap="рис. 5 — Corpus callosum соединяет инстансы grid">
+      <span class="fig-no">рис. 5 · лист V</span>
+      <h2>Здесь полушария говорят друг с другом</h2>
+      <span class="lat">Corpus callosum — мозолистое тело</span>
+      <p>Мозолистое тело соединяет два полушария. У Noema это gRPC-федерация:
+      инстансы объединяются в grid и делятся знаниями и вычислениями.</p>
+      <ul class="fn">
+        <li>grid federate — узлы становятся распределённым мозгом</li>
+        <li>общий knowledge между инстансами</li>
+        <li>gRPC-транспорт поверх FastAPI-сервиса</li>
+      </ul>
+      <div class="code">noema grid federate --peer localhost:50051</div>
+    </article>
+
+    <article class="chap" id="meninges" data-z="z-meninges" data-cap="рис. 6 — Meninges: rate limiting, ключи, tool_policy">
+      <span class="fig-no">рис. 6 · лист VI</span>
+      <h2>Здесь стоят защитные оболочки</h2>
+      <span class="lat">Meninges — оболочки мозга</span>
+      <p>Мозг защищён тремя оболочками. Периметр Noema: rate limiting, API-ключи
+      с per-tenant квотами, tool_policy для MCP, RFC 7807 для ошибок и
+      Prometheus-метрики поверх всего.</p>
+      <ul class="fn">
+        <li>rate limiting и API-ключи на каждом запросе</li>
+        <li>MCP-транспорты http/SSE с политикой инструментов</li>
+        <li>Unicode mojibake gate — сломанный юникод не проходит CI</li>
+      </ul>
+      <div class="code">GET /health/metrics → <b>Prometheus</b> · ошибки → <b>RFC 7807</b></div>
+    </article>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><b>2 773</b><span>теста · pytest + hypothesis</span></div>
+  <div class="stat"><b>159</b><span>python-модулей</span></div>
+  <div class="stat"><b>3.14</b><span>python в docker-образе</span></div>
+  <div class="stat"><b>6</b><span>отделов атласа</span></div>
+</div>
+
+<footer>
+  <span>Noema · нейросимвольная инженерия, которая доказывает</span>
+  <span><a href="index.html">3D-коннектом ↗</a> · <a href="https://github.com/ssrjkk/noema">GitHub ↗</a> · <a href="https://ssrjkk.github.io/">все проекты ↗</a></span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+<script>
+(function(){
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var caption = document.getElementById("plate-caption");
+
+  function lit(id, on){
+    var z = document.getElementById(id);
+    if (z) z.classList.toggle("lit", on);
+    document.querySelectorAll("#legend li").forEach(function(li){
+      li.classList.toggle("lit", on && li.dataset.z === id);
+    });
+  }
+
+  if (!reduced && window.gsap && window.ScrollTrigger){
+    gsap.registerPlugin(ScrollTrigger);
+
+    gsap.from(".title .small, .title h1, .title p, .title .hint", {
+      duration:.9, y:20, opacity:0, stagger:.1, ease:"power2.out"
+    });
+    /* рамка планшета прочерчивается */
+    gsap.from(".plate .frame", {duration:1.1, opacity:0, ease:"power2.inOut", delay:.3});
+    gsap.from(".plate svg", {duration:1.2, opacity:0, ease:"power2.inOut", delay:.45});
+
+    gsap.utils.toArray(".chap").forEach(function(chap){
+      var id = chap.dataset.z, cap = chap.dataset.cap;
+      ScrollTrigger.create({
+        trigger:chap, start:"top 58%", end:"bottom 42%",
+        onToggle:function(self){
+          lit(id, self.isActive);
+          if (self.isActive && caption) caption.innerHTML = cap.replace(/(рис\. \d)/, "<b>$1</b>");
+        }
+      });
+      gsap.from(chap.querySelectorAll(".fig-no, h2, .lat, p, .fn li, .code"), {
+        duration:.75, y:18, opacity:0, stagger:.06, ease:"power2.out",
+        scrollTrigger:{trigger:chap, start:"top 66%", once:true}
+      });
+    });
+
+    gsap.from(".stat", {duration:.7, y:16, opacity:0, stagger:.08, ease:"power2.out",
+      scrollTrigger:{trigger:".stats", start:"top 80%", once:true}});
+  } else {
+    /* без анимаций: первый отдел подсвечен статично */
+    lit("z-prefrontal", true);
+  }
+})();
+</script>
+</body>
+</html>
