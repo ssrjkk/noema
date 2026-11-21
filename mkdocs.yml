@@ -52,6 +52,8 @@ markdown_extensions:
 strict: true
 exclude_docs: |
   index.html
+  atlas.html
+  noema.html
 
 nav:
   - Home: index.md

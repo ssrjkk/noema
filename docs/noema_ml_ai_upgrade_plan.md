@@ -21,7 +21,7 @@
 `autonomy/fixer.py:258`.
 Из этого по умолчанию включено не всё: маршрутизация остаётся `static`, bandit — только с
 `NOEMA_LLM__ROUTER=linucb`; `search_hybrid` доступен как API хранилища, основную цепочку поиска он не замещает.
-Пункт 5 (`docs/noema.html`) в main отдельно от этого бандла и остаётся в режиме `DEMO SIM`.
+Пункт 5 (`docs/index.html`) в main отдельно от этого бандла и остаётся в режиме `DEMO SIM`.
 Фазовые формулировки README этот бандл не меняет: в README Фазы 2–3 описаны так, как их фиксирует
 `docs/ROADMAP.md` (все пункты закрыты), а не как «в активной разработке».
 
@@ -41,5 +41,5 @@
      в README и docs не формулируем.
    - Честный `ASTContractMutator`: сначала проверяет baseline, раздельно учитывает `verifier_errors` и никогда не засчитывает падение верификатора как убийство мутанта.
    - PUCT MCTS с подключаемой Process Reward Model (PRM).
-5. **Standalone 3D Neural Connectome (`docs/noema.html`)**:
+5. **Standalone 3D Neural Connectome (`docs/index.html`)**:
    - Интерактивная визуализация 95 000 нейронов и 135 000 синапсов в честном режиме `DEMO SIM` (без неавторизованного мутирующего API и без фейкового `VERIFIED`).
