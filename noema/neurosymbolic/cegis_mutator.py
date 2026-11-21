@@ -111,6 +111,7 @@ def run_static_ast_gate(source_code: str) -> StaticCheckResult:
     forbidden_direct = {"eval", "exec", "__import__", "compile"}
     forbidden_attrs = {"system", "popen", "exec", "eval", "__import__"}
     shell_runners = {"run", "Popen", "call", "check_call", "check_output"}
+    forbidden_call_names = forbidden_direct | forbidden_attrs | shell_runners
     found_forbidden: list[str] = []
     defined: set[str] = set(dir(builtins))
     loaded: set[str] = set()
@@ -122,7 +123,13 @@ def run_static_ast_gate(source_code: str) -> StaticCheckResult:
             defined.add(node.arg)
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             for alias in node.names:
-                defined.add(alias.asname or alias.name.split(".")[0])
+                bound = alias.asname or alias.name.split(".")[0]
+                defined.add(bound)
+                # A plain Call check only sees `os.system(...)`. Once the shell entry
+                # point is rebound by an import (`from os import system`), the call site
+                # is a bare Name and used to slip through this gate entirely.
+                if isinstance(node, ast.ImportFrom) and bound in forbidden_call_names:
+                    found_forbidden.append(f"from {node.module or '.'} import {bound}")
         elif isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name:
             defined.add(node.name)
         elif isinstance(node, ast.MatchMapping) and node.rest:

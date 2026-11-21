@@ -91,7 +91,7 @@ def export_dpo(
     pairs = builder.build_dpo_pairs(
         rollouts, max_pairs_per_task=max_pairs_per_task if max_pairs_per_task > 0 else None
     )
-    out = builder.export_jsonl(pairs, output)
+    out = builder.export_jsonl(pairs, output, create_parents=True)
     ok(f"{len(pairs)} DPO pairs from {len(rollouts)} rollouts -> {out}")
 
 
@@ -106,7 +106,7 @@ def export_grpo(
     rollouts = _load_rollouts(Path(input_path))
     builder = RLVRDatasetBuilder()
     groups = builder.build_grpo_groups(rollouts)
-    out = builder.export_jsonl(groups, output)
+    out = builder.export_jsonl(groups, output, create_parents=True)
     ok(f"{len(groups)} GRPO groups from {len(rollouts)} rollouts -> {out}")
 
 

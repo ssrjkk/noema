@@ -156,10 +156,30 @@ class RLVRDatasetBuilder:
         self,
         records: Sequence[dict[str, object]],
         output_path: str | Path,
+        *,
+        allowed_root: str | Path | None = None,
+        create_parents: bool = False,
     ) -> Path:
-        """Write dataset records as UTF-8 JSONL."""
+        """Write dataset records as UTF-8 JSONL.
+
+        ``allowed_root`` confines the destination: a path that resolves outside it raises
+        ValueError, so a caller cannot smuggle ``..`` out of the export directory.
+        Parent directories are not created unless ``create_parents=True`` — callers that
+        own the path (the CLI) pass it explicitly.
+        """
         out = Path(output_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
+        if allowed_root is not None:
+            root_resolved = Path(allowed_root).resolve()
+            out_resolved = out.resolve()
+            if not out_resolved.is_relative_to(root_resolved):
+                raise ValueError(f"Output path {out_resolved} escapes allowed_root {root_resolved}")
+        if create_parents:
+            out.parent.mkdir(parents=True, exist_ok=True)
+        elif not out.parent.exists():
+            raise FileNotFoundError(
+                f"Parent directory does not exist: {out.parent} "
+                "(pass create_parents=True to create it)"
+            )
         with out.open("w", encoding="utf-8") as fh:
             for rec in records:
                 fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
