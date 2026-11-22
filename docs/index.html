@@ -268,7 +268,7 @@
         Цельный 3D-коннектом · 95,000 нейронов
       </div>
       <div id="inspectorLocusCoord" class="text-[10px] text-[#38BDF8] mt-0.5">
-        ssrjkk/noema · 159 modules · 42,882 LOC
+        ssrjkk/noema · 160 modules · 43,460 LOC
       </div>
     </div>
 
@@ -359,7 +359,7 @@ Interactive browser showcase (not live Z3).</pre>
           </div>
           <div class="p-2 rounded-lg bg-[#04070D]/90 border border-[#94A3B8]/15">
             <div class="text-[#526075]">MODULES</div>
-            <div class="text-[#38BDF8] font-semibold text-xs">159 · 42,882 LOC</div>
+            <div class="text-[#38BDF8] font-semibold text-xs">160 · 43,460 LOC</div>
           </div>
           <div class="p-2 rounded-lg bg-[#04070D]/90 border border-[#94A3B8]/15">
             <div class="text-[#526075]">PYTHON CI</div>
@@ -493,7 +493,7 @@ Interactive browser showcase (not live Z3).</pre>
     // Three.js is the one hard external dependency. Without a guard the page dies on the
     // first `new THREE.*` below and shows nothing but a black rectangle.
     const container = document.getElementById('webglViewport');
-    if (typeof THREE === 'undefined') {
+    function showUnavailable(message) {
       container.style.display = 'flex';
       container.style.alignItems = 'center';
       container.style.justifyContent = 'center';
@@ -502,8 +502,12 @@ Interactive browser showcase (not live Z3).</pre>
       container.style.fontFamily = "'JetBrains Mono', monospace";
       container.style.fontSize = '13px';
       container.style.textAlign = 'center';
-      container.textContent =
-        'Three.js не загрузился с CDN — 3D-коннектом недоступен. Текстовое описание ниже работает.';
+      container.textContent = message;
+    }
+    if (typeof THREE === 'undefined') {
+      showUnavailable(
+        'Three.js не загрузился с CDN — 3D-коннектом недоступен. Текстовое описание ниже работает.'
+      );
       throw new Error('Three.js failed to load from CDN');
     }
 
@@ -530,7 +534,16 @@ Interactive browser showcase (not live Z3).</pre>
     const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 400);
     camera.position.set(0, 2, 54);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    } catch (webglError) {
+      // CDN может отдать three.js, а браузер при этом не выдаёт GL-контекст.
+      showUnavailable(
+        'WebGL недоступен в этом браузере — 3D-коннектом не отрисовать. Текстовое описание ниже работает.'
+      );
+      throw webglError;
+    }
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x030508, 1);
@@ -820,7 +833,7 @@ Interactive browser showcase (not live Z3).</pre>
     applyPaletteColors('biolum');
 
     const NEURAL_HUBS = [
-      { id: 'N-00', title: 'Цельный 3D-коннектом · 95,000 нейронов', coord: 'ssrjkk/noema · 159 modules · 42,882 LOC', pos: new THREE.Vector3(0, 1.5, 0), camOffset: new THREE.Vector3(4, 2, 52), rotY: -0.22, color: 0x38BDF8 },
+      { id: 'N-00', title: 'Цельный 3D-коннектом · 95,000 нейронов', coord: 'ssrjkk/noema · 160 modules · 43,460 LOC', pos: new THREE.Vector3(0, 1.5, 0), camOffset: new THREE.Vector3(4, 2, 52), rotY: -0.22, color: 0x38BDF8 },
       { id: 'N-01', title: 'Ствол и Таламус · Model Router & gRPC Grid', coord: 'MNI-152: [4, -28, -34] · Cluster N-01', pos: new THREE.Vector3(2.8, -8.5, 2.2), camOffset: new THREE.Vector3(4.5, -7.5, 22), rotY: -0.35, color: 0x38BDF8 },
       { id: 'N-02', title: 'Височная доля · Hybrid Memory & Failure Index', coord: 'MNI-152: [-54, -22, -12] · Cluster N-02', pos: new THREE.Vector3(-2.5, -3.2, 8.8), camOffset: new THREE.Vector3(-1.5, -2.5, 21), rotY: -0.15, color: 0x38BDF8 },
       { id: 'N-03', title: 'Префронтальная кора · ChainOfThought & MCTS', coord: 'MNI-152: [-42, 38, 28] · Cluster N-03', pos: new THREE.Vector3(-12.2, 3.8, 6.2), camOffset: new THREE.Vector3(-11.0, 4.2, 21), rotY: 0.25, color: 0x818CF8 },
