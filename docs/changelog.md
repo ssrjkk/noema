@@ -68,6 +68,20 @@
   timestamps now floor to the microsecond (`epoch_to_utc`), including `superseded_at` and the Postgres
   failure-index `created_at`. `tests/test_ml_upgrades.py::test_fact_written_on_a_coarse_tick_is_retrievable`
   pins the boundary; it fails against the previous code and is deterministic since.
+- **Merge gate больше не падает на двоичных файлах.** `_raw_changed_files` читал каждый
+  изменённый файл как текст, и `apple-touch-icon.png` в диффе поднял `UnicodeDecodeError`
+  (байт `0x89`), который внешний `except` превращал в `gate_error` — блокировался весь PR из-за
+  иконки. Оцениваются только файлы из `include_suffixes`, так что бинажник в судейский список не
+  попал бы и раньше; обход теперь ловит и `UnicodeDecodeError`. Проверено живым прогоном CLI в
+  отдельном git-репозитории с теми же `.png`/`.ico`, что лежат в `docs/`: до правки —
+  `BLOCKED gate_error:'utf-8' codec can't decode byte 0x89`, после — `PASSED`
+  (`changed_files=1`, `sandbox all_valid=True`). Ровно эти два файла кладёт в дифф новый тест
+  `tests/test_merge_gate.py::test_raw_changed_files_skips_binary_and_missing`: без guard'а он красный.
+- **Проверки витрины читают разметку в любом регистре.** CodeQL поднял high на самом тесте
+  (`tests/test_docs_site.py:28`): регулярка `<script\b[^>]*>` не видела `<SCRIPT>`, то есть
+  проверка «у запиненного скрипта есть `crossorigin`» обходилась строчкой в верхнем регистре.
+  `_script_tags` и разбор `src=` теперь без учёта регистра, а
+  `test_script_tags_match_markup_of_any_case` фиксирует и обратное: `<scripts>` матчиться не должен.
 
 ### Documentation
 - `usage-guide.md` covered the v2 surfaces for the first time: model routing, `train` commands with

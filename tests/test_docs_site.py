@@ -25,16 +25,25 @@ def _page(name: str) -> str:
 
 
 def _script_tags(html: str) -> list[str]:
-    return re.findall(r"<script\b[^>]*>", html)
+    """Opening ``<script>`` tags, however the page spells the name."""
+    return re.findall(r"<script\b[^>]*>", html, re.IGNORECASE)
+
+
+def test_script_tags_match_markup_of_any_case() -> None:
+    assert _script_tags("<script src=a>") == ["<script src=a>"]
+    assert _script_tags("<SCRIPT SRC=a>") == ["<SCRIPT SRC=a>"]
+    assert _script_tags("<ScRiPt INTEGRITY=x>") == ["<ScRiPt INTEGRITY=x>"]
+    assert _script_tags("<scripts></scripts>") == []
 
 
 def test_pinned_scripts_are_cors_enabled() -> None:
     """An integrity attribute on a no-CORS subresource is a hard block, not a warning."""
     for name in ("index.html", "atlas.html"):
         for tag in _script_tags(_page(name)):
-            if "integrity=" not in tag:
+            attrs = tag.lower()
+            if "integrity=" not in attrs:
                 continue
-            assert "crossorigin=" in tag, f"{name}: pinned script without crossorigin: {tag}"
+            assert "crossorigin=" in attrs, f"{name}: pinned script without crossorigin: {tag}"
 
 
 def test_pinned_cdns_are_versioned() -> None:
@@ -45,10 +54,10 @@ def test_pinned_cdns_are_versioned() -> None:
         pinned: list[str] = []
         unpinned: list[str] = []
         for tag in _script_tags(html):
-            src = re.search(r'src="(https://[^"]+)"', tag)
+            src = re.search(r'src="(https://[^"]+)"', tag, re.IGNORECASE)
             if src is None:
                 continue
-            (pinned if "integrity=" in tag else unpinned).append(src.group(1))
+            (pinned if "integrity=" in tag.lower() else unpinned).append(src.group(1))
         for url in pinned:
             assert _VERSIONED.search(url), f"{name}: pin on an unversioned URL {url}"
         for url in unpinned:
