@@ -86,9 +86,12 @@
 ### Documentation
 - `usage-guide.md` covered the v2 surfaces for the first time: model routing, `train` commands with
   the exact rollout JSONL schema, hybrid retrieval, failure index and CEGIS feedback.
-- README metrics re-measured against the CI run of PR #41: 2 773 tests collected (2 756 passed +
-  17 skipped on Ubuntu / 3.12). The size figures next to them come from the tree itself and are
-  restated above with the counting method, because the two drifted by a couple of lines.
+- README metrics re-measured against the CI run of PR #42: 2 781 tests collected, 2 764 passed and
+  17 skipped — the same totals on Python 3.12, 3.13 and 3.14 in the Ubuntu leg. That is 8 more than
+  `main` had (2 773): the five head guards in `tests/test_docs_site.py`, two for binary files in a
+  diff and one for tag-name case. The figure comes from the CI log, not from a local run.
+  The size figures next to them come from the tree itself and are restated above with the counting
+  method, because the two drifted by a couple of lines.
   `docs/showcase/` добавлен в `sitemap.xml`; у страницы появились canonical и Open Graph —
   раньше витрина показывалась в картах сайта без собственной записи.
 - README feature tables and the ML/AI upgrade plan describe the bundle as shipped instead of planned;

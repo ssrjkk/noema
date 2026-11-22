@@ -287,7 +287,7 @@ noema/
 
 | Метрика | Значение |
 |---|---|
-| **Тесты** | 2 773 собрано (2 756 passed + 17 skipped на Ubuntu / 3.12; pytest + hypothesis + pytest-benchmark) |
+| **Тесты** | 2 781 собрано (2 764 passed + 17 skipped на Ubuntu / 3.12; pytest + hypothesis + pytest-benchmark) |
 | **Исходные файлы** | 225 Python-файлов в `noema/` (160 модулей + 65 `__init__`) |
 | **Строки кода** | 43 463 всего, 36 815 — код (остальное пустые и комментарии) |
 | **CI** | Ruff lint + format, mypy, bandit, safety, pip-audit |
