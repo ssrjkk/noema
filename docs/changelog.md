@@ -7,8 +7,60 @@
   bi-temporal validity and failure-indexed memory, opt-in LinUCB model routing
   (`NOEMA_LLM__ROUTER=linucb`) with fail-closed budget and checkpoint validation, and the
   `noema train` CLI for DPO/GRPO exports and out-of-sample judge calibration.
+- **Витрина поднята на корень Pages** (PR #40, #41) — 3D-коннектом занял `docs/index.html`,
+  бумажный атлас переехал на `docs/atlas.html`, а `docs/noema.html` стал noindex-заглушкой с
+  редиректом; кросс-ссылки, `mkdocs.yml` (`exclude_docs`) и `sitemap.xml` приведены в соответствие.
+  Витрина показывает 160 модулей и 43 463 строки — `noema/**/*.py` (225 файлов, из них 65
+  `__init__.py`) в дереве этой ветки; пересчёт идёт по строкам файла, «код» = без пустых строк и
+  строк-комментариев.
+
+### Security
+- **MD5 объявлен там, где он и есть — не криптографией.** Пять отпечатков содержимого и ключей
+  кэша (`api/cache_headers.py`, `ingestion/loader.py` в двух местах, `modules/caching/kernel.py`,
+  `modules/config/kernel.py`) передают `usedforsecurity=False`, поэтому bandit больше не требует
+  их заглушить: `# nosec B324` в дереве не осталось ни одного (проверено grep'ом по `noema/`).
+  Подавление предупреждения прятало вопрос; параметр отвечает на него.
 
 ### Fixes
+- **Витрина переживает потерю WebGL-контекста.** three.js r128 сам пересобирает GL-подсистемы на
+  `webglcontextrestored`, но страница на пропажу контекста не реагировала ничем: чёрный холст
+  оставался «живым», а счётчик FPS продолжал считать кадры `requestAnimationFrame`, хотя
+  `renderer.render()` выходил по внутреннему `_isContextLost` и не делал ни одного вызова
+  отрисовки (замер на живой странице: 0 draw-вызовов за 1,5 с при показаниях «20 FPS»). Цикл
+  теперь останавливается, HUD показывает «нет GL», появляется `role="alert"` с кнопкой
+  «вернуть сцену», а `aria-label` вьюпорта сообщает о простое.
+- **Атлас: подписи отделов больше не исчезают.** Без анимаций (`prefers-reduced-motion`) и при
+  недоступности CDN подсвечивался один отдел из шести, то есть пять оставались с `opacity: 0`
+  вместе со своими латинскими подписями и выносками. В ветке без анимаций теперь подсвечены все
+  отделы, а для отключённого JavaScript тот же результат даёт `<noscript><style>`.
+- **Атлас: строка легенды зеркалит отдел.** Прошлое состояние `lit(id, false)` гасило сразу все
+  шесть строк легенды, из-за чего при скролле подписанный отдел оставался без индекса
+  (44 рассогласования из 65 замеров прокрутки). Легенда больше не хранит своё состояние — она
+  читает его у соответствующего отдела.
+- **Атлас: «Подсветите отдел — прочтите главу» стало правдой.** Раньше в файле не было ни одного
+  обработчика: ни мышь, ни касание, ни Tab не давали реакции (`hover_changed: false`,
+  `click_changed: false`, фокусируемых элементов внутри SVG — ноль). Отделы и строки легенды
+  получили `tabindex`, `role="button"`, `aria-label`, `<title>` и переход в главу по клику,
+  Enter или Space.
+- **Заглушка `noema.html` сохраняет `?query` и `#hash`.** `meta refresh` вёл на `index.html` и
+  терял якорь: deep-link вида `noema.html#step-3` открывал начало страницы.
+- **Состояние переключателей доступно ассистивным технологиям.** `aria-pressed` у переключателей
+  и `aria-expanded` + `aria-controls` у панели инспектора вместо одной лишь смены класса;
+  доступное имя собирается из видимой подписи, так что WCAG 2.5.3 больше не нарушается на
+  кнопках, где `aria-label` («Переключить авто-вращение») не повторял то, что написано на кнопке
+  («ОРБИТА»).
+- **Иконки и SRI.** `/noema/favicon.ico` и `/noema/apple-touch-icon.png` отдавали 404 — теперь это
+  настоящие файлы, подключены и на витрине, и в атласе, и в showcases; атлас получил тот же знак,
+  что и продвинутая витрина. Теги `three.min.js` (r128), `gsap` и `ScrollTrigger` (3.13.0) закрыты
+  `integrity` вместе с `crossorigin="anonymous"`: без CORS-запроса браузер не может проверить хеш
+  и отсекает скрипт целиком — первая версия пина без `crossorigin` роняла коннектом в заглушку
+  «Three.js не загрузился» (проверено в headless Chrome на локальной копии). `cdn.tailwindcss.com`
+  оставлен без SRI осознанно: у него нет версии в URL, payload меняется, и pinned-хеш сломал бы
+  вёрстку при чужом релизе.
+- **Кнопка «вернуть сцену» возвращает контекст.** `renderer.forceContextRestore()` в r128 не
+  генерирует `webglcontextrestored` (замер: ни одного события за 2.5 с), поэтому ручка
+  `WEBGL_lose_context` берётся заранее, пока контекст жив, и восстановление идёт через неё: после
+  нажатия — 104 вызова отрисовки за 1.5 с и FPS-счётчик снова считает.
 - **Read-after-write in hybrid memory** — the bi-temporal projection converted an epoch float with
   `datetime.fromtimestamp`, which rounds the sub-microsecond tail up. On a coarse clock a fact written
   on the current tick got a `valid_from` one microsecond ahead of the next reading and was filtered out
@@ -16,12 +68,32 @@
   timestamps now floor to the microsecond (`epoch_to_utc`), including `superseded_at` and the Postgres
   failure-index `created_at`. `tests/test_ml_upgrades.py::test_fact_written_on_a_coarse_tick_is_retrievable`
   pins the boundary; it fails against the previous code and is deterministic since.
+- **Merge gate больше не падает на двоичных файлах.** `_raw_changed_files` читал каждый
+  изменённый файл как текст, и `apple-touch-icon.png` в диффе поднял `UnicodeDecodeError`
+  (байт `0x89`), который внешний `except` превращал в `gate_error` — блокировался весь PR из-за
+  иконки. Оцениваются только файлы из `include_suffixes`, так что бинажник в судейский список не
+  попал бы и раньше; обход теперь ловит и `UnicodeDecodeError`. Проверено живым прогоном CLI в
+  отдельном git-репозитории с теми же `.png`/`.ico`, что лежат в `docs/`: до правки —
+  `BLOCKED gate_error:'utf-8' codec can't decode byte 0x89`, после — `PASSED`
+  (`changed_files=1`, `sandbox all_valid=True`). Ровно эти два файла кладёт в дифф новый тест
+  `tests/test_merge_gate.py::test_raw_changed_files_skips_binary_and_missing`: без guard'а он красный.
+- **Проверки витрины читают разметку в любом регистре.** CodeQL поднял high на самом тесте
+  (`tests/test_docs_site.py:28`): регулярка `<script\b[^>]*>` не видела `<SCRIPT>`, то есть
+  проверка «у запиненного скрипта есть `crossorigin`» обходилась строчкой в верхнем регистре.
+  `_script_tags` и разбор `src=` теперь без учёта регистра, а
+  `test_script_tags_match_markup_of_any_case` фиксирует и обратное: `<scripts>` матчиться не должен.
 
 ### Documentation
 - `usage-guide.md` covered the v2 surfaces for the first time: model routing, `train` commands with
   the exact rollout JSONL schema, hybrid retrieval, failure index and CEGIS feedback.
-- README metrics re-measured against the CI run and the tree: 2 769 tests collected
-  (2 752 passed + 17 skipped on Ubuntu / 3.12), 225 Python files under `noema/`, 43 417 lines.
+- README metrics re-measured against the CI run of PR #42: 2 781 tests collected, 2 764 passed and
+  17 skipped — the same totals on Python 3.12, 3.13 and 3.14 in the Ubuntu leg. That is 8 more than
+  `main` had (2 773): the five head guards in `tests/test_docs_site.py`, two for binary files in a
+  diff and one for tag-name case. The figure comes from the CI log, not from a local run.
+  The size figures next to them come from the tree itself and are restated above with the counting
+  method, because the two drifted by a couple of lines.
+  `docs/showcase/` добавлен в `sitemap.xml`; у страницы появились canonical и Open Graph —
+  раньше витрина показывалась в картах сайта без собственной записи.
 - README feature tables and the ML/AI upgrade plan describe the bundle as shipped instead of planned;
   `README.ru.md` docs list brought to parity with `README.md`.
 - README phase status corrected: the note claimed Phases 2–3 were "in active development" and the

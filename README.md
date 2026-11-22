@@ -293,9 +293,9 @@ noema/
 
 | Metric | Value |
 |---|---|
-| **Tests** | 2,773 collected — unit, hypothesis property and pytest-benchmark cases (2,756 passed + 17 skipped on Ubuntu / 3.12) |
+| **Tests** | 2,781 collected — unit, hypothesis property and pytest-benchmark cases (2,764 passed + 17 skipped on Ubuntu / 3.12) |
 | **Source files** | 225 Python files under `noema/` (160 modules + 65 package `__init__`) |
-| **Lines of code** | 43,460 lines, 36,812 of them code (the rest blank and comments) |
+| **Lines of code** | 43,463 lines, 36,815 of them code (the rest blank and comments) |
 | **CI** | Ruff lint + format, encoding/mojibake gate, mypy, bandit + pip-audit, golden eval, merge gate |
 | **Platforms** | Ubuntu + Windows, Python 3.12 + 3.13 + 3.14 |
 | **Encoding** | Unicode mojibake gate — broken strings fail CI |

@@ -156,8 +156,10 @@ def _raw_changed_files(cfg: GateConfig) -> list[dict[str, str]]:
         file_path = Path(path)
         try:
             content = file_path.read_text(encoding="utf-8")
-        except OSError:
-            continue  # deleted or unreadable files are not gated
+        except (OSError, UnicodeDecodeError):
+            # A deleted/unreadable path or a binary asset (an .ico is diffable by
+            # git but carries no text for the judge) is not gateable - skip it.
+            continue
         language = "python" if path.endswith(".py") else "text"
         files.append({"path": path, "language": language, "content": content})
     return files

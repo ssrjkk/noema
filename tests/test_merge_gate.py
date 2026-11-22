@@ -19,7 +19,9 @@ from noema.experiments.gate import (
     GateConfig,
     GateReport,
     _changed_file_paths,
+    _collect_files,
     _environment_import_roots,
+    _raw_changed_files,
     _repo_lint_config,
     run_gate_cli,
     run_merge_gate,
@@ -62,6 +64,40 @@ def test_collect_changed_files_lists_paths(tmp_path):
 
     paths = _changed_file_paths(_fake_git(["app.py", "readme.md", "old.txt"]), "origin/main")
     assert paths == ["app.py", "readme.md", "old.txt"]
+
+
+def test_raw_changed_files_skips_binary_and_missing(tmp_path, monkeypatch):
+    """An icon in the diff is not judgeable text, and must not abort collection.
+
+    A binary raises UnicodeDecodeError, not OSError; any escape from the gate
+    becomes a ``gate_error`` block, so an undecodable PNG would hold every
+    unrelated PR hostage.
+    """
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "apple-touch-icon.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+    (tmp_path / "favicon.ico").write_bytes(bytes([0, 0, 1, 0, 0xFF, 0xFE, 0x00, 0x01]))
+
+    cfg = GateConfig(git=_fake_git(["app.py", "apple-touch-icon.png", "favicon.ico", "gone.py"]))
+    assert [f["path"] for f in _raw_changed_files(cfg)] == ["app.py"]
+    assert _collect_files(cfg) == [{"path": "app.py", "language": "python", "content": "x = 1\n"}]
+
+
+@pytest.mark.asyncio
+async def test_gate_blocks_binary_free_verdict_not_on_decode_error(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "favicon.ico").write_bytes(b"\x00\x00\x01\x00\x89\xff\x00\x01")
+
+    cfg = GateConfig(
+        git=_fake_git(["app.py", "favicon.ico"]),
+        judge=await _judge_factory(0.9),
+        sandbox=_FakeSandbox(all_valid=True),
+    )
+    report = await run_merge_gate(cfg)
+    assert report.changed_files == 1
+    assert not any(b.startswith("gate_error") for b in report.blocked_by)
+    assert report.note != "gate_error"
 
 
 @pytest.mark.asyncio

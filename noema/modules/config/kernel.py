@@ -183,7 +183,9 @@ class ConfigManager:
             env_name = re.sub(r"[^A-Z0-9_]", "_", s.name.upper())
 
             if s.sensitive:
-                placeholder = hashlib.md5(s.name.encode()).hexdigest()[:16].upper()  # nosec B324 - placeholder generation
+                placeholder = (
+                    hashlib.md5(s.name.encode(), usedforsecurity=False).hexdigest()[:16].upper()
+                )
                 env_lines.append(f"# {s.description}" if s.description else f"# {s.name}")
                 env_lines.append(f"{env_name}=CHANGE_ME_{placeholder}")
                 env_lines.append("")
