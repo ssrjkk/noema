@@ -18,7 +18,9 @@
 <meta property="og:image" content="https://ssrjkk.github.io/noema/og-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23f3ecdd'/%3E%3Cpath d='M14 26c2-10 12-16 24-14 12 2 18 12 16 22-2 8-8 12-16 12l-2 10-6-2 2-10c-10 2-20-6-18-18z' fill='none' stroke='%231d2b3a' stroke-width='3'/%3E%3Ccircle cx='38' cy='22' r='4' fill='%23a4322a'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20width='64'%20height='64'%20rx='12'%20fill='%2304070D'/%3E%3Cg%20stroke='%2338BDF8'%20stroke-width='3.5'%20stroke-linecap='round'%20opacity='.85'%3E%3Cpath%20d='M32%2032L14%2015M32%2032L50%2013M32%2032L52%2047M32%2032L15%2050'/%3E%3C/g%3E%3Ccircle%20cx='32'%20cy='32'%20r='7.5'%20fill='%23818CF8'/%3E%3Ccircle%20cx='14'%20cy='15'%20r='4.5'%20fill='%2338BDF8'/%3E%3Ccircle%20cx='50'%20cy='13'%20r='4.5'%20fill='%2334D399'/%3E%3Ccircle%20cx='52'%20cy='47'%20r='4.5'%20fill='%23FB7185'/%3E%3Ccircle%20cx='15'%20cy='50'%20r='4.5'%20fill='%2338BDF8'/%3E%3C/svg%3E">
+<link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="canonical" href="https://ssrjkk.github.io/noema/atlas.html">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -69,9 +71,12 @@ header a:hover{border-bottom-color:var(--artery)}
 .plate svg{width:100%;display:block}
 .zone{opacity:0;transition:opacity .5s}
 .zone.lit{opacity:1}
+.zone.hot{opacity:1}
 .zone#z-meninges.lit path{opacity:.9}
+.zone#z-meninges.hot path{opacity:.9}
 .zone .fill{opacity:.5}
 .zone .hatch{opacity:.6}
+.zone:focus-visible{outline:2px solid var(--vein);outline-offset:2px}
 .zlabel{font:italic 500 13px var(--serif);fill:var(--ink)}
 .zlead{stroke:var(--hairline);stroke-width:1}
 .plate .caption{
@@ -82,6 +87,8 @@ header a:hover{border-bottom-color:var(--artery)}
 .plate .legend{list-style:none;margin-top:12px;font:12.5px var(--mono);color:var(--soft)}
 .plate .legend li{padding:2px 0;transition:.35s}
 .plate .legend li.lit{color:var(--artery)}
+.plate .legend li.hot{color:var(--artery)}
+.plate .legend li:focus-visible{outline:2px solid var(--vein);outline-offset:2px}
 .plate .legend li i{display:inline-block;width:26px;margin-right:6px;font-style:normal}
 /* ── главы-отделы ────────────────────────────── */
 .chapters{padding-top:120px}
@@ -121,6 +128,7 @@ footer a:hover{border-bottom-color:var(--artery)}
   html{scroll-behavior:auto}
 }
 </style>
+<noscript><style>.zone{opacity:1}</style></noscript>
 </head>
 <body>
 
@@ -338,20 +346,79 @@ footer a:hover{border-bottom-color:var(--artery)}
   <span><a href="index.html">3D-коннектом ↗</a> · <a href="https://github.com/ssrjkk/noema">GitHub ↗</a> · <a href="https://ssrjkk.github.io/">все проекты ↗</a></span>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js" crossorigin="anonymous" integrity="sha384-HOvlOYPIs/zjoIkWUGXkVmXsjr8GuZLV+Q+rcPwmJOVZVpvTSXQChiN4t9Euv9Vc"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js" crossorigin="anonymous" integrity="sha384-P8VzCVnT9NBUkMrpcIZrJbA7EBjJvh/fJS6PmP+4nLIM284DtsImIv8D0fFjIkeh"></script>
 <script>
 (function(){
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var caption = document.getElementById("plate-caption");
+  var defaultCap = caption ? caption.innerHTML : "";
+  var currentCap = defaultCap;
+
+  function chapOf(id){ return document.querySelector('.chap[data-z="' + id + '"]'); }
+  function capHtml(id){
+    var ch = chapOf(id);
+    return ch ? ch.dataset.cap.replace(/(рис\. \d)/, "<b>$1</b>") : defaultCap;
+  }
+
+  /* Строка легенды зеркалит отдел, а не живёт своей жизнью: lit(id,false) раньше гасил
+     все шесть строк, из-за чего подписанный скроллом отдел оставался без индекса. */
+  function syncLegend(){
+    document.querySelectorAll("#legend li").forEach(function(li){
+      var z = document.getElementById(li.dataset.z);
+      li.classList.toggle("lit", !!(z && z.classList.contains("lit")));
+    });
+  }
 
   function lit(id, on){
     var z = document.getElementById(id);
     if (z) z.classList.toggle("lit", on);
-    document.querySelectorAll("#legend li").forEach(function(li){
-      li.classList.toggle("lit", on && li.dataset.z === id);
+    syncLegend();
+  }
+
+  function setHot(id, hot){
+    var z = document.getElementById(id);
+    var li = document.querySelector('#legend li[data-z="' + id + '"]');
+    if (z) z.classList.toggle("hot", hot);
+    if (li) li.classList.toggle("hot", hot);
+    if (caption) caption.innerHTML = hot ? capHtml(id) : currentCap;
+  }
+
+  function gotoChap(id){
+    var ch = chapOf(id);
+    if (ch) ch.scrollIntoView({behavior: reduced ? "auto" : "smooth", block: "start"});
+  }
+
+  /* Подпись «Подсветите отдел — прочтите главу» обещает действие: отделы реагируют
+     на мышь, касание, фокус с клавиатуры и переход по Enter/Space. */
+  function makeHotspot(el, id, label){
+    el.setAttribute("tabindex", "0");
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", label);
+    el.style.cursor = "pointer";
+    el.addEventListener("pointerenter", function(){ setHot(id, true); });
+    el.addEventListener("pointerleave", function(){ setHot(id, false); });
+    el.addEventListener("focus", function(){ setHot(id, true); });
+    el.addEventListener("blur", function(){ setHot(id, false); });
+    el.addEventListener("click", function(){ gotoChap(id); });
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); gotoChap(id); }
     });
   }
+
+  document.querySelectorAll(".zone").forEach(function(z){
+    var ch = chapOf(z.id);
+    if (!ch) return;
+    var h2 = ch.querySelector("h2");
+    var title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = ch.dataset.cap;
+    z.insertBefore(title, z.firstChild);
+    makeHotspot(z, z.id, (h2 ? h2.textContent : z.id) + " — перейти к отделу");
+  });
+
+  document.querySelectorAll("#legend li").forEach(function(li){
+    if (document.getElementById(li.dataset.z)) makeHotspot(li, li.dataset.z, li.textContent.trim() + " — перейти к отделу");
+  });
 
   if (!reduced && window.gsap && window.ScrollTrigger){
     gsap.registerPlugin(ScrollTrigger);
@@ -364,12 +431,15 @@ footer a:hover{border-bottom-color:var(--artery)}
     gsap.from(".plate svg", {duration:1.2, opacity:0, ease:"power2.inOut", delay:.45});
 
     gsap.utils.toArray(".chap").forEach(function(chap){
-      var id = chap.dataset.z, cap = chap.dataset.cap;
+      var id = chap.dataset.z;
       ScrollTrigger.create({
         trigger:chap, start:"top 58%", end:"bottom 42%",
         onToggle:function(self){
           lit(id, self.isActive);
-          if (self.isActive && caption) caption.innerHTML = cap.replace(/(рис\. \d)/, "<b>$1</b>");
+          if (self.isActive) {
+            currentCap = capHtml(id);
+            if (caption) caption.innerHTML = currentCap;
+          }
         }
       });
       gsap.from(chap.querySelectorAll(".fig-no, h2, .lat, p, .fn li, .code"), {
@@ -381,8 +451,10 @@ footer a:hover{border-bottom-color:var(--artery)}
     gsap.from(".stat", {duration:.7, y:16, opacity:0, stagger:.08, ease:"power2.out",
       scrollTrigger:{trigger:".stats", start:"top 80%", once:true}});
   } else {
-    /* без анимаций: первый отдел подсвечен статично */
-    lit("z-prefrontal", true);
+    /* Без анимаций (или без CDN) отделы подсвечены все: в них подписи анатомии,
+       один подсвеченный отдел означал бы исчезнувшие пять остальных. */
+    document.querySelectorAll(".zone").forEach(function(z){ z.classList.add("lit"); });
+    syncLegend();
   }
 })();
 </script>
