@@ -330,6 +330,7 @@ noema/
 - [Monitoring](docs/monitoring-setup.md) — observability setup
 - [Performance Tuning](docs/performance-tuning.md) — optimization guide
 - [Troubleshooting](docs/troubleshooting.md) — common issues and fixes
+- [Showcase](https://ssrjkk.github.io/noema/showcase/)
 
 ## Roadmap
 
