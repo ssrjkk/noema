@@ -21,6 +21,20 @@ Noema — это не очередной генератор кода. Это н�
 
 ---
 
+**Сайт:** https://ssrjkk.github.io/noema/
+
+## Скриншоты
+
+Сняты с опубликованного сайта в настоящем браузере (Chrome, 1440×900 и 390×844).
+
+| Главная | Разделы |
+| --- | --- |
+| <img src="docs/screenshots/home.jpg" width="420" alt="Noema — главная страница"> | <img src="docs/screenshots/content.jpg" width="420" alt="Noema — разделы сайта"> |
+
+<p align="center"><img src="docs/screenshots/showcase.jpg" width="420" alt="Noema — интерактивная витрина"></p>
+
+<p align="center"><img src="docs/screenshots/mobile.jpg" width="320" alt="Noema — мобильная версия"></p>
+
 ## Быстрый старт
 
 ```bash

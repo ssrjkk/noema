@@ -27,6 +27,20 @@ Noema is not another code generator. It is a neurosymbolic system that proposes 
 
 ---
 
+**Site:** https://ssrjkk.github.io/noema/
+
+## Screenshots
+
+Captured from the published site in a real browser (Chrome, 1440×900 and 390×844).
+
+| Home | Sections |
+| --- | --- |
+| <img src="docs/screenshots/home.jpg" width="420" alt="Noema — landing page"> | <img src="docs/screenshots/content.jpg" width="420" alt="Noema — site sections"> |
+
+<p align="center"><img src="docs/screenshots/showcase.jpg" width="420" alt="Noema — interactive showcase"></p>
+
+<p align="center"><img src="docs/screenshots/mobile.jpg" width="320" alt="Noema — mobile view"></p>
+
 ## Quick Start
 
 ```bash
