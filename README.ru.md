@@ -324,6 +324,7 @@ noema/
 - [Мониторинг](docs/monitoring-setup.md) — настройка наблюдаемости
 - [Производительность](docs/performance-tuning.md) — руководство по оптимизации
 - [Troubleshooting](docs/troubleshooting.md) — частые проблемы и решения
+- [Showcase](https://ssrjkk.github.io/noema/showcase/)
 
 ## Дорожная карта
 
