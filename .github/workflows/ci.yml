@@ -214,6 +214,11 @@ jobs:
     timeout-minutes: 20
     needs: lint
     if: github.event_name == 'pull_request'
+    services:
+      ollama:
+        image: ollama/ollama:latest
+        ports:
+          - 11434:11434
     steps:
       - uses: actions/checkout@v7
         with:
@@ -232,10 +237,18 @@ jobs:
           # Gate import policy allows a root only if it resolves here; symbolic.py imports z3.
           pip install "z3-solver>=5.1.0.0"
 
+      - name: Pull judge model
+        run: |
+          container_id="$(docker ps -q --filter ancestor=ollama/ollama:latest)"
+          test -n "$container_id"
+          docker exec "$container_id" ollama pull qwen2.5:0.5b
+
       - name: Run merge gate
         id: gate
         env:
           NOEMA_API_RATE_LIMIT_ENABLED: "false"
+          NOEMA_LLM_PROVIDER: ollama
+          NOEMA_LLM_OLLAMA_MODEL: qwen2.5:0.5b
         run: |
           python -m noema.experiments.gate \
             --diff-target "origin/${{ github.base_ref }}" \
