@@ -58,7 +58,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-      id-token: write
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -88,7 +87,6 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
-          use_oidc: true
           files: ./coverage.xml
           fail_ci_if_error: true
 
