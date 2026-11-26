@@ -11,7 +11,7 @@
 Noema is not another code generator. It is a neurosymbolic system that proposes solutions with LLMs, verifies them against formal contracts with Z3, validates them in a sandboxed runtime, and maintains a fully auditable trail of every reasoning step — then fixes its own incidents end-to-end.
 
 > [!NOTE]
-> **Phase 1 — The Architect** is production-ready. Phase 2 (autonomous self-healing) and Phase 3 (multi-node grid federation) are merged and under test — `docs/ROADMAP.md` has no open items. Pointing the incident → PR loop at a real repository is a configuration step: it needs `NOEMA_AUTONOMY__GITHUB_*` credentials.
+> **Phase 1 — The Architect** is implemented. Phase 2 (autonomous self-healing) and Phase 3 (multi-node grid federation) are merged and under test — `docs/ROADMAP.md` has no open items. Pointing the incident → PR loop at a real repository is a configuration step: it needs `NOEMA_AUTONOMY__GITHUB_*` credentials.
 
 ---
 
@@ -321,7 +321,7 @@ noema/
 - [Anatomical Atlas](https://ssrjkk.github.io/noema/atlas.html) ([source](docs/atlas.html)) — engraved paper edition of the same walk
 - [ML/AI Upgrade Plan](docs/noema_ml_ai_upgrade_plan.md) — v2: RLVR, hybrid memory, LinUCB routing, Z3 CEGIS (shipped to `main`)
 - [Whitepaper](docs/WHITEPAPER.md) — vision and design principles
-- [Roadmap](docs/ROADMAP.md) — three phases: Architect → Autopoietic Enterprise → Global Noema Grid
+- [Roadmap](docs/ROADMAP.md) — three phases: Architect → self-healing → multi-node grid
 - [Configuration](docs/configuration.md) — all env vars and YAML options
 - [Deployment](docs/deployment.md) — Docker / Compose / K8s / Helm / Terraform
 - [Getting Started](docs/getting-started.md) — tutorial and walkthrough
@@ -337,7 +337,7 @@ noema/
 | Phase | Name | Status |
 |---|---|---|
 | **1** | **The Architect** — generation + verification + sandbox + benchmarks + knowledge + reasoning trace | **Done** |
-| **2** | **The Autopoietic Enterprise** — incident → PR, merge gate, evolution with auto-apply, benchmark service | **Merged, under test** |
+| **2** | **Self-healing** — incident → PR, merge gate, evolution with auto-apply, benchmark service | **Merged, under test** |
 | **3** | **Global Noema Grid** — multi-node pool, gRPC federation, token/ledger economics, live dashboard | **Merged, under test** |
 
 ## Author
