@@ -233,9 +233,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev,db]"
-          # Gate import policy allows a root only if it resolves here; symbolic.py imports z3.
-          pip install "z3-solver>=5.1.0.0"
+          pip install -e ".[dev,db,full]"
 
       - name: Pull judge model
         run: |
