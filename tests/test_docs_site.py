@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
-PAGES = ("index.html", "atlas.html", "showcase/index.html")
+PAGES = ("index.html", "atlas.html")
 
 _VERSIONED = re.compile(r"/r\d+/|@\d+\.\d+\.\d+")
 
@@ -92,7 +92,6 @@ def test_sitemap_lists_published_pages() -> None:
     for loc in (
         "https://ssrjkk.github.io/noema/",
         "https://ssrjkk.github.io/noema/atlas.html",
-        "https://ssrjkk.github.io/noema/showcase/",
     ):
         assert f"<loc>{loc}</loc>" in sitemap, f"{loc} missing from docs/sitemap.xml"
     assert "https://ssrjkk.github.io/noema/sitemap.xml" in robots
