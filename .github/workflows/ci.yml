@@ -233,7 +233,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[dev,db,full]"
+          pip install -e ".[dev,db]"
+          pip install "openai>=3.8.0,<4.0" "z3-solver>=5.1.0.0"
 
       - name: Pull judge model
         run: |
