@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "noema"
 version = "1.4.0"
-description = "Production-grade AI reasoning engine with 22 domain modules"
+description = "Neuro-symbolic code generation with Z3 verification and sandboxed execution."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -19,6 +19,7 @@ dependencies = [
 
     # Async / HTTP
     "aiohttp>=3.14.5",
+    "httpx>=0.28.1",
 
     # Cache / queues
     "redis>=5.0.3,<6.0",
@@ -53,7 +54,6 @@ dev = [
     "pytest-timeout>=2.4.0",
     "pytest-benchmark>=5.3.1",
     "hypothesis>=6.170.8,<6.171",
-    "httpx>=0.28.1",
     "fakeredis>=2.37.1",
     "ruff==0.17.6",
     "mypy==2.4.1",
