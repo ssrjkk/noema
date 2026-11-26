@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NOEMA — 3D Neural Connectome Brain &amp; Z3 Atlas</title>
-  <meta name="description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально, Docker-песочница валидирует код до PR. 3D-коннектом из 95 000 нейронов — витрина тракта задачи. FastAPI, gRPC-федерация, MCP, 2 781 тест.">
+  <meta name="description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально, Docker-песочница валидирует код до PR. 3D-коннектом из 95 000 нейронов — витрина тракта задачи. FastAPI, gRPC-федерация, MCP, 2 782 тест.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="SSRJKK">
   <meta property="og:title" content="NOEMA — 3D Neural Connectome Brain &amp; Z3 Atlas">
-  <meta property="og:description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально, Docker-песочница валидирует код до PR. 3D-коннектом из 95 000 нейронов. FastAPI, gRPC-федерация, MCP, 2 781 тест.">
+  <meta property="og:description" content="Noema — нейросимвольный движок: LLM предлагает решение, Z3 доказывает его формально, Docker-песочница валидирует код до PR. 3D-коннектом из 95 000 нейронов. FastAPI, gRPC-федерация, MCP, 2 782 тест.">
   <meta property="og:url" content="https://ssrjkk.github.io/noema/">
   <meta property="og:locale" content="ru_RU">
   <meta property="og:image" content="https://ssrjkk.github.io/noema/og-card.png">
@@ -66,8 +66,17 @@
       background: radial-gradient(circle at 62% 48%, #0B1324 0%, #050811 52%, #020306 100%);
     }
 
-    #webglViewport canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+    #webglViewport canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; cursor: grab; }
     #webglViewport canvas:active { cursor: grabbing; }
+    #webglViewport #brainFallback { z-index: 0; cursor: default; }
+    #webglViewport canvas:not(#brainFallback) { z-index: 1; }
+    #webglViewport canvas[hidden], #brainFallback[hidden], #brainUnavailableNotice[hidden] { display: none; }
+    #brainUnavailableNotice {
+      position: absolute; z-index: 2; left: 50%; bottom: 12%; transform: translateX(-50%);
+      width: min(520px, calc(100% - 32px)); padding: 12px 16px; border: 1px solid rgba(148,163,184,.28);
+      border-radius: 10px; background: rgba(4,7,13,.9); color: #94A3B8; text-align: center;
+      font: 12px/1.5 'JetBrains Mono', monospace;
+    }
 
     .ambient-vignette {
       position: fixed;
@@ -214,6 +223,16 @@
     .smt-toggle:hover { background: rgba(56, 189, 248, 0.08); border-color: rgba(56, 189, 248, 0.22); }
     .smt-toggle.violated { background: rgba(251, 113, 133, 0.14); border-color: rgba(251, 113, 133, 0.5); }
 
+    @media (max-width: 767px) {
+      .locus-card {
+        background: linear-gradient(180deg, rgba(4,7,13,.30), rgba(4,7,13,.70));
+        backdrop-filter: blur(4px);
+      }
+      .locus-card h1, .locus-card h2, .locus-card p, .locus-card code {
+        text-shadow: 0 1px 10px rgba(2,3,6,.95);
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .scroll-progress-fill, .story-column, .locus-card, .ctrl-btn, .smt-toggle {
         transition: none !important;
@@ -223,7 +242,10 @@
 </head>
 <body>
 
-  <div id="webglViewport" role="img" aria-label="Интерактивная 3D-модель мозга Noema из 95 000 нейронов"></div>
+  <div id="webglViewport" role="img" aria-label="Интерактивная 3D-модель мозга Noema из 95 000 нейронов">
+    <canvas id="brainFallback" aria-hidden="true"></canvas>
+    <div id="brainUnavailableNotice" role="status" hidden></div>
+  </div>
   <div class="ambient-vignette" aria-hidden="true"></div>
 
   <header class="top-hud flex items-center justify-between px-3 sm:px-5 font-mono-tech text-[11px] text-[#94A3B8]">
@@ -233,7 +255,7 @@
         NOEMA // 3D NEURAL CONNECTOME
       </span>
       <span class="hidden lg:inline text-[#334155]" aria-hidden="true">|</span>
-      <span class="hidden lg:inline text-[#94A3B8]">95,000 NEURONS · 135,000 SYNAPSES · 2,781 TESTS</span>
+      <span class="hidden lg:inline text-[#94A3B8]">95,000 NEURONS · 135,000 SYNAPSES · 2,782 TESTS</span>
       <button id="btnCameraSync" class="ctrl-btn py-0.5 px-2 text-[9.5px] active" aria-pressed="true" data-desc="камера следует за скроллом">СКРОЛЛ: СИНХР</button>
       <span class="hidden sm:inline px-2 py-0.5 rounded bg-[#38BDF8]/10 border border-[#38BDF8]/30 text-[#38BDF8] text-[9.5px]">STATIC DEMO</span>
     </div>
@@ -357,7 +379,7 @@ Interactive browser showcase (not live Z3).</pre>
         <div class="grid grid-cols-3 gap-2 mb-4 font-mono-tech text-[10px]">
           <div class="p-2 rounded-lg bg-[#04070D]/90 border border-[#94A3B8]/15">
             <div class="text-[#526075]">TESTS</div>
-            <div class="text-[#F4F7FB] font-semibold text-xs">2,781</div>
+            <div class="text-[#F4F7FB] font-semibold text-xs">2,782</div>
           </div>
           <div class="p-2 rounded-lg bg-[#04070D]/90 border border-[#94A3B8]/15">
             <div class="text-[#526075]">MODULES</div>
@@ -492,19 +514,120 @@ Interactive browser showcase (not live Z3).</pre>
     }
     const rng = mulberry32(20261119);
 
-    // Three.js is the one hard external dependency. Without a guard the page dies on the
-    // first `new THREE.*` below and shows nothing but a black rectangle.
+    // A dependency-free brain is visible before WebGL starts and remains if the CDN,
+    // GPU or context is unavailable. The 3D connectome replaces it only after render.
     const container = document.getElementById('webglViewport');
+    const fallbackCanvas = document.getElementById('brainFallback');
+    const fallbackNotice = document.getElementById('brainUnavailableNotice');
+
+    function drawBrainFallback() {
+      const rect = container.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = Math.max(1, rect.width);
+      const height = Math.max(1, rect.height);
+      fallbackCanvas.width = Math.round(width * dpr);
+      fallbackCanvas.height = Math.round(height * dpr);
+      const ctx = fallbackCanvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const scale = Math.min(width / 900, height / 650);
+      const originX = width > 900 ? width * 0.58 : width * 0.5;
+      const originY = height * (width < 768 ? 0.38 : 0.52);
+      ctx.save();
+      ctx.translate(originX, originY);
+      ctx.scale(scale, scale);
+
+      const brain = new Path2D();
+      brain.moveTo(-250, -30);
+      brain.bezierCurveTo(-285, -120, -210, -215, -115, -205);
+      brain.bezierCurveTo(-70, -250, 20, -250, 70, -205);
+      brain.bezierCurveTo(210, -215, 285, -120, 250, -30);
+      brain.bezierCurveTo(285, 70, 190, 155, 95, 145);
+      brain.bezierCurveTo(40, 185, -15, 150, -30, 115);
+      brain.bezierCurveTo(-90, 165, -190, 130, -215, 75);
+      brain.bezierCurveTo(-265, 55, -280, 10, -250, -30);
+      brain.closePath();
+
+      const glow = ctx.createRadialGradient(0, -20, 20, 0, -20, 330);
+      glow.addColorStop(0, 'rgba(56,189,248,.18)');
+      glow.addColorStop(0.55, 'rgba(129,140,248,.09)');
+      glow.addColorStop(1, 'rgba(3,5,8,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(-340, -280, 680, 560);
+
+      ctx.save();
+      ctx.clip(brain);
+      const points = [];
+      const palette = ['#38BDF8', '#818CF8', '#34D399', '#FB7185'];
+      for (let i = 0; i < 2600 && points.length < 950; i++) {
+        const x = (rng() - 0.5) * 610;
+        const y = (rng() - 0.5) * 470;
+        if (!ctx.isPointInPath(brain, x, y)) continue;
+        points.push({ x, y, size: 0.7 + rng() * 1.8, color: palette[Math.floor(rng() * palette.length)] });
+      }
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 10; i < points.length; i++) {
+        const p = points[i];
+        for (let j = i - 1; j > i - 9; j--) {
+          const q = points[j];
+          const dist = Math.hypot(p.x - q.x, p.y - q.y);
+          if (dist > 42) continue;
+          ctx.strokeStyle = 'rgba(99,102,241,.16)';
+          ctx.lineWidth = 0.55;
+          ctx.beginPath();
+          ctx.moveTo(q.x, q.y);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        }
+      }
+      for (const p of points) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = 0.45 + rng() * 0.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(56,189,248,.5)';
+      ctx.lineWidth = 1.6;
+      ctx.stroke(brain);
+      ctx.strokeStyle = 'rgba(148,163,184,.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -225);
+      ctx.bezierCurveTo(-18, -120, 18, -20, 0, 120);
+      ctx.stroke();
+
+      const hubs = [[-120,-80,'#34D399'],[70,-40,'#FB7185'],[-50,60,'#818CF8'],[125,70,'#38BDF8']];
+      for (const [x, y, color] of hubs) {
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.45;
+        ctx.beginPath();
+        ctx.arc(x, y, 18, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    drawBrainFallback();
+    window.addEventListener('resize', () => {
+      if (!fallbackCanvas.hidden) drawBrainFallback();
+    });
+
     function showUnavailable(message) {
-      container.style.display = 'flex';
-      container.style.alignItems = 'center';
-      container.style.justifyContent = 'center';
-      container.style.padding = '24px';
-      container.style.color = '#94A3B8';
-      container.style.fontFamily = "'JetBrains Mono', monospace";
-      container.style.fontSize = '13px';
-      container.style.textAlign = 'center';
-      container.textContent = message;
+      fallbackCanvas.hidden = false;
+      fallbackNotice.textContent = message;
+      fallbackNotice.hidden = false;
+      const rendered = container.querySelector('canvas:not(#brainFallback)');
+      if (rendered) rendered.hidden = true;
     }
     if (typeof THREE === 'undefined') {
       showUnavailable(
@@ -550,6 +673,8 @@ Interactive browser showcase (not live Z3).</pre>
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x030508, 1);
     container.appendChild(renderer.domElement);
+    fallbackCanvas.hidden = true;
+    fallbackNotice.hidden = true;
     renderer.domElement.setAttribute('aria-hidden', 'true');
 
     // three r128 пересобирает свои GL-подсистемы на webglcontextrestored, но для посетителя
@@ -570,6 +695,8 @@ Interactive browser showcase (not live Z3).</pre>
       if (show) {
         if (hud) { hud.textContent = 'нет GL'; hud.style.color = '#FB7185'; }
         if (viewport) viewport.setAttribute('aria-label', VIEWPORT_ARIA + ' — графический контекст потерян, сцена остановлена');
+        fallbackCanvas.hidden = false;
+        renderer.domElement.hidden = true;
         if (glLostNotice) return;
         glLostNotice = document.createElement('div');
         glLostNotice.setAttribute('role', 'alert');
@@ -593,6 +720,8 @@ Interactive browser showcase (not live Z3).</pre>
       } else {
         if (hud) { hud.textContent = '— FPS'; hud.style.color = ''; }
         if (viewport) viewport.setAttribute('aria-label', VIEWPORT_ARIA);
+        fallbackCanvas.hidden = true;
+        renderer.domElement.hidden = false;
         if (glLostNotice) { glLostNotice.remove(); glLostNotice = null; }
       }
     }
