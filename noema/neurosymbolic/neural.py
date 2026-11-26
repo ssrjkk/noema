@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
+import httpx
 import structlog
 
 if TYPE_CHECKING:
@@ -264,8 +265,7 @@ class NeuralInterface:
             logger.error("llm_request_timeout", timeout=request.timeout)
             from openai import APITimeoutError as _APITimeoutError
 
-            _fake_request = cast("Any", None)
-            raise _APITimeoutError(_fake_request) from None
+            raise _APITimeoutError(httpx.Request("POST", "https://noema.invalid/llm")) from None
 
     async def _batch_processor(self) -> None:
         while True:
