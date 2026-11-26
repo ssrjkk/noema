@@ -31,8 +31,6 @@ Noema — это не очередной генератор кода. Это н�
 | --- | --- |
 | <img src="docs/screenshots/home.jpg" width="420" alt="Noema — главная страница"> | <img src="docs/screenshots/content.jpg" width="420" alt="Noema — разделы сайта"> |
 
-<p align="center"><img src="docs/screenshots/showcase.jpg" width="420" alt="Noema — интерактивная витрина"></p>
-
 <p align="center"><img src="docs/screenshots/mobile.jpg" width="320" alt="Noema — мобильная версия"></p>
 
 ## Быстрый старт
@@ -324,7 +322,6 @@ noema/
 - [Мониторинг](docs/monitoring-setup.md) — настройка наблюдаемости
 - [Производительность](docs/performance-tuning.md) — руководство по оптимизации
 - [Troubleshooting](docs/troubleshooting.md) — частые проблемы и решения
-- [Showcase](https://ssrjkk.github.io/noema/showcase/)
 
 ## Дорожная карта
 

@@ -37,8 +37,6 @@ Captured from the published site in a real browser (Chrome, 1440×900 and 390×8
 | --- | --- |
 | <img src="docs/screenshots/home.jpg" width="420" alt="Noema — landing page"> | <img src="docs/screenshots/content.jpg" width="420" alt="Noema — site sections"> |
 
-<p align="center"><img src="docs/screenshots/showcase.jpg" width="420" alt="Noema — interactive showcase"></p>
-
 <p align="center"><img src="docs/screenshots/mobile.jpg" width="320" alt="Noema — mobile view"></p>
 
 ## Quick Start
@@ -317,7 +315,7 @@ noema/
 ## Documentation
 
 - [Usage Guide](docs/usage-guide.md) — complete CLI, API, and library reference with examples
-- [3D Connectome Showcase](https://ssrjkk.github.io/noema/) — interactive neural-connectome landing page (static, DEMO SIM mode)
+- [3D Connectome](https://ssrjkk.github.io/noema/) — interactive neural-connectome landing page (static, DEMO SIM mode)
 - [Anatomical Atlas](https://ssrjkk.github.io/noema/atlas.html) ([source](docs/atlas.html)) — engraved paper edition of the same walk
 - [ML/AI Upgrade Plan](docs/noema_ml_ai_upgrade_plan.md) — v2: RLVR, hybrid memory, LinUCB routing, Z3 CEGIS (shipped to `main`)
 - [Whitepaper](docs/WHITEPAPER.md) — vision and design principles
@@ -330,7 +328,6 @@ noema/
 - [Monitoring](docs/monitoring-setup.md) — observability setup
 - [Performance Tuning](docs/performance-tuning.md) — optimization guide
 - [Troubleshooting](docs/troubleshooting.md) — common issues and fixes
-- [Showcase](https://ssrjkk.github.io/noema/showcase/)
 
 ## Roadmap
 
