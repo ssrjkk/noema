@@ -1,8 +1,8 @@
 # Noema
 
-[![CI](https://github.com/ssrjkk/noema/actions/workflows/ci.yml/badge.svg)](https://github.com/ssrjkk/noema/actions/workflows/ci.yml)
-[![python-3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+
+
 
 
 
@@ -15,7 +15,7 @@ Noema is not another code generator. It is a neurosymbolic system that proposes 
 
 ---
 
-<p align="center">
+
   <a href="#quick-start">Quick Start</a> •
   <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
@@ -23,7 +23,7 @@ Noema is not another code generator. It is a neurosymbolic system that proposes 
   <a href="#usage">Usage</a> •
   <a href="#documentation">Docs</a> •
   <a href="README.ru.md">Русский</a>
-</p>
+
 
 ---
 
