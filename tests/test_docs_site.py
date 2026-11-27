@@ -95,3 +95,13 @@ def test_sitemap_lists_published_pages() -> None:
     ):
         assert f"<loc>{loc}</loc>" in sitemap, f"{loc} missing from docs/sitemap.xml"
     assert "https://ssrjkk.github.io/noema/sitemap.xml" in robots
+
+
+def test_brain_has_a_dependency_free_fallback() -> None:
+    html = _page("index.html")
+    assert 'id="brainFallback"' in html
+    assert 'id="brainUnavailableNotice"' in html
+    assert "function drawBrainFallback()" in html
+    assert "fallbackCanvas.hidden = true" in html
+    assert "fallbackCanvas.hidden = false" in html
+    assert "container.textContent = message" not in html
